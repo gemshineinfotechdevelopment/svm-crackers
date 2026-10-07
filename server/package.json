@@ -1,0 +1,38 @@
+{
+  "name": "apsara-crackers-backend",
+  "version": "1.0.0",
+  "description": "Backend API Server for Apsara Crackers application",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "init:db": "node dist/initVpsDb.js",
+    "init:db:ts": "tsx initVpsDb.ts",
+    "clean:stocks": "node dist/removeStockFields.js",
+    "clean:stocks:ts": "tsx removeStockFields.ts",
+    "seed": "tsx seedData.ts"
+  },
+  "keywords": [
+    "express",
+    "typescript",
+    "mongodb",
+    "apsara-crackers"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.7",
+    "cloudinary": "^2.11.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongoose": "^8.9.5",
+    "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
+  }
+}

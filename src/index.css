@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 500;
+
+  color-scheme: light;
+  color: #0F172A;
+  background-color: #FFFFFF;
+
+  /* Modern Crisp Palette Variables */
+  --primary-red: #D32F2F;
+  --primary-red-dark: #B71C1C;
+  --primary-red-light: #FEE2E2;
+  --primary-gold: #D97706;
+  --primary-gold-dark: #B45309;
+  --primary-gold-light: #FEF3C7;
+  --royal-blue: #1E40AF;
+  --royal-blue-dark: #1E3A8A;
+  --royal-blue-light: #EFF6FF;
+  --bg-festive: #FFFFFF;
+  --border-gold: #E2E8F0;
+  --border-gold-subtle: #F1F5F9;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #FFFFFF;
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: #FFFFFF;
+}

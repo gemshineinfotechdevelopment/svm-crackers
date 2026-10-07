@@ -1,0 +1,48 @@
+{
+  "name": "apsara-crackers",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:client": "vite",
+    "dev:server": "npm --prefix server run dev",
+    "dev:all": "concurrently -n \"CLIENT,SERVER\" -c \"cyan,magenta\" \"npm run dev\" \"npm run dev:server\"",
+    "server": "npm --prefix server run dev",
+    "build": "tsc -b && vite build",
+    "build:server": "npm --prefix server run build",
+    "build:all": "npm run build && npm run build:server",
+    "seed": "npm --prefix server run seed",
+    "init:db": "npm --prefix server run init:db",
+    "clean:stocks": "npm --prefix server run clean:stocks",
+    "lint": "oxlint",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.3.1",
+    "@mui/material": "^9.3.1",
+    "html2pdf.js": "^0.14.0",
+    "lucide-react": "^1.33.0",
+    "pdfjs-dist": "^6.3.289",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tesseract.js": "^7.0.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@types/html2pdf.js": "^0.10.0",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "concurrently": "^9.2.1",
+    "oxlint": "^1.79.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2"
+  },
+  "overrides": {
+    "shell-quote": "^1.12.0"
+  }
+}
