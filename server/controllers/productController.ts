@@ -4,15 +4,45 @@ import PriceList from '../models/PriceList';
 
 export const getProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { type } = req.query;
+    const { type, year, search } = req.query;
     const filter: any = {};
+
+    const andConditions: any[] = [];
+
     if (type && typeof type === 'string' && type !== 'ALL') {
-      filter.$or = [
-        { productType: type },
-        { productType: 'Both' },
-        ...(type === 'Retail' ? [{ productType: { $exists: false } }, { productType: null }, { productType: '' }] : []),
-      ];
+      andConditions.push({
+        $or: [
+          { productType: type },
+          { productType: 'Both' },
+          ...(type === 'Retail' ? [{ productType: { $exists: false } }, { productType: null }, { productType: '' }] : []),
+        ],
+      });
     }
+
+    if (year && typeof year === 'string' && year.trim() !== '' && year.toLowerCase() !== 'all') {
+      const yearStr = year.trim();
+      const yearNum = parseInt(yearStr, 10);
+      if (!isNaN(yearNum)) {
+        const startOfYear = new Date(Date.UTC(yearNum, 0, 1, 0, 0, 0));
+        const endOfYear = new Date(Date.UTC(yearNum, 11, 31, 23, 59, 59, 999));
+        andConditions.push({
+          $or: [
+            { year: yearNum },
+            { year: yearStr },
+            { createdAt: { $gte: startOfYear, $lte: endOfYear } },
+          ],
+        });
+      }
+    }
+
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      andConditions.push({ name: { $regex: search.trim(), $options: 'i' } });
+    }
+
+    if (andConditions.length > 0) {
+      filter.$and = andConditions;
+    }
+
     const products = await Product.find(filter).lean().sort({ slNo: 1, createdAt: 1 });
     res.status(200).json({ success: true, count: products.length, data: products });
   } catch (error) {
@@ -35,7 +65,21 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
 
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { shopStock, godownStock, stock, ...rest } = req.body;
+    const currentSystemYear = new Date().getFullYear();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    // Security Restriction: Product creation ONLY allowed in current system year
+    if (selectedViewYear && Number(selectedViewYear) !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New products can only be added to the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before adding a new product.`,
+        error: 'Product creation is only allowed in the current system year.',
+      });
+      return;
+    }
+
+    const { shopStock, godownStock, stock, selectedViewYear: _v, viewYear: _vy, ...rest } = req.body;
+    rest.year = rest.year ? Number(rest.year) : currentSystemYear;
     const targetType = rest.productType || 'Retail';
 
     if (!rest.slNo || Number(rest.slNo) <= 0) {
@@ -58,7 +102,11 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
       if (cleanName) {
         const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const nameRegex = new RegExp(`^${escapedName}$`, 'i');
-        const existingPriceItem = await PriceList.findOne({ itemName: { $regex: nameRegex } });
+        const targetYear = rest.year;
+        const existingPriceItem = await PriceList.findOne({
+          itemName: { $regex: nameRegex },
+          $or: [{ year: targetYear }, { year: String(targetYear) }],
+        });
         if (!existingPriceItem) {
           await PriceList.create({
             slNo: product.slNo,
@@ -67,6 +115,7 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
             unit: product.unit || 'Box',
             rate: product.rate || 0,
             mrp: product.mrp || 0,
+            year: targetYear,
           });
         }
       }
@@ -209,6 +258,7 @@ export const bulkImportProducts = async (req: Request, res: Response, next: Next
       startingSl = highestProd?.slNo || 0;
     }
 
+    const currentYear = new Date().getFullYear();
     const formattedDocs = items
       .map((item: any, idx: number) => {
         const name = String(item.name || item.itemName || '').trim();
@@ -223,6 +273,7 @@ export const bulkImportProducts = async (req: Request, res: Response, next: Next
           mrp: Number(item.mrp || 0),
           unit: String(item.unit || 'Box').trim() || 'Box',
           productType: targetType,
+          year: item.year ? Number(item.year) : currentYear,
         };
       })
       .filter(Boolean);
@@ -244,4 +295,3 @@ export const bulkImportProducts = async (req: Request, res: Response, next: Next
     next(error);
   }
 };
-

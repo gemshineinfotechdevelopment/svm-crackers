@@ -3,6 +3,7 @@ import {
   getParticulars,
   getParticularById,
   getNextBillNo,
+  getCustomerBillingHistory,
   createParticular,
   updateParticular,
   deleteParticular,
@@ -17,6 +18,8 @@ router.route('/').get(getParticulars).post(createParticular);
 
 // Specific named routes (placed before generic :id)
 router.route('/next-bill-no').get(getNextBillNo);
+router.route('/customer-history').get(getCustomerBillingHistory);
+router.route('/customer/:customerName/history').get(getCustomerBillingHistory);
 router.route('/:id/pdf').post(uploadParticularPdf).delete(deleteParticularPdf);
 
 // Generic ID routes

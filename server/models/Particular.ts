@@ -49,6 +49,20 @@ export interface IParticular extends Document {
   sgstTotal?: string;
   igstTotal?: string;
   roundOff?: string;
+  year?: number | string;
+  despatchTo?: string;
+  lorryTransport?: string;
+  lrNo?: string;
+  lrDate?: string;
+  taxType?: 'CGST_SGST' | 'IGST' | string;
+  taxPercent?: string;
+  cgstPercent?: string;
+  sgstPercent?: string;
+  igstPercent?: string;
+  subTotal?: string;
+  netAmount?: string;
+  inWords?: string;
+  billFlag?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -88,6 +102,7 @@ const ParticularSchema: Schema = new Schema(
     paidAmount: { type: String, default: '0.00' },
     notes: { type: String, default: '' },
     date: { type: String, required: true },
+    year: { type: Schema.Types.Mixed, index: true, default: () => new Date().getFullYear() },
     pdfData: { type: String, default: '' },
     pdfName: { type: String, default: '' },
     pdfPublicId: { type: String, default: '' },
@@ -103,9 +118,25 @@ const ParticularSchema: Schema = new Schema(
     sgstTotal: { type: String, default: '0.00' },
     igstTotal: { type: String, default: '0.00' },
     roundOff: { type: String, default: '0.00' },
+    despatchTo: { type: String, default: '' },
+    lorryTransport: { type: String, default: '' },
+    lrNo: { type: String, default: '' },
+    lrDate: { type: String, default: '' },
+    taxType: { type: String, default: 'IGST' },
+    taxPercent: { type: String, default: '18' },
+    cgstPercent: { type: String, default: '0' },
+    sgstPercent: { type: String, default: '0' },
+    igstPercent: { type: String, default: '18' },
+    subTotal: { type: String, default: '0' },
+    netAmount: { type: String, default: '0' },
+    inWords: { type: String, default: '' },
+    billFlag: { type: String, default: '' },
   },
   { timestamps: true }
 );
+
+ParticularSchema.index({ customerName: 1, year: 1 });
+ParticularSchema.index({ year: 1, createdAt: -1 });
 
 export const Particular = mongoose.model<IParticular>('Particular', ParticularSchema);
 

@@ -20,13 +20,15 @@ import accountRoutes from './routes/accountRoutes';
 import authRoutes from './routes/authRoutes';
 import settingsRoutes from './routes/settingsRoutes';
 import { seedDefaultAdmin } from './controllers/authController';
+import { backfillMissingYears } from './utils/yearUtils';
 
 const app: Application = express();
 const PORT = process.env.PORT || 5015;
 
-// Connect Database & Seed default admin
-connectDB().then(() => {
-  seedDefaultAdmin();
+// Connect Database, Seed default admin & Backfill historical years safely
+connectDB().then(async () => {
+  await seedDefaultAdmin();
+  await backfillMissingYears();
 });
 
 // Configure CORS Origins

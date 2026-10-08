@@ -37,6 +37,14 @@ import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
 import * as XLSX from 'xlsx';
 import { ProductsApi, CategoriesApi } from '../services/api';
 import { printProductsListDirectly } from '../utils/printUtils';
+import {
+  getActiveBillingYear,
+  setActiveBillingYear,
+  getStandardYearOptions,
+  YEAR_CHANGE_EVENT,
+} from '../utils/yearContext';
+import { getSelectedBillYear } from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 export type ProductType = 'Retail' | 'Wholesale' | 'Both';
 
@@ -50,6 +58,7 @@ export interface ProductItem {
   mrp?: number;
   unit?: string;
   productType?: ProductType | string;
+  year?: number;
 }
 
 export const ProductsPage: FC = () => {
@@ -59,6 +68,10 @@ export const ProductsPage: FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [activeTabType, setActiveTabType] = useState<'Retail' | 'Wholesale' | 'ALL'>('Retail');
+
+  // Year state
+  const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
+  const yearOptions = useMemo(() => getStandardYearOptions(), []);
 
   // Add / Edit Modal State
   const [openModal, setOpenModal] = useState(false);
@@ -93,11 +106,12 @@ export const ProductsPage: FC = () => {
     severity: 'info',
   });
 
-  const fetchProductsAndCategories = async () => {
+  const fetchProductsAndCategories = async (targetYear: number | string = selectedYear) => {
     try {
       setLoading(true);
+      const effectiveYear = targetYear || getSelectedBillYear();
       const [prodsData, catsData] = await Promise.all([
-        ProductsApi.getAll().catch(() => []),
+        ProductsApi.getAll(undefined, effectiveYear).catch(() => []),
         CategoriesApi.getAll().catch(() => []),
       ]);
 
@@ -112,6 +126,7 @@ export const ProductsPage: FC = () => {
           mrp: Number(p.mrp) || 0,
           unit: p.unit || 'Box',
           productType: (p.productType as ProductType) || 'Retail',
+          year: p.year ? Number(p.year) : Number(effectiveYear),
         }));
         setProducts(formatted);
       }
@@ -127,8 +142,24 @@ export const ProductsPage: FC = () => {
   };
 
   useEffect(() => {
-    fetchProductsAndCategories();
+    fetchProductsAndCategories(selectedYear);
+  }, [selectedYear]);
+
+  // Listen to Global Year change
+  useEffect(() => {
+    const handleYearChange = (e: any) => {
+      const newYr = e?.detail?.year ? Number(e.detail.year) : getActiveBillingYear();
+      setSelectedYear(newYr);
+    };
+    window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+    return () => window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
   }, []);
+
+  const handleYearChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const yr = Number(e.target.value);
+    setSelectedYear(yr);
+    setActiveBillingYear(yr);
+  };
 
   // Helper to get next Serial Number starting from 1 independently for each product type
   const getNextSlNoForType = (type: ProductType) => {
@@ -175,8 +206,14 @@ export const ProductsPage: FC = () => {
     });
   }, [tabProducts, selectedCategory, searchTerm]);
 
-  // Open Add Modal (Calculates next S.No starting from 1 for selected type)
+  // Open Add Modal
   const handleOpenAdd = () => {
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog(selectedYear, 'add products');
+      return;
+    }
+
     const targetType = activeTabType === 'ALL' ? 'Retail' : activeTabType;
     setEditingProduct(null);
     setProductType(targetType);
@@ -199,6 +236,12 @@ export const ProductsPage: FC = () => {
 
   // Open Edit Modal
   const handleOpenEdit = (product: ProductItem) => {
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog(selectedYear, 'edit products');
+      return;
+    }
+
     setEditingProduct(product);
     setProductType((product.productType as ProductType) || 'Retail');
     setProductSlNo(product.slNo || 1);
@@ -228,6 +271,8 @@ export const ProductsPage: FC = () => {
         rate: Number(productRate) || 0,
         mrp: Number(productMrp) || 0,
         productType: productType,
+        year: Number(selectedYear),
+        selectedViewYear: selectedYear,
       };
 
       if (editingProduct) {
@@ -247,10 +292,10 @@ export const ProductsPage: FC = () => {
         });
       }
       setOpenModal(false);
-      fetchProductsAndCategories();
-    } catch (err) {
+      fetchProductsAndCategories(selectedYear);
+    } catch (err: any) {
       console.error('Failed to save product:', err);
-      alert('Error saving product');
+      alert(err.message || 'Error saving product');
     } finally {
       setModalLoading(false);
     }
@@ -279,6 +324,12 @@ export const ProductsPage: FC = () => {
 
   const handleConfirmBulkDelete = async () => {
     if (selectedIds.length === 0) return;
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog(selectedYear, 'delete products');
+      return;
+    }
+
     try {
       setBulkDeleting(true);
       await ProductsApi.bulkDelete(selectedIds);
@@ -299,6 +350,12 @@ export const ProductsPage: FC = () => {
   };
 
   const handleDeleteProduct = async (product: ProductItem) => {
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog(selectedYear, 'delete products');
+      return;
+    }
+
     const id = product._id || product.id || '';
     if (!id) return;
     if (!window.confirm(`Delete product "${product.name}"?`)) return;
@@ -459,11 +516,18 @@ export const ProductsPage: FC = () => {
 
   const handleConfirmBulkImport = async () => {
     if (previewItems.length === 0) return;
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog(selectedYear, 'import products');
+      return;
+    }
+
     try {
       setUploading(true);
       const itemsToImport = previewItems.map((item) => ({
         ...item,
         productType: bulkUploadType === 'Both' ? 'Both' : (item.productType || bulkUploadType),
+        year: Number(selectedYear),
       }));
 
       await ProductsApi.bulkImport({
@@ -475,7 +539,7 @@ export const ProductsPage: FC = () => {
       setBulkUploadOpen(false);
       setPreviewItems([]);
       setUploadFileName('');
-      fetchProductsAndCategories();
+      fetchProductsAndCategories(selectedYear);
       setToast({
         open: true,
         message: `Successfully imported ${previewItems.length} products to ${bulkUploadType}!`,
@@ -567,8 +631,8 @@ export const ProductsPage: FC = () => {
             </Typography>
           </Box>
 
-          {/* Type Counts Badges */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          {/* Type Counts Badges & Year Selector */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Chip
                 label={`🛒 Retail: ${retailCount}`}
@@ -603,6 +667,34 @@ export const ProductsPage: FC = () => {
                   height: '22px',
                 }}
               />
+            </Box>
+
+            {/* Year Selector */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#0F172A' }}>
+                Year:
+              </Typography>
+              <select
+                value={selectedYear}
+                onChange={handleYearChange}
+                style={{
+                  height: '22px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#0B4DB7',
+                  border: '1px solid #0B4DB7',
+                  borderRadius: '3px',
+                  padding: '0 4px',
+                  background: '#F0F5FA',
+                  cursor: 'pointer',
+                }}
+              >
+                {yearOptions.map((y) => (
+                  <option key={y.value} value={y.value}>
+                    {y.label}
+                  </option>
+                ))}
+              </select>
             </Box>
           </Box>
         </Box>
@@ -731,6 +823,11 @@ export const ProductsPage: FC = () => {
               {/* Bulk Upload Button */}
               <Button
                 onClick={() => {
+                  const currentSystemYear = new Date().getFullYear();
+                  if (Number(selectedYear) !== currentSystemYear) {
+                    triggerYearRestrictionDialog(selectedYear, 'bulk upload products');
+                    return;
+                  }
                   setBulkUploadType(activeTabType === 'ALL' ? 'Retail' : activeTabType);
                   setPreviewItems([]);
                   setUploadFileName('');
@@ -775,7 +872,7 @@ export const ProductsPage: FC = () => {
               </Button>
 
               <Button
-                onClick={fetchProductsAndCategories}
+                onClick={() => fetchProductsAndCategories(selectedYear)}
                 startIcon={<RefreshRoundedIcon sx={{ fontSize: 14 }} />}
                 size="small"
                 sx={{
@@ -873,7 +970,7 @@ export const ProductsPage: FC = () => {
                   ) : filteredProducts.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
-                        {searchTerm ? 'No products match your search.' : `No ${activeTabType} products found. Click "+ Add Product" or "Bulk Upload" to add.`}
+                        {searchTerm ? 'No products match your search.' : `No ${activeTabType} products found for year ${selectedYear}. Click "+ Add Product" or "Bulk Upload" to add.`}
                       </TableCell>
                     </TableRow>
                   ) : (

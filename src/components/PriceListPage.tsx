@@ -53,6 +53,14 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import Tesseract from 'tesseract.js';
 import { PriceListsApi, CategoriesApi } from '../services/api';
 import { getStoredSettings } from './SettingsPage';
+import {
+  getActiveBillingYear,
+  setActiveBillingYear,
+  getStandardYearOptions,
+  YEAR_CHANGE_EVENT,
+} from '../utils/yearContext';
+import { getSelectedBillYear } from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -68,6 +76,7 @@ export interface PriceItem {
   rate: number;
   effectiveDate?: string;
   batchName?: string;
+  year?: number;
 }
 
 export interface UploadedPriceDoc {
@@ -87,6 +96,10 @@ export const PriceListPage: FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [activeViewMode, setActiveViewMode] = useState<'table' | 'documents'>('table');
   const [showUploadZone, setShowUploadZone] = useState<boolean>(false);
+
+  // Year state
+  const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
+  const yearOptions = useMemo(() => getStandardYearOptions(), []);
 
   // File Upload & Preview States
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -167,12 +180,13 @@ export const PriceListPage: FC = () => {
     }
   };
 
-  // Fetch initial data
-  const fetchData = async () => {
+  // Fetch initial data for selected year
+  const fetchData = async (targetYear: number | string = selectedYear) => {
     try {
       setLoading(true);
+      const effectiveYear = targetYear || getSelectedBillYear();
       const [priceData, catData] = await Promise.all([
-        PriceListsApi.getAll(),
+        PriceListsApi.getAll({ year: effectiveYear }),
         CategoriesApi.getAll().catch(() => []),
       ]);
 
@@ -180,6 +194,7 @@ export const PriceListPage: FC = () => {
       if (Array.isArray(priceData)) {
         mergedItems = priceData.map((item: any) => ({
           ...item,
+          year: item.year || effectiveYear,
         }));
       }
 
@@ -194,8 +209,31 @@ export const PriceListPage: FC = () => {
     }
   };
 
+  const handleYearChange = (newYear: number) => {
+    setSelectedYear(newYear);
+    setActiveBillingYear(newYear);
+    fetchData(newYear);
+  };
+
   useEffect(() => {
-    fetchData();
+    fetchData(selectedYear);
+
+    const handleGlobalYear = (e: any) => {
+      const year = e?.detail?.year ? Number(e.detail.year) : (typeof getSelectedBillYear === 'function' ? Number(getSelectedBillYear()) : undefined);
+      if (year && year !== selectedYear) {
+        setSelectedYear(year);
+        fetchData(year);
+      } else {
+        fetchData();
+      }
+    };
+    window.addEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+    window.addEventListener('apsara_bill_year_changed', handleGlobalYear);
+    return () => {
+      window.removeEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+      window.removeEventListener('apsara_bill_year_changed', handleGlobalYear);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Filtered price items
@@ -954,6 +992,7 @@ export const PriceListPage: FC = () => {
         items: previewItems,
         batchName: uploadBatchName || uploadFileName,
         replaceExisting,
+        year: selectedYear,
       });
 
       const newDoc: UploadedPriceDoc = {
@@ -969,7 +1008,7 @@ export const PriceListPage: FC = () => {
       setUploadModalOpen(false);
       setPreviewItems([]);
       setPendingPdfDataUrl('');
-      fetchData();
+      fetchData(selectedYear);
       setToast({
         open: true,
         message: `Successfully imported ${previewItems.length} items! Automatically synced to Product & Categories pages.`,
@@ -1022,12 +1061,13 @@ export const PriceListPage: FC = () => {
         unit: quickUnit || 'Box',
         rate: rNum,
         mrp: rNum,
+        year: selectedYear,
         batchName: docTitle || pendingDocUpload?.name || 'Photo Entry',
       });
 
       setQuickItemName('');
       setQuickRate('');
-      fetchData();
+      fetchData(selectedYear);
       setToast({
         open: true,
         message: `Product "${quickItemName.trim()}" added to Price List!`,
@@ -1221,6 +1261,13 @@ export const PriceListPage: FC = () => {
   };
 
   const handleOpenAdd = () => {
+    const currentSystemYear = new Date().getFullYear().toString();
+    const selectedViewYear = getSelectedBillYear();
+    if (selectedViewYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+      return;
+    }
+
     setEditingItem(null);
     setFormSlNo(items.length > 0 ? Math.max(...items.map((i) => i.slNo || 0)) + 1 : 1);
     setFormName('');
@@ -1255,6 +1302,15 @@ export const PriceListPage: FC = () => {
       return;
     }
 
+    if (!editingItem) {
+      const currentSystemYear = new Date().getFullYear().toString();
+      const selectedViewYear = getSelectedBillYear();
+      if (selectedViewYear !== currentSystemYear) {
+        triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+        return;
+      }
+    }
+
     try {
       setSavingItem(true);
       const payload = {
@@ -1265,6 +1321,7 @@ export const PriceListPage: FC = () => {
         mrp: Number(formMrp) || 0,
         discountPercent: Number(formDiscount) || 0,
         rate: rateNum,
+        year: selectedYear,
       };
 
       if (editingItem) {
@@ -1274,7 +1331,7 @@ export const PriceListPage: FC = () => {
         await PriceListsApi.create(payload);
       }
       setItemModalOpen(false);
-      fetchData();
+      fetchData(selectedYear);
       setToast({
         open: true,
         message: `Product "${payload.itemName}" saved successfully!`,
@@ -1409,8 +1466,45 @@ export const PriceListPage: FC = () => {
             />
           </Box>
 
-          {/* Subtabs & Import Toggle */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+          {/* Right: Year Selector & Subtabs */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {/* Year Selector */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                bgcolor: '#FFFFFF',
+                border: '1px solid #93C5FD',
+                borderRadius: '4px',
+                px: 1,
+                py: 0.2,
+              }}
+            >
+              <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF' }}>
+                Year:
+              </Typography>
+              <select
+                value={selectedYear}
+                onChange={(e) => handleYearChange(Number(e.target.value))}
+                style={{
+                  fontSize: '11.5px',
+                  fontWeight: 800,
+                  color: '#1E3A8A',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {yearOptions.map((y) => (
+                  <option key={y} value={y} style={{ color: '#0F172A', fontWeight: 600 }}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </Box>
+
             <Button
               size="small"
               onClick={() => setActiveViewMode('table')}

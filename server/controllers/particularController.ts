@@ -7,35 +7,102 @@ import { Product } from '../models/Product';
 import { Inventory } from '../models/Inventory';
 import { escapeRegex, recalculateCustomerBalance } from '../utils/ledgerUtils';
 import { isCloudinaryConfigured, uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
+import { extractYearFromDate } from '../utils/yearUtils';
 
 // Stock tracking is disabled
 const adjustStock = async (_products: any[], _multiplier: number): Promise<void> => {
   // No-op
 };
 
-
-
 export const getParticulars = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { customerName, billType } = req.query;
+    const { customerName, billType, year } = req.query;
     const filter: any = {};
-    if (customerName && typeof customerName === 'string' && customerName.trim() !== '' && customerName.toLowerCase() !== 'all') {
-      filter.customerName = { $regex: new RegExp(`^${escapeRegex(customerName.trim())}$`, 'i') };
+    const andConditions: any[] = [];
+
+    // Filter by Financial / Calendar Year if specified
+    if (year && typeof year === 'string' && year.trim() !== '' && year.toUpperCase() !== 'ALL') {
+      const parsedYear = parseInt(year, 10);
+      if (!isNaN(parsedYear)) {
+        andConditions.push({
+          $or: [
+            { year: parsedYear },
+            { year: String(parsedYear) },
+            { date: { $regex: new RegExp(String(parsedYear)) } },
+          ],
+        });
+      }
     }
+
+    // 2. Customer Name Filter
+    if (customerName && typeof customerName === 'string' && customerName.trim() !== '' && customerName.toLowerCase() !== 'all') {
+      andConditions.push({
+        customerName: { $regex: new RegExp(`^${escapeRegex(customerName.trim())}$`, 'i') },
+      });
+    }
+
+    // 3. Bill Type Filter (GST / REGULAR)
     if (billType && typeof billType === 'string' && billType.trim() !== '' && billType.toLowerCase() !== 'all') {
       const bType = billType.trim().toUpperCase();
       if (bType === 'GST') {
-        filter.$or = [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }];
+        andConditions.push({
+          $or: [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }],
+        });
       } else if (bType === 'REGULAR') {
-        filter.billType = { $ne: 'GST' };
-        filter.billNo = { $not: { $regex: /^GST/i } };
+        andConditions.push({
+          billType: { $ne: 'GST' },
+          billNo: { $not: { $regex: /^GST/i } },
+        });
       } else {
-        filter.billType = bType;
+        andConditions.push({ billType: bType });
       }
+    }
+
+    if (andConditions.length > 0) {
+      filter.$and = andConditions;
     }
 
     const particulars = await Particular.find(filter).sort({ createdAt: -1, _id: -1 });
     res.status(200).json({ success: true, count: particulars.length, data: particulars });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getCustomerBillingHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const customerName = String(req.query.customerName || req.params.customerName || '').trim();
+    const currentYear = Number(req.query.currentYear || req.query.year) || new Date().getFullYear();
+
+    if (!customerName) {
+      res.status(200).json({ success: true, data: { hasPreviousBills: false, currentYear, previousYears: [] } });
+      return;
+    }
+
+    const bills = await Particular.find({
+      customerName: { $regex: new RegExp(`^${escapeRegex(customerName)}$`, 'i') },
+    }).lean();
+
+    const yearCounts = new Map<number, number>();
+    for (const b of bills) {
+      const bYear = Number(b.year) || extractYearFromDate(b.date || b.createdAt, currentYear);
+      if (bYear < currentYear) {
+        yearCounts.set(bYear, (yearCounts.get(bYear) || 0) + 1);
+      }
+    }
+
+    const previousYears = Array.from(yearCounts.entries())
+      .map(([yr, billCount]) => ({ year: yr, billCount }))
+      .sort((a, b) => b.year - a.year);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        hasPreviousBills: previousYears.length > 0,
+        currentYear,
+        previousYears,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -57,8 +124,12 @@ export const getParticularById = async (req: Request, res: Response, next: NextF
 export const getNextBillNo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const type = (req.query.type as string || '').toUpperCase();
+    const year = req.query.year ? parseInt(String(req.query.year), 10) : undefined;
+    const yearQuery = year && !isNaN(year) ? { year } : {};
+
     if (type === 'GST') {
       const gstParticulars = await Particular.find({
+        ...yearQuery,
         $or: [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }]
       }, 'billNo');
       let maxNum = 0;
@@ -77,6 +148,7 @@ export const getNextBillNo = async (req: Request, res: Response, next: NextFunct
     }
 
     const regularParticulars = await Particular.find({
+      ...yearQuery,
       $and: [
         { billType: { $ne: 'GST' } },
         { billNo: { $not: { $regex: /^GST/i } } }
@@ -101,6 +173,18 @@ export const getNextBillNo = async (req: Request, res: Response, next: NextFunct
 
 export const createParticular = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const currentSystemYear = new Date().getFullYear().toString();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    // Backend Security Restriction: Bill creation ONLY allowed in current system year
+    if (selectedViewYear && String(selectedViewYear).trim() !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New bills can only be created in the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before creating a new bill.`,
+        error: 'Bill creation is only allowed in the current system year.',
+      });
+      return;
+    }
     const {
       customerName,
       customerPhone,
@@ -247,6 +331,18 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       computedStatus = 'PARTIAL';
     }
 
+    const rawDate = date || new Date().toISOString().split('T')[0];
+    const dateYear = extractYearFromDate(rawDate);
+    const targetYear = req.body.year ? Number(req.body.year) : dateYear;
+
+    if (req.body.year && dateYear !== Number(req.body.year)) {
+      res.status(400).json({
+        success: false,
+        error: `Bill date does not belong to the selected year (${req.body.year}). Please select a date from ${req.body.year}.`,
+      });
+      return;
+    }
+
     const particular = await Particular.create({
       customerName: trimmedCustName,
       customerPhone: customerPhone || '',
@@ -266,7 +362,8 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       paymentMode: paymentMode || (computedStatus === 'PAID' ? 'CASH' : 'CREDIT'),
       paidAmount: paidNum > 0 ? paidNum.toFixed(2) : '0.00',
       notes: notes || '',
-      date: date || new Date().toISOString().split('T')[0],
+      date: rawDate,
+      year: targetYear,
       products: products || [],
       billType: billType === 'GST' ? 'GST' : 'REGULAR',
       placeOfSupply: placeOfSupply || '',
@@ -278,6 +375,19 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       sgstTotal: sgstTotal || '0.00',
       igstTotal: igstTotal || '0.00',
       roundOff: roundOff || '0.00',
+      despatchTo: req.body.despatchTo || req.body.dispatchTo || '',
+      lorryTransport: req.body.lorryTransport || transport || '',
+      lrNo: req.body.lrNo || '',
+      lrDate: req.body.lrDate || '',
+      taxType: req.body.taxType || 'IGST',
+      taxPercent: req.body.taxPercent || gstRate || '18',
+      cgstPercent: req.body.cgstPercent || '0',
+      sgstPercent: req.body.sgstPercent || '0',
+      igstPercent: req.body.igstPercent || '18',
+      subTotal: req.body.subTotal || '0.00',
+      netAmount: req.body.netAmount || total || '0.00',
+      inWords: req.body.inWords || '',
+      billFlag: req.body.billFlag || '',
     });
 
     // 1. Automatically log Bill DEBIT to Account Ledger (Regular Bills ONLY, never for GST)
@@ -382,6 +492,9 @@ export const updateParticular = async (req: Request, res: Response, next: NextFu
         ...(paidAmount !== undefined && { paidAmount }),
         ...(notes !== undefined && { notes }),
         ...(date !== undefined && { date }),
+        ...(date !== undefined
+          ? { year: req.body.year ? Number(req.body.year) : extractYearFromDate(date) }
+          : (req.body.year !== undefined ? { year: Number(req.body.year) } : {})),
         ...(products !== undefined && { products }),
         ...(req.body.billType !== undefined && { billType: req.body.billType }),
         ...(req.body.placeOfSupply !== undefined && { placeOfSupply: req.body.placeOfSupply }),
@@ -393,6 +506,19 @@ export const updateParticular = async (req: Request, res: Response, next: NextFu
         ...(req.body.sgstTotal !== undefined && { sgstTotal: req.body.sgstTotal }),
         ...(req.body.igstTotal !== undefined && { igstTotal: req.body.igstTotal }),
         ...(req.body.roundOff !== undefined && { roundOff: req.body.roundOff }),
+        ...(req.body.despatchTo !== undefined && { despatchTo: req.body.despatchTo }),
+        ...(req.body.lorryTransport !== undefined && { lorryTransport: req.body.lorryTransport }),
+        ...(req.body.lrNo !== undefined && { lrNo: req.body.lrNo }),
+        ...(req.body.lrDate !== undefined && { lrDate: req.body.lrDate }),
+        ...(req.body.taxType !== undefined && { taxType: req.body.taxType }),
+        ...(req.body.taxPercent !== undefined && { taxPercent: req.body.taxPercent }),
+        ...(req.body.cgstPercent !== undefined && { cgstPercent: req.body.cgstPercent }),
+        ...(req.body.sgstPercent !== undefined && { sgstPercent: req.body.sgstPercent }),
+        ...(req.body.igstPercent !== undefined && { igstPercent: req.body.igstPercent }),
+        ...(req.body.subTotal !== undefined && { subTotal: req.body.subTotal }),
+        ...(req.body.netAmount !== undefined && { netAmount: req.body.netAmount }),
+        ...(req.body.inWords !== undefined && { inWords: req.body.inWords }),
+        ...(req.body.billFlag !== undefined && { billFlag: req.body.billFlag }),
       },
       { new: true, runValidators: true }
     );
