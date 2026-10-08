@@ -45,6 +45,9 @@ export interface GstBillPrintData {
   dispatchTo?: string;
   despatchFrom?: string;
   despatchTo?: string;
+  lorryTransport?: string;
+  lrNo?: string;
+  lrDate?: string;
   caseCount?: string | number;
   companyName?: string;
   gstin?: string;
@@ -56,8 +59,13 @@ export interface GstBillPrintData {
   packingCharges?: string | number;
   packingPercent?: string | number;
   taxableAmount?: string | number;
+  taxType?: string;
+  taxPercent?: string | number;
+  cgstPercent?: string | number;
   cgstTotal?: string | number;
+  sgstPercent?: string | number;
   sgstTotal?: string | number;
+  igstPercent?: string | number;
   igstTotal?: string | number;
   roundOff?: string | number;
   total: string | number;
