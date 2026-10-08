@@ -697,11 +697,9 @@ export const GstBillPage: FC = () => {
       setSnackbarMessage(`GST Bill #${billData.billNo} saved successfully!`);
       setSnackbarOpen(true);
 
-      // If Bill checkbox is checked, trigger print modal
-      if (billFlag) {
-        setSelectedBillForPrint(billData);
-        setPrintModalOpen(true);
-      }
+      // Open PDF Preview & Print Modal
+      setSelectedBillForPrint(billData);
+      setPrintModalOpen(true);
 
       fetchGstHistory();
       fetchNextGstBillNo();

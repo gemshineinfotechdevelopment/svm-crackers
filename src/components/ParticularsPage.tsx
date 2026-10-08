@@ -34,7 +34,6 @@ import {
 import { getStoredSettings } from './SettingsPage';
 import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
-import { printBillDirectly } from '../utils/printUtils';
 import {
   getActiveBillingYear,
   setActiveBillingYear,
@@ -479,9 +478,31 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
       setSnackbarOpen(true);
 
-      if (onEditSuccess) {
-        setTimeout(onEditSuccess, 1000);
-      }
+      // Construct bill data and open PDF Preview & Print Modal immediately
+      const savedBillData: BillPrintData = {
+        billNo: billNo || '1001',
+        date: billDate,
+        customerName: customerName.trim() || 'Valued Customer',
+        customerPhone: customerMobile.trim(),
+        customerAddress: customerAddress.trim(),
+        customerGst: customerGst.trim(),
+        companyName: companyName || storeSettings.companyName || 'Sri Vignatha Traders',
+        subtotal: subtotal,
+        discount: discountAmount,
+        packing: packingAmount,
+        total: netPayment,
+        invoiceTitle: 'QUOTATION',
+        products: validRows.map((r) => ({
+          particular: r.particular,
+          quantity: r.quantity,
+          rate: r.rate,
+          pktUnit: r.pktUnit,
+          amount: r.amount,
+        })),
+      };
+
+      setSelectedBillForPrint(savedBillData);
+      setPrintModalOpen(true);
     } catch (err: any) {
       console.error('Failed to save bill:', err);
       setSnackbarMessage(err.message || 'Failed to save Quotation.');
@@ -491,7 +512,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     }
   };
 
-  // Direct Print Handler
+  // Direct Print / PDF Handler
   const handlePrint = () => {
     const validRows = productRows.filter((r) => r.particular.trim() !== '');
     const billData: BillPrintData = {
@@ -517,7 +538,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     };
 
     setSelectedBillForPrint(billData);
-    printBillDirectly(billData);
+    setPrintModalOpen(true);
   };
 
   // Reset / Exit Form
@@ -1434,6 +1455,9 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           onClose={() => {
             setPrintModalOpen(false);
             setSelectedBillForPrint(null);
+            if (isEditMode && onEditSuccess) {
+              onEditSuccess();
+            }
           }}
           bill={selectedBillForPrint}
         />
