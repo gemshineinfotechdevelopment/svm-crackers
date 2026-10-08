@@ -352,34 +352,8 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setQuickCode('');
   };
 
-<<<<<<< HEAD
-  const discountAmount = useMemo(() => {
-    const rawDisc = parseFloat(discount) || 0;
-    if (rawDisc <= 0) return 0;
-    if (rawDisc <= 100) {
-      return (subtotal * rawDisc) / 100;
-    }
-    return rawDisc;
-  }, [subtotal, discount]);
-
-  const totalCases = useMemo(() => {
-    return productRows.reduce((acc, row) => acc + (parseFloat(row.quantity) || 0), 0);
-  }, [productRows]);
-
-  const grandTotal = useMemo(() => {
-    const transportAmt = parseFloat(transport) || 0;
-    const packingAmt = parseFloat(packing) || 0;
-    const isTaxEnabled = Boolean(storeSettings.enableTax);
-    const taxPercent = isTaxEnabled ? (parseFloat(tax) || 0) : 0;
-
-    const afterDiscount = Math.max(0, subtotal - discountAmount);
-    const withAdditions = afterDiscount + transportAmt + packingAmt;
-    const taxAmt = taxPercent > 0 ? (withAdditions * taxPercent) / 100 : 0;
-    return withAdditions + taxAmt;
-  }, [subtotal, discountAmount, transport, packing, tax, storeSettings.enableTax]);
-
   // Save Quotation / Bill
-  const handleSaveBill = async (actionType: 'save' | 'print' | 'share' = 'save') => {
+  const handleSaveBill = async () => {
     if (!isEditMode) {
       const currentSystemYear = new Date().getFullYear().toString();
       const selectedViewYear = getSelectedBillYear();
