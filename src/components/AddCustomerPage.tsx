@@ -3,11 +3,10 @@ import {
   Box,
   Typography,
   Button,
-  InputBase,
-  Paper,
   CircularProgress,
 } from '@mui/material';
-import AddCircleOutlineRoundedIcon from '@mui/icons-material/AddCircleOutlineRounded';
+import PersonAddAlt1RoundedIcon from '@mui/icons-material/PersonAddAlt1Rounded';
+import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import { CustomersApi } from '../services/api';
 
 interface AddCustomerPageProps {
@@ -51,7 +50,7 @@ export const AddCustomerPage: FC<AddCustomerPageProps> = ({
         address: formData.billingAddress.trim(),
         avatarLetter: formData.fullName.trim().charAt(0).toUpperCase(),
         avatarBg: '#F1F5F9',
-        avatarColor: '#B91C1C',
+        avatarColor: '#1E3A8A',
       });
       if (onSubmitSuccess) {
         onSubmitSuccess();
@@ -65,318 +64,212 @@ export const AddCustomerPage: FC<AddCustomerPageProps> = ({
   };
 
   return (
-    <Box
-      sx={{
-        width: '100%',
-        px: { xs: 2, sm: 3, md: 4 },
-        py: { xs: 2.5, md: 3 },
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* Page Title & Subtitle */}
-      <Box sx={{ mb: 3 }}>
-        <Typography
-          variant="h1"
-          sx={{
-            fontSize: '28px',
-            fontWeight: 800,
-            color: '#B91C1C',
-            letterSpacing: '-0.025em',
-            lineHeight: 1.2,
-            mb: 0.8,
-          }}
-        >
-          Add New Customer
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: '14px',
-            color: '#475569',
-            fontWeight: 500,
-            letterSpacing: '-0.01em',
-          }}
-        >
-          Enter the details below to register a new customer profile into the billing platform.
-        </Typography>
-      </Box>
-
-      {/* Main Form Card */}
-      <Paper
-        elevation={0}
+    <Box sx={{ width: '100%', p: { xs: 1, sm: 1.5 }, bgcolor: '#D9E4F2', minHeight: 'calc(100vh - 70px)' }}>
+      {/* Outer Window Card */}
+      <Box
         sx={{
-          width: '100%',
-          backgroundColor: '#FFFFFF',
-          borderRadius: '14px',
-          border: '1px solid #E2E8F0',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
-          p: { xs: 2.5, sm: 3.5, md: 4 },
-          boxSizing: 'border-box',
+          maxWidth: '850px',
+          mx: 'auto',
+          bgcolor: '#FFFFFF',
+          border: '1px solid #9BB3CC',
+          borderRadius: '4px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        <Box component="form" noValidate autoComplete="off">
+        {/* Window Title Header Bar */}
+        <Box
+          sx={{
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            px: 1.5,
+            py: 0.8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PersonAddAlt1RoundedIcon sx={{ fontSize: 18, color: '#0284C7' }} />
+            <Typography
+              sx={{
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#0F172A',
+                letterSpacing: '0.01em',
+              }}
+            >
+              Add New Customer Profile
+            </Typography>
+          </Box>
+
+          <Button
+            onClick={onCancel}
+            startIcon={<ArrowBackRoundedIcon sx={{ fontSize: 15 }} />}
+            size="small"
+            sx={{
+              height: '24px',
+              px: 1,
+              py: 0,
+              bgcolor: '#EDF4FB',
+              border: '1px solid #94A3B8',
+              color: '#0F172A',
+              fontSize: '11.5px',
+              fontWeight: 700,
+              textTransform: 'none',
+              borderRadius: '3px',
+              '&:hover': { bgcolor: '#D9E4F2' },
+            }}
+          >
+            Back to List
+          </Button>
+        </Box>
+
+        {/* Inner Content Area */}
+        <Box sx={{ p: { xs: 1.5, sm: 2.5 }, bgcolor: '#F0F5FA' }}>
           <Box
             sx={{
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-              gap: 2.5,
+              gap: 1.5,
+              mb: 1.5,
             }}
           >
-            {/* Full Name Field */}
-            <Box>
-              <Typography
-                sx={{
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: '#1F1714',
-                  mb: 1,
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                Full Name / Business Name *
-              </Typography>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  backgroundColor: '#FFFFFF',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '8px',
-                  px: 1.5,
-                  height: '42px',
-                  transition: 'all 0.15s ease',
-                  '&:focus-within': {
-                    borderColor: '#DC2626',
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 0 0 3px rgba(220, 38, 38, 0.12)',
-                  },
-                }}
-              >
-                <InputBase
-                  fullWidth
-                  placeholder="e.g. Acme Fireworks"
-                  value={formData.fullName}
-                  onChange={handleChange('fullName')}
-                  sx={{
-                    fontSize: '13.5px',
-                    fontWeight: 500,
-                    color: '#1F1714',
-                    '& input::placeholder': {
-                      color: '#9CA3AF',
-                      opacity: 1,
-                    },
-                  }}
-                />
-              </Box>
-            </Box>
+            {/* Box 1: Customer Personal Details */}
+            <fieldset className="erp-fieldset">
+              <legend className="erp-legend">Customer Identity</legend>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
+                {/* Full Name */}
+                <Box>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
+                    Full Name / Business Name *
+                  </Typography>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Ramesh Traders"
+                    value={formData.fullName}
+                    onChange={handleChange('fullName')}
+                    className="erp-input"
+                    style={{ width: '100%' }}
+                  />
+                </Box>
 
-            {/* Mobile Number Field */}
-            <Box>
-              <Typography
-                sx={{
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: '#1F1714',
-                  mb: 1,
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                Mobile Number
-              </Typography>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  backgroundColor: '#FFFFFF',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '8px',
-                  px: 1.5,
-                  height: '42px',
-                  transition: 'all 0.15s ease',
-                  '&:focus-within': {
-                    borderColor: '#DC2626',
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 0 0 3px rgba(220, 38, 38, 0.12)',
-                  },
-                }}
-              >
-                <InputBase
-                  fullWidth
-                  placeholder="e.g. +91 98765 43210"
-                  value={formData.mobileNumber}
-                  onChange={handleChange('mobileNumber')}
-                  sx={{
-                    fontSize: '13.5px',
-                    fontWeight: 500,
-                    color: '#1F1714',
-                    '& input::placeholder': {
-                      color: '#9CA3AF',
-                      opacity: 1,
-                    },
-                  }}
-                />
+                {/* Mobile Number */}
+                <Box>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
+                    Mobile Number
+                  </Typography>
+                  <input
+                    type="text"
+                    placeholder="e.g. 9876543210"
+                    value={formData.mobileNumber}
+                    onChange={handleChange('mobileNumber')}
+                    className="erp-input"
+                    style={{ width: '100%' }}
+                  />
+                </Box>
               </Box>
-            </Box>
+            </fieldset>
 
-            {/* GSTIN Field */}
-            <Box>
-              <Typography
-                sx={{
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: '#1F1714',
-                  mb: 1,
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                GSTIN / Tax ID
-              </Typography>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  backgroundColor: '#FFFFFF',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '8px',
-                  px: 1.5,
-                  height: '42px',
-                  transition: 'all 0.15s ease',
-                  '&:focus-within': {
-                    borderColor: '#DC2626',
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 0 0 3px rgba(220, 38, 38, 0.12)',
-                  },
-                }}
-              >
-                <InputBase
-                  fullWidth
-                  placeholder="e.g. 33ABCDE1234F1Z5"
-                  value={formData.gstin}
-                  onChange={handleChange('gstin')}
-                  sx={{
-                    fontSize: '13.5px',
-                    fontWeight: 500,
-                    color: '#1F1714',
-                    '& input::placeholder': {
-                      color: '#9CA3AF',
-                      opacity: 1,
-                    },
-                  }}
-                />
+            {/* Box 2: Tax & Statutory Info */}
+            <fieldset className="erp-fieldset">
+              <legend className="erp-legend">Tax Information</legend>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
+                {/* GSTIN */}
+                <Box>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
+                    GSTIN / Tax ID
+                  </Typography>
+                  <input
+                    type="text"
+                    placeholder="e.g. 33ABCDE1234F1Z5"
+                    value={formData.gstin}
+                    onChange={handleChange('gstin')}
+                    className="erp-input"
+                    style={{ width: '100%', textTransform: 'uppercase' }}
+                  />
+                </Box>
               </Box>
-            </Box>
-
-            {/* Billing Address Field */}
-            <Box>
-              <Typography
-                sx={{
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: '#1F1714',
-                  mb: 1,
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                Billing / Delivery Address *
-              </Typography>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  backgroundColor: '#FFFFFF',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '8px',
-                  px: 1.5,
-                  height: '42px',
-                  transition: 'all 0.15s ease',
-                  '&:focus-within': {
-                    borderColor: '#DC2626',
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 0 0 3px rgba(220, 38, 38, 0.12)',
-                  },
-                }}
-              >
-                <InputBase
-                  fullWidth
-                  placeholder="e.g. 123 Bazaar Street, Sivakasi"
-                  value={formData.billingAddress}
-                  onChange={handleChange('billingAddress')}
-                  sx={{
-                    fontSize: '13.5px',
-                    fontWeight: 500,
-                    color: '#1F1714',
-                    '& input::placeholder': {
-                      color: '#9CA3AF',
-                      opacity: 1,
-                    },
-                  }}
-                />
-              </Box>
-            </Box>
+            </fieldset>
           </Box>
 
-          {/* Action Buttons */}
+          {/* Box 3: Address Details */}
+          <fieldset className="erp-fieldset" style={{ marginBottom: '16px' }}>
+            <legend className="erp-legend">Billing & Delivery Address</legend>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6 }}>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A' }}>
+                Full Address *
+              </Typography>
+              <textarea
+                rows={3}
+                required
+                placeholder="Enter complete billing / delivery address..."
+                value={formData.billingAddress}
+                onChange={handleChange('billingAddress')}
+                className="erp-input"
+                style={{ width: '100%', resize: 'vertical' }}
+              />
+            </Box>
+          </fieldset>
+
+          {/* Action Buttons: Cancel & Save */}
           <Box
             sx={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
-              gap: 1.5,
-              mt: 4,
-              pt: 3,
-              borderTop: '1px solid #F1F5F9',
+              gap: 1,
+              pt: 1.5,
+              borderTop: '1px solid #C2D3E5',
             }}
           >
             <Button
-              variant="outlined"
               onClick={onCancel}
               disabled={loading}
+              variant="outlined"
+              size="small"
               sx={{
-                height: '40px',
-                px: 2.5,
-                borderRadius: '8px',
-                fontSize: '13.5px',
-                fontWeight: 600,
-                color: '#475569',
-                borderColor: '#E2E8F0',
+                bgcolor: '#E5ECF4',
+                borderColor: '#94A3B8',
+                color: '#0F172A',
+                fontWeight: 700,
+                fontSize: '12.5px',
+                px: 2,
+                py: 0.5,
+                borderRadius: '3px',
                 textTransform: 'none',
-                '&:hover': {
-                  borderColor: '#D97706',
-                  backgroundColor: '#F8FAFC',
-                },
+                '&:hover': { bgcolor: '#D9E4F2' },
               }}
             >
               Cancel
             </Button>
 
             <Button
-              variant="contained"
-              disableElevation
               onClick={handleSubmit}
               disabled={loading}
-              startIcon={
-                loading ? <CircularProgress size={16} color="inherit" /> : <AddCircleOutlineRoundedIcon sx={{ fontSize: 18 }} />
-              }
+              variant="contained"
+              size="small"
               sx={{
-                height: '40px',
-                px: 3,
-                borderRadius: '8px',
-                fontSize: '13.5px',
-                fontWeight: 700,
-                background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
+                bgcolor: '#741748',
                 color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: '12.5px',
+                px: 2.5,
+                py: 0.5,
+                minWidth: '120px',
+                borderRadius: '3px',
                 textTransform: 'none',
-                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)',
-                  boxShadow: '0 4px 12px rgba(220, 38, 38, 0.4)',
-                },
+                '&:hover': { bgcolor: '#580e34' },
               }}
             >
-              {loading ? 'Creating...' : 'Register Customer'}
+              {loading ? <CircularProgress size={16} color="inherit" /> : 'Register Customer'}
             </Button>
           </Box>
         </Box>
-      </Paper>
+      </Box>
     </Box>
   );
 };

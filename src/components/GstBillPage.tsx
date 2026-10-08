@@ -1555,6 +1555,11 @@ export const GstBillPage: FC = () => {
                       }}
                     />
                   </Box>
+                </fieldset>
+              </Grid>
+            </Grid>
+          </Box>
+        )}
 
                   {/* Bottom: Bill Checkbox and [ Save Bill ] / [ Print ] */}
                   <Box

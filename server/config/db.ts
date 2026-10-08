@@ -4,7 +4,7 @@ export const connectDB = async (retryCount = 0): Promise<void> => {
   let uri =
     process.env.MONGODB_URI ||
     process.env.MONGO_URI ||
-    'mongodb://127.0.0.1:27017/apsara_crackers_db';
+    'mongodb://127.0.0.1:27017/svm_crackers';
 
   // Strip accidental angle brackets from connection strings if present
   if (uri.includes('<') && uri.includes('>')) {
@@ -13,7 +13,7 @@ export const connectDB = async (retryCount = 0): Promise<void> => {
 
   // Ensure DB name is explicitly set if using default cluster query string without DB name
   if (uri.includes('.mongodb.net/?')) {
-    uri = uri.replace('.mongodb.net/?', '.mongodb.net/apsara_crackers_db?');
+    uri = uri.replace('.mongodb.net/?', '.mongodb.net/svm_crackers?');
   }
 
   try {
