@@ -552,7 +552,7 @@ export const GstBillPage: FC = () => {
       despatchFrom: dispatchFrom || '',
       despatchTo: dispatchTo || '',
       caseCount: lineCalculations.totalCases,
-      companyName: 'APSARA TRADERS',
+      companyName: storeSettings.companyName || 'SVM TRADERS',
       gstin: storeSettings.gstin || '33ABFFA6758B1ZP',
       hsnNo: '3604',
       products: lineCalculations.computedRows,

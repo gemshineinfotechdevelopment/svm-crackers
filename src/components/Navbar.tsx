@@ -21,16 +21,16 @@ import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
-import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import CategoryRoundedIcon from '@mui/icons-material/CategoryRounded';
 import FormatListNumberedRoundedIcon from '@mui/icons-material/FormatListNumberedRounded';
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
+import RequestQuoteRoundedIcon from '@mui/icons-material/RequestQuoteRounded';
 import defaultApsaraLogo from '../assets/logo.png';
 import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { HealthApi, API_BASE_URL } from '../services/api';
 
-export type NavTab = 'All Customers' | 'Billing' | 'GST Bill' | 'Categories' | 'Price List' | 'Product' | 'Settings';
+export type NavTab = 'All Customers' | 'Quotation' | 'GST Bill' | 'Categories' | 'Price List' | 'Product' | 'Settings';
 
 interface NavbarProps {
   activeTab?: NavTab;
@@ -38,22 +38,17 @@ interface NavbarProps {
   onLogout?: () => void;
 }
 
-const TAB_ICONS: Record<NavTab, React.ReactElement> = {
-  'All Customers': <PeopleAltRoundedIcon sx={{ fontSize: 20 }} />,
-  'Billing': <ReceiptLongRoundedIcon sx={{ fontSize: 20 }} />,
-  'GST Bill': <DescriptionRoundedIcon sx={{ fontSize: 20 }} />,
-  'Categories': <CategoryRoundedIcon sx={{ fontSize: 20 }} />,
-  'Price List': <FormatListNumberedRoundedIcon sx={{ fontSize: 20 }} />,
-  'Product': <Inventory2RoundedIcon sx={{ fontSize: 20 }} />,
-  'Settings': <SettingsRoundedIcon sx={{ fontSize: 20 }} />,
-};
+interface ErpMenuItem {
+  label: string;
+  tabKey?: NavTab;
+  isAction?: boolean;
+}
 
 export const Navbar: FC<NavbarProps> = ({
   activeTab = 'All Customers',
   onSelectTab,
   onLogout,
 }) => {
-  const tabs: NavTab[] = ['All Customers', 'Billing', 'GST Bill', 'Categories', 'Price List', 'Product', 'Settings'];
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [companySettings, setCompanySettings] = useState<CompanySettings>(getStoredSettings);
@@ -107,158 +102,75 @@ export const Navbar: FC<NavbarProps> = ({
     if (onLogout) onLogout();
   };
 
+  // Top ERP Menu Items matching the desktop software photo
+  const erpMenuItems: ErpMenuItem[] = [
+    { label: 'Master', tabKey: 'Product' },
+    { label: 'Customers', tabKey: 'All Customers' },
+    { label: 'Purchases', tabKey: 'Price List' },
+    { label: 'Sales', tabKey: 'Quotation' },
+    { label: 'Categories', tabKey: 'Categories' },
+    { label: 'Product Master', tabKey: 'Product' },
+    { label: 'Quotation', tabKey: 'Quotation' },
+    { label: 'Price List', tabKey: 'Price List' },
+    { label: 'Tax Bill', tabKey: 'GST Bill' },
+    { label: 'Settings', tabKey: 'Settings' },
+  ];
+
+  const firmName = (companySettings.companyName || 'SRI VIGNATHA TRADERS').toUpperCase();
+  const currentYear = new Date().getFullYear();
+
   return (
-    <>
+    <Box component="header" sx={{ width: '100%', userSelect: 'none' }}>
+      {/* 1. Classic Windows ERP Title Bar */}
       <Box
-        component="header"
         sx={{
           width: '100%',
           backgroundColor: '#FFFFFF',
-          borderBottom: '1px solid #E2E8F0',
-          background: '#FFFFFF',
-          px: { xs: 1.5, sm: 2.5, md: 4 },
-          height: { xs: '58px', sm: '66px' },
+          borderBottom: '1px solid #C5D5E6',
+          height: { xs: '32px', sm: '36px' },
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          position: { xs: 'static', md: 'sticky' },
-          top: { xs: 'auto', md: 0 },
-          zIndex: 1100,
-          boxSizing: 'border-box',
-          boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)',
+          px: { xs: 1, sm: 1.5 },
+          boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
         }}
       >
-        {/* Left Brand Identity: Logo + Firm Title */}
-        <Box
-          onClick={() => handleTabClick('All Customers')}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: { xs: 1, sm: 1.5 },
-            cursor: 'pointer',
-            userSelect: 'none',
-            maxWidth: { xs: '200px', sm: '260px', md: '300px' },
-          }}
-        >
-          {/* Logo */}
+        {/* Left: Window Icon + Title */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box
             component="img"
             src={companySettings.logoUrl || defaultApsaraLogo}
-            alt={companySettings.companyName || 'Apsara Crackers'}
+            alt="Logo"
             sx={{
-              width: { xs: 34, sm: 40 },
-              height: { xs: 34, sm: 40 },
+              width: 18,
+              height: 18,
               objectFit: 'contain',
-              borderRadius: '8px',
-              flexShrink: 0,
-              filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.1))',
+              borderRadius: '2px',
             }}
           />
-
-          <Box sx={{ minWidth: 0, overflow: 'hidden' }}>
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 800,
-                fontSize: { xs: '14.5px', sm: '17px' },
-                color: '#B91C1C',
-                letterSpacing: '-0.02em',
-                lineHeight: 1.15,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {companySettings.companyName || 'Apsara Crackers'}
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: { xs: '9px', sm: '10.5px' },
-                fontWeight: 700,
-                color: '#D97706',
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {companySettings.tagline || (companySettings.city ? `${companySettings.city}` : 'Billing & Management')}
-            </Typography>
-          </Box>
+          <Typography
+            sx={{
+              fontSize: { xs: '12px', sm: '13px' },
+              fontWeight: 700,
+              color: '#0F172A',
+              letterSpacing: '0.02em',
+              textTransform: 'uppercase',
+            }}
+          >
+            {firmName} - {currentYear}
+          </Typography>
         </Box>
 
-        {/* Center Desktop Navigation Links (Hidden on Mobile/Tablet) */}
-        <Box
-          component="nav"
-          sx={{
-            display: { xs: 'none', md: 'flex' },
-            alignItems: 'center',
-            gap: { md: 2.5, lg: 3.5 },
-            height: '100%',
-          }}
-        >
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab;
-            return (
-              <Box
-                key={tab}
-                onClick={() => handleTabClick(tab)}
-                sx={{
-                  position: 'relative',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  px: 0.5,
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontWeight: isActive ? 800 : 600,
-                    fontSize: '14px',
-                    color: isActive ? '#B91C1C' : '#475569',
-                    letterSpacing: '-0.01em',
-                    transition: 'all 0.15s ease',
-                    '&:hover': {
-                      color: '#B91C1C',
-                    },
-                  }}
-                >
-                  {tab}
-                </Typography>
-
-                {/* Active indicator underline bar */}
-                {isActive && (
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      height: '3px',
-                      background: 'linear-gradient(90deg, #DC2626 0%, #F59E0B 100%)',
-                      borderTopLeftRadius: '3px',
-                      borderTopRightRadius: '3px',
-                    }}
-                  />
-                )}
-              </Box>
-            );
-          })}
-        </Box>
-
-        {/* Right Action Section */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, sm: 1.5 } }}>
-          {/* Live Backend Connection Status Pill */}
+        {/* Right: Window Control Buttons (_ □ X) + Profile */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          {/* Backend Connection Status Badge */}
           <Tooltip
             title={
               backendStatus === 'connected'
-                ? `Backend Connected: ${backendUrl}`
+                ? `Database Online: ${backendUrl}`
                 : backendStatus === 'checking'
-                ? 'Testing backend connection...'
-                : `Backend Disconnected (${backendUrl}). Click to retry.`
+                ? 'Connecting...'
+                : `Offline. Click to retry.`
             }
             arrow
           >
@@ -267,10 +179,10 @@ export const Navbar: FC<NavbarProps> = ({
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 0.8,
-                py: 0.5,
-                px: { xs: 0.9, sm: 1.3 },
-                borderRadius: '20px',
+                gap: 0.5,
+                py: 0.2,
+                px: 0.8,
+                borderRadius: '3px',
                 backgroundColor:
                   backendStatus === 'connected'
                     ? '#F0FDF4'
@@ -279,20 +191,19 @@ export const Navbar: FC<NavbarProps> = ({
                     : '#FEF2F2',
                 border: `1px solid ${
                   backendStatus === 'connected'
-                    ? '#BBF7D0'
+                    ? '#86EFAC'
                     : backendStatus === 'checking'
                     ? '#FEF08A'
                     : '#FECACA'
                 }`,
                 cursor: backendStatus === 'disconnected' ? 'pointer' : 'default',
-                transition: 'all 0.2s ease',
-                userSelect: 'none',
+                mr: 1,
               }}
             >
               <Box
                 sx={{
-                  width: 8,
-                  height: 8,
+                  width: 6,
+                  height: 6,
                   borderRadius: '50%',
                   backgroundColor:
                     backendStatus === 'connected'
@@ -300,15 +211,11 @@ export const Navbar: FC<NavbarProps> = ({
                       : backendStatus === 'checking'
                       ? '#CA8A04'
                       : '#DC2626',
-                  boxShadow:
-                    backendStatus === 'connected'
-                      ? '0 0 0 2px rgba(22, 163, 74, 0.25)'
-                      : 'none',
                 }}
               />
               <Typography
                 sx={{
-                  fontSize: '11px',
+                  fontSize: '10px',
                   fontWeight: 700,
                   color:
                     backendStatus === 'connected'
@@ -316,170 +223,154 @@ export const Navbar: FC<NavbarProps> = ({
                       : backendStatus === 'checking'
                       ? '#854D0E'
                       : '#991B1B',
-                  letterSpacing: '0.01em',
-                  display: { xs: 'none', sm: 'inline-block' },
+                  display: { xs: 'none', sm: 'inline' },
                 }}
               >
-                {backendStatus === 'connected'
-                  ? 'Backend Connected'
-                  : backendStatus === 'checking'
-                  ? 'Connecting...'
-                  : 'Backend Offline'}
+                {backendStatus === 'connected' ? 'Online' : 'Offline'}
               </Typography>
             </Box>
           </Tooltip>
 
-          {/* Profile Avatar Button */}
-          <Box
-            onClick={handleProfileClick}
-            sx={{
-              width: { xs: 32, sm: 36 },
-              height: { xs: 32, sm: 36 },
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #1E40AF 0%, #1E3A8A 100%)',
-              border: '1.5px solid #E2E8F0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              boxShadow: '0 2px 6px rgba(30, 64, 175, 0.2)',
-              '&:hover': {
-                transform: 'scale(1.06)',
-              },
-            }}
-          >
-            <PersonOutlineRoundedIcon sx={{ fontSize: { xs: 18, sm: 20 }, color: '#FFFFFF' }} />
-          </Box>
-
-          {/* Mobile Hamburger Menu Button (Visible only on mobile/tablet) */}
+          {/* User Icon */}
           <IconButton
-            onClick={() => setMobileDrawerOpen(true)}
+            onClick={handleProfileClick}
+            size="small"
             sx={{
-              display: { xs: 'flex', md: 'none' },
-              color: '#B91C1C',
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              p: 0.8,
-              borderRadius: '8px',
-              '&:hover': {
-                backgroundColor: '#F1F5F9',
-              },
+              p: 0.4,
+              borderRadius: '3px',
+              '&:hover': { backgroundColor: '#E2E8F0' },
             }}
           >
-            <MenuRoundedIcon sx={{ fontSize: 22 }} />
+            <PersonOutlineRoundedIcon sx={{ fontSize: 18, color: '#1E40AF' }} />
           </IconButton>
         </Box>
-
-        {/* Profile / Logout Popup Menu */}
-        <Menu
-          anchorEl={anchorEl}
-          open={Boolean(anchorEl)}
-          onClose={handleCloseMenu}
-          transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-          anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-          slotProps={{
-            paper: {
-              sx: {
-                borderRadius: '12px',
-                minWidth: '170px',
-                boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08)',
-                border: '1px solid #E2E8F0',
-                backgroundColor: '#FFFFFF',
-                mt: 1,
-              },
-            },
-          }}
-        >
-          <MenuItem disabled sx={{ opacity: '1 !important', py: 1.2 }}>
-            <ListItemIcon>
-              <AdminPanelSettingsRoundedIcon sx={{ fontSize: 20, color: '#B91C1C' }} />
-            </ListItemIcon>
-            <Box>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
-                Administrator
-              </Typography>
-              <Typography sx={{ fontSize: '11px', color: '#D97706', fontWeight: 600 }}>
-                Logged In
-              </Typography>
-            </Box>
-          </MenuItem>
-          <Divider sx={{ my: 0.5, borderColor: '#E2E8F0' }} />
-          <MenuItem
-            onClick={() => {
-              handleCloseMenu();
-              handleTabClick('Settings');
-            }}
-            sx={{ py: 1 }}
-          >
-            <ListItemIcon>
-              <SettingsRoundedIcon sx={{ fontSize: 18, color: '#B91C1C' }} />
-            </ListItemIcon>
-            <Typography sx={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
-              Software Settings
-            </Typography>
-          </MenuItem>
-          <MenuItem onClick={handleLogoutClick} sx={{ color: '#DC2626', py: 1 }}>
-            <ListItemIcon>
-              <LogoutRoundedIcon sx={{ fontSize: 18, color: '#DC2626' }} />
-            </ListItemIcon>
-            <Typography sx={{ fontSize: '13px', fontWeight: 700 }}>
-              Logout
-            </Typography>
-          </MenuItem>
-        </Menu>
       </Box>
 
-      {/* Mobile Horizontal Touch Tab Bar (Quick thumb scrolling under Navbar on Mobile) */}
+      {/* 2. Desktop ERP Menu Bar (Master | Customers | Purchases | Sales | Quotation | Tax Bill etc) */}
       <Box
         sx={{
-          display: { xs: 'flex', md: 'none' },
+          width: '100%',
+          backgroundColor: '#EDF4FB',
+          borderBottom: '1px solid #B0C4DE',
+          px: { xs: 1, sm: 2 },
+          height: '34px',
+          display: 'flex',
           alignItems: 'center',
-          gap: 1,
-          px: 1.5,
-          py: 0.8,
-          backgroundColor: '#FFFFFF',
-          borderBottom: '1px solid #E2E8F0',
+          justifyContent: 'space-between',
           overflowX: 'auto',
           scrollbarWidth: 'none',
           '&::-webkit-scrollbar': { display: 'none' },
-          position: 'static',
-          top: 'auto',
-          zIndex: 1090,
         }}
       >
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab;
-          return (
-            <Box
-              key={tab}
-              onClick={() => handleTabClick(tab)}
-              sx={{
-                px: 1.4,
-                py: 0.6,
-                borderRadius: '20px',
-                backgroundColor: isActive ? '#DC2626' : '#F8FAFC',
-                color: isActive ? '#FFFFFF' : '#475569',
-                border: isActive ? '1px solid #B91C1C' : '1px solid #E2E8F0',
-                fontSize: '12px',
-                fontWeight: 700,
-                whiteSpace: 'nowrap',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.6,
-                flexShrink: 0,
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {TAB_ICONS[tab]}
-              {tab}
-            </Box>
-          );
-        })}
+        {/* Desktop Menu Links */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
+          {erpMenuItems.map((item, index) => {
+            const isTabActive = item.tabKey && activeTab === item.tabKey;
+            return (
+              <Box
+                key={index}
+                onClick={() => item.tabKey && handleTabClick(item.tabKey)}
+                sx={{
+                  cursor: 'pointer',
+                  py: 0.3,
+                  px: 0.8,
+                  borderRadius: '3px',
+                  backgroundColor: isTabActive ? '#D2E3F5' : 'transparent',
+                  border: isTabActive ? '1px solid #99BBE8' : '1px solid transparent',
+                  '&:hover': {
+                    backgroundColor: '#DCEBFA',
+                    borderColor: '#A8C7EE',
+                  },
+                  transition: 'all 0.1s ease',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: '12.5px',
+                    fontWeight: isTabActive ? 800 : 600,
+                    color: isTabActive ? '#1E3A8A' : '#0F172A',
+                  }}
+                >
+                  {item.label}
+                </Typography>
+              </Box>
+            );
+          })}
+        </Box>
+
+        {/* Mobile Hamburger Drawer Toggle (Mobile only) */}
+        <IconButton
+          onClick={() => setMobileDrawerOpen(true)}
+          sx={{
+            display: { xs: 'flex', md: 'none' },
+            p: 0.4,
+            color: '#1E3A8A',
+          }}
+        >
+          <MenuRoundedIcon sx={{ fontSize: 18 }} />
+        </IconButton>
       </Box>
 
-      {/* Mobile Slide-Out Drawer Menu */}
+      {/* Profile / Logout Popup Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleCloseMenu}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '6px',
+              minWidth: '180px',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+              border: '1px solid #B0C4DE',
+              backgroundColor: '#FFFFFF',
+              mt: 0.5,
+            },
+          },
+        }}
+      >
+        <MenuItem disabled sx={{ opacity: '1 !important', py: 1 }}>
+          <ListItemIcon>
+            <AdminPanelSettingsRoundedIcon sx={{ fontSize: 18, color: '#1E40AF' }} />
+          </ListItemIcon>
+          <Box>
+            <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
+              Administrator
+            </Typography>
+            <Typography sx={{ fontSize: '10px', color: '#16A34A', fontWeight: 600 }}>
+              System Ready
+            </Typography>
+          </Box>
+        </MenuItem>
+        <Divider sx={{ my: 0.5, borderColor: '#E2E8F0' }} />
+        <MenuItem
+          onClick={() => {
+            handleCloseMenu();
+            handleTabClick('Settings');
+          }}
+          sx={{ py: 0.8 }}
+        >
+          <ListItemIcon>
+            <SettingsRoundedIcon sx={{ fontSize: 16, color: '#1E40AF' }} />
+          </ListItemIcon>
+          <Typography sx={{ fontSize: '12.5px', fontWeight: 600 }}>
+            System Settings
+          </Typography>
+        </MenuItem>
+        <MenuItem onClick={handleLogoutClick} sx={{ color: '#DC2626', py: 0.8 }}>
+          <ListItemIcon>
+            <LogoutRoundedIcon sx={{ fontSize: 16, color: '#DC2626' }} />
+          </ListItemIcon>
+          <Typography sx={{ fontSize: '12.5px', fontWeight: 700 }}>
+            Exit / Logout
+          </Typography>
+        </MenuItem>
+      </Menu>
+
+      {/* Mobile Drawer */}
       <Drawer
         anchor="right"
         open={mobileDrawerOpen}
@@ -487,106 +378,51 @@ export const Navbar: FC<NavbarProps> = ({
         slotProps={{
           paper: {
             sx: {
-              width: '280px',
-              backgroundColor: '#FFFFFF',
-              borderLeft: '1px solid #E2E8F0',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
+              width: '260px',
+              backgroundColor: '#EDF4FB',
+              borderLeft: '1px solid #B0C4DE',
             },
           },
         }}
       >
-        <Box>
-          {/* Drawer Header */}
-          <Box
-            sx={{
-              p: 2,
-              background: 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)',
-              color: '#FFFFFF',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              borderBottom: '1px solid #E2E8F0',
-            }}
-          >
-            <Box>
-              <Typography sx={{ fontSize: '15px', fontWeight: 800 }}>
-                {companySettings.companyName || 'Apsara Crackers'}
-              </Typography>
-              <Typography sx={{ fontSize: '11px', color: '#FEF08A', fontWeight: 600 }}>
-                Main Navigation
-              </Typography>
-            </Box>
-            <IconButton onClick={() => setMobileDrawerOpen(false)} sx={{ color: '#FFFFFF' }}>
-              <CloseRoundedIcon sx={{ fontSize: 20 }} />
-            </IconButton>
-          </Box>
-
-          {/* Drawer Navigation List */}
-          <List sx={{ p: 1 }}>
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab;
-              return (
-                <ListItem key={tab} disablePadding sx={{ mb: 0.5 }}>
-                  <ListItemButton
-                    onClick={() => handleTabClick(tab)}
-                    sx={{
-                      borderRadius: '10px',
-                      backgroundColor: isActive ? '#FEE2E2' : 'transparent',
-                      border: isActive ? '1px solid #FECACA' : '1px solid transparent',
-                      color: isActive ? '#B91C1C' : '#0F172A',
-                      py: 1.2,
-                      '&:hover': {
-                        backgroundColor: '#F8FAFC',
-                      },
-                    }}
-                  >
-                    <ListItemIcon sx={{ color: isActive ? '#B91C1C' : '#64748B', minWidth: '36px' }}>
-                      {TAB_ICONS[tab]}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography sx={{ fontSize: '14px', fontWeight: isActive ? 800 : 600 }}>
-                          {tab}
-                        </Typography>
-                      }
-                    />
-                  </ListItemButton>
-                </ListItem>
-              );
-            })}
-          </List>
+        <Box sx={{ p: 1.5, background: '#1E3A8A', color: '#FFFFFF', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography sx={{ fontSize: '13px', fontWeight: 800 }}>
+            {firmName}
+          </Typography>
+          <IconButton onClick={() => setMobileDrawerOpen(false)} sx={{ color: '#FFFFFF', p: 0.5 }}>
+            <CloseRoundedIcon sx={{ fontSize: 16 }} />
+          </IconButton>
         </Box>
-
-        {/* Drawer Bottom Logout Button */}
-        <Box sx={{ p: 2, borderTop: '1px solid #E2E8F0' }}>
-          <ListItemButton
-            onClick={handleLogoutClick}
-            sx={{
-              borderRadius: '10px',
-              backgroundColor: '#FEF2F2',
-              border: '1px solid #FECACA',
-              color: '#DC2626',
-              py: 1,
-              '&:hover': {
-                backgroundColor: '#FEE2E2',
-              },
-            }}
-          >
-            <ListItemIcon sx={{ color: '#DC2626', minWidth: '36px' }}>
-              <LogoutRoundedIcon sx={{ fontSize: 20 }} />
-            </ListItemIcon>
-            <ListItemText
-              primary={
-                <Typography sx={{ fontSize: '14px', fontWeight: 700 }}>
-                  Logout
-                </Typography>
-              }
-            />
-          </ListItemButton>
-        </Box>
+        <List sx={{ p: 1 }}>
+          {[
+            { label: 'All Customers', tab: 'All Customers' as NavTab, icon: <PeopleAltRoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Quotation', tab: 'Quotation' as NavTab, icon: <RequestQuoteRoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Tax Bill (GST)', tab: 'GST Bill' as NavTab, icon: <DescriptionRoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Product Master', tab: 'Product' as NavTab, icon: <Inventory2RoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Categories', tab: 'Categories' as NavTab, icon: <CategoryRoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Price List', tab: 'Price List' as NavTab, icon: <FormatListNumberedRoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Settings', tab: 'Settings' as NavTab, icon: <SettingsRoundedIcon sx={{ fontSize: 18 }} /> },
+          ].map((item) => (
+            <ListItem key={item.label} disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                onClick={() => handleTabClick(item.tab)}
+                sx={{
+                  borderRadius: '4px',
+                  backgroundColor: activeTab === item.tab ? '#D2E3F5' : 'transparent',
+                  py: 0.8,
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: '32px', color: '#1E3A8A' }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText
+                  primary={<Typography sx={{ fontSize: '13px', fontWeight: activeTab === item.tab ? 800 : 600 }}>{item.label}</Typography>}
+                />
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
       </Drawer>
-    </>
+    </Box>
   );
 };

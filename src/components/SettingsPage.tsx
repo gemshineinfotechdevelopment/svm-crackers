@@ -72,7 +72,7 @@ export interface CompanySettings {
 }
 
 export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
-  companyName: 'Apsara Crackers',
+  companyName: 'SVM Crackers',
   tagline: 'Standard Fire Works & Fancy Crackers',
   ownerName: '',
   phone: '9843067073',
