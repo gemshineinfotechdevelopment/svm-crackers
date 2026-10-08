@@ -8,6 +8,7 @@ export interface IProduct extends Document {
   rate?: number;
   mrp?: number;
   unit?: string;
+  productType?: 'Retail' | 'Wholesale' | 'Both' | string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,8 +22,16 @@ const ProductSchema: Schema = new Schema(
     rate: { type: Number, default: 0 },
     mrp: { type: Number, default: 0 },
     unit: { type: String, default: 'Box' },
+    productType: {
+      type: String,
+      enum: ['Retail', 'Wholesale', 'Both'],
+      default: 'Retail',
+      trim: true,
+    },
   },
   { timestamps: true, strict: false }
 );
+
+ProductSchema.index({ productType: 1, name: 1 });
 
 export const Product = mongoose.model<IProduct>('Product', ProductSchema);

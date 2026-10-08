@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type FC } from 'react';
+import { useState, useEffect, useMemo, type FC, type ChangeEvent, type DragEvent } from 'react';
 import {
   Box,
   Typography,
@@ -16,6 +16,11 @@ import {
   DialogActions,
   CircularProgress,
   Checkbox,
+  Chip,
+  Tabs,
+  Tab,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -24,8 +29,16 @@ import DeleteSweepRoundedIcon from '@mui/icons-material/DeleteSweepRounded';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
-import { ProductsApi, CategoriesApi, PriceListsApi } from '../services/api';
+import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
+import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
+import ShoppingCartRoundedIcon from '@mui/icons-material/ShoppingCartRounded';
+import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
+import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
+import * as XLSX from 'xlsx';
+import { ProductsApi, CategoriesApi } from '../services/api';
 import { printProductsListDirectly } from '../utils/printUtils';
+
+export type ProductType = 'Retail' | 'Wholesale' | 'Both';
 
 export interface ProductItem {
   _id?: string;
@@ -36,6 +49,7 @@ export interface ProductItem {
   rate?: number;
   mrp?: number;
   unit?: string;
+  productType?: ProductType | string;
 }
 
 export const ProductsPage: FC = () => {
@@ -44,10 +58,13 @@ export const ProductsPage: FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [activeTabType, setActiveTabType] = useState<'Retail' | 'Wholesale' | 'ALL'>('Retail');
 
   // Add / Edit Modal State
   const [openModal, setOpenModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
+  const [productType, setProductType] = useState<ProductType>('Retail');
+  const [productSlNo, setProductSlNo] = useState<number>(1);
   const [productName, setProductName] = useState('');
   const [productCategory, setProductCategory] = useState('General');
   const [productUnit, setProductUnit] = useState('Box');
@@ -55,74 +72,50 @@ export const ProductsPage: FC = () => {
   const [productMrp, setProductMrp] = useState<string>('0');
   const [modalLoading, setModalLoading] = useState(false);
 
+  // Bulk Upload Modal State
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
+  const [bulkUploadType, setBulkUploadType] = useState<ProductType>('Retail');
+  const [replaceExisting, setReplaceExisting] = useState(false);
+  const [uploadFileName, setUploadFileName] = useState('');
+  const [previewItems, setPreviewItems] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
   // Bulk delete state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const fetchProductsAndPrices = async () => {
+  // Toast / Alert notification
+  const [toast, setToast] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
+    open: false,
+    message: '',
+    severity: 'info',
+  });
+
+  const fetchProductsAndCategories = async () => {
     try {
       setLoading(true);
-      const [prodsData, catsData, priceData] = await Promise.all([
+      const [prodsData, catsData] = await Promise.all([
         ProductsApi.getAll().catch(() => []),
         CategoriesApi.getAll().catch(() => []),
-        PriceListsApi.getAll().catch(() => []),
       ]);
 
-      const priceMap = new Map<string, any>();
-      if (Array.isArray(priceData)) {
-        priceData.forEach((item: any) => {
-          if (item.itemName) {
-            priceMap.set(item.itemName.toLowerCase().trim(), item);
-          }
-        });
-      }
-
-      let mergedProducts: ProductItem[] = [];
-      const seenNames = new Set<string>();
-
       if (Array.isArray(prodsData)) {
-        prodsData.forEach((p: any, idx: number) => {
-          const key = (p.name || '').toLowerCase().trim();
-          seenNames.add(key);
-          const priceItem = priceMap.get(key);
-
-          mergedProducts.push({
-            _id: p._id || p.id,
-            id: p._id || p.id,
-            slNo: p.slNo || idx + 1,
-            name: p.name,
-            category: priceItem?.category || p.category || 'General',
-            rate: priceItem?.rate !== undefined && priceItem.rate > 0 ? priceItem.rate : (p.rate || 0),
-            mrp: priceItem?.mrp !== undefined && priceItem.mrp > 0 ? priceItem.mrp : (p.mrp || 0),
-            unit: priceItem?.unit || p.unit || 'Box',
-          });
-        });
+        const formatted: ProductItem[] = prodsData.map((p: any, idx: number) => ({
+          _id: p._id || p.id,
+          id: p._id || p.id,
+          slNo: Number(p.slNo) || idx + 1,
+          name: p.name || '',
+          category: p.category || 'General',
+          rate: Number(p.rate) || 0,
+          mrp: Number(p.mrp) || 0,
+          unit: p.unit || 'Box',
+          productType: (p.productType as ProductType) || 'Retail',
+        }));
+        setProducts(formatted);
       }
 
-      if (Array.isArray(priceData)) {
-        let maxSlNo = mergedProducts.length > 0 ? Math.max(...mergedProducts.map((p) => p.slNo || 0)) : 0;
-        priceData.forEach((pItem: any) => {
-          const key = (pItem.itemName || '').toLowerCase().trim();
-          if (key && !seenNames.has(key)) {
-            maxSlNo += 1;
-            seenNames.add(key);
-
-            mergedProducts.push({
-              _id: pItem._id || pItem.id,
-              id: pItem._id || pItem.id,
-              slNo: pItem.slNo || maxSlNo,
-              name: pItem.itemName,
-              category: pItem.category || 'General',
-              rate: pItem.rate || 0,
-              mrp: pItem.mrp || 0,
-              unit: pItem.unit || 'Box',
-            });
-          }
-        });
-      }
-
-      setProducts(mergedProducts);
       if (Array.isArray(catsData) && catsData.length > 0) {
         setCategories(catsData.map((c) => ({ name: c.name, color: c.color })));
       }
@@ -134,11 +127,41 @@ export const ProductsPage: FC = () => {
   };
 
   useEffect(() => {
-    fetchProductsAndPrices();
+    fetchProductsAndCategories();
   }, []);
 
+  // Helper to get next Serial Number starting from 1 independently for each product type
+  const getNextSlNoForType = (type: ProductType) => {
+    const typeItems = products.filter(
+      (p) => p.productType === type || p.productType === 'Both' || (!p.productType && type === 'Retail')
+    );
+    return typeItems.length > 0 ? Math.max(...typeItems.map((p) => Number(p.slNo) || 0)) + 1 : 1;
+  };
+
+  // Counts by Type
+  const retailCount = useMemo(() => {
+    return products.filter((p) => !p.productType || p.productType === 'Retail' || p.productType === 'Both').length;
+  }, [products]);
+
+  const wholesaleCount = useMemo(() => {
+    return products.filter((p) => p.productType === 'Wholesale' || p.productType === 'Both').length;
+  }, [products]);
+
+  // Tab Filtering & Search
+  const tabProducts = useMemo(() => {
+    let list: ProductItem[] = [];
+    if (activeTabType === 'Retail') {
+      list = products.filter((p) => !p.productType || p.productType === 'Retail' || p.productType === 'Both');
+    } else if (activeTabType === 'Wholesale') {
+      list = products.filter((p) => p.productType === 'Wholesale' || p.productType === 'Both');
+    } else {
+      list = [...products];
+    }
+    return list.sort((a, b) => (a.slNo || 0) - (b.slNo || 0));
+  }, [products, activeTabType]);
+
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
+    return tabProducts.filter((p) => {
       const matchesCategory = selectedCategory === 'ALL' || p.category === selectedCategory;
       const term = searchTerm.toLowerCase().trim();
       const matchesSearch =
@@ -146,13 +169,18 @@ export const ProductsPage: FC = () => {
         p.name.toLowerCase().includes(term) ||
         (p.category && p.category.toLowerCase().includes(term)) ||
         String(p.slNo).includes(term) ||
-        String(p.rate).includes(term);
+        String(p.rate).includes(term) ||
+        (p.productType && p.productType.toLowerCase().includes(term));
       return matchesCategory && matchesSearch;
     });
-  }, [products, selectedCategory, searchTerm]);
+  }, [tabProducts, selectedCategory, searchTerm]);
 
+  // Open Add Modal (Calculates next S.No starting from 1 for selected type)
   const handleOpenAdd = () => {
+    const targetType = activeTabType === 'ALL' ? 'Retail' : activeTabType;
     setEditingProduct(null);
+    setProductType(targetType);
+    setProductSlNo(getNextSlNoForType(targetType));
     setProductName('');
     setProductCategory(categories[0]?.name || 'General');
     setProductUnit('Box');
@@ -161,8 +189,19 @@ export const ProductsPage: FC = () => {
     setOpenModal(true);
   };
 
+  // Switch type inside modal -> update S.No accordingly
+  const handleSelectProductTypeInModal = (newType: ProductType) => {
+    setProductType(newType);
+    if (!editingProduct) {
+      setProductSlNo(getNextSlNoForType(newType));
+    }
+  };
+
+  // Open Edit Modal
   const handleOpenEdit = (product: ProductItem) => {
     setEditingProduct(product);
+    setProductType((product.productType as ProductType) || 'Retail');
+    setProductSlNo(product.slNo || 1);
     setProductName(product.name);
     setProductCategory(product.category || 'General');
     setProductUnit(product.unit || 'Box');
@@ -171,6 +210,7 @@ export const ProductsPage: FC = () => {
     setOpenModal(true);
   };
 
+  // Save Single Product
   const handleSaveProduct = async () => {
     if (!productName.trim()) {
       alert('Please enter product name');
@@ -181,25 +221,33 @@ export const ProductsPage: FC = () => {
       setModalLoading(true);
 
       const payload = {
+        slNo: Number(productSlNo) || getNextSlNoForType(productType),
         name: productName.trim(),
-        category: productCategory,
-        unit: productUnit,
+        category: productCategory || 'General',
+        unit: productUnit || 'Box',
         rate: Number(productRate) || 0,
         mrp: Number(productMrp) || 0,
+        productType: productType,
       };
 
       if (editingProduct) {
         const id = editingProduct._id || editingProduct.id || '';
         await ProductsApi.update(id, payload);
+        setToast({
+          open: true,
+          message: `Product "${payload.name}" updated successfully for ${productType}!`,
+          severity: 'success',
+        });
       } else {
-        const nextSlNo = products.length > 0 ? Math.max(...products.map((p) => p.slNo || 0)) + 1 : 1;
-        await ProductsApi.create({
-          slNo: nextSlNo,
-          ...payload,
+        await ProductsApi.create(payload);
+        setToast({
+          open: true,
+          message: `New product "${payload.name}" (S.No: ${payload.slNo}) added to ${productType}!`,
+          severity: 'success',
         });
       }
       setOpenModal(false);
-      fetchProductsAndPrices();
+      fetchProductsAndCategories();
     } catch (err) {
       console.error('Failed to save product:', err);
       alert('Error saving product');
@@ -208,6 +256,7 @@ export const ProductsPage: FC = () => {
     }
   };
 
+  // Bulk selection handlers
   const isAllSelected = useMemo(() => {
     if (filteredProducts.length === 0) return false;
     return filteredProducts.every((p) => selectedIds.includes(p._id || p.id || ''));
@@ -225,9 +274,7 @@ export const ProductsPage: FC = () => {
 
   const handleToggleSelect = (id: string) => {
     if (!id) return;
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
   };
 
   const handleConfirmBulkDelete = async () => {
@@ -238,6 +285,11 @@ export const ProductsPage: FC = () => {
       setProducts((prev) => prev.filter((p) => !selectedIds.includes(p._id || p.id || '')));
       setSelectedIds([]);
       setBulkDeleteDialogOpen(false);
+      setToast({
+        open: true,
+        message: `${selectedIds.length} products deleted successfully`,
+        severity: 'success',
+      });
     } catch (err) {
       console.error('Failed to bulk delete products:', err);
       alert('Error deleting selected products');
@@ -255,14 +307,229 @@ export const ProductsPage: FC = () => {
       await ProductsApi.delete(id);
       setProducts((prev) => prev.filter((p) => (p._id || p.id) !== id));
       setSelectedIds((prev) => prev.filter((i) => i !== id));
+      setToast({
+        open: true,
+        message: `Product "${product.name}" deleted.`,
+        severity: 'info',
+      });
     } catch (err) {
       console.error('Failed to delete product:', err);
       alert('Error deleting product');
     }
   };
 
+  // Bulk Upload File Processing
+  const handleFileChosen = (file: File) => {
+    if (!file) return;
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    if (!['xlsx', 'xls', 'csv'].includes(fileExt || '')) {
+      alert('Please upload an Excel (.xlsx, .xls) or CSV (.csv) file.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        if (!rawRows || rawRows.length === 0) {
+          alert('Spreadsheet is empty.');
+          return;
+        }
+
+        let headerRowIdx = -1;
+        let slCol = -1;
+        let nameCol = -1;
+        let catCol = -1;
+        let unitCol = -1;
+        let mrpCol = -1;
+        let rateCol = -1;
+        let typeCol = -1;
+
+        for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
+          const row = rawRows[r];
+          if (!Array.isArray(row)) continue;
+          const lowerCells = row.map((c) => String(c || '').toLowerCase().trim());
+          const hasName = lowerCells.some((c) => c.includes('product') || c.includes('item') || c.includes('name') || c.includes('particular'));
+          const hasRate = lowerCells.some((c) => c.includes('rate') || c.includes('price') || c.includes('mrp') || c.includes('amount'));
+
+          if (hasName && hasRate) {
+            headerRowIdx = r;
+            lowerCells.forEach((c, idx) => {
+              if (c.includes('sl') || c.includes('s.no') || c === 'no' || c === '#') slCol = idx;
+              else if (c.includes('product') || c.includes('item') || c.includes('name') || c.includes('particular')) nameCol = idx;
+              else if (c.includes('cat') || c.includes('group') || (c.includes('type') && !c.includes('product type'))) catCol = idx;
+              else if (c.includes('unit') || c.includes('pkg') || c.includes('packing') || c.includes('per')) unitCol = idx;
+              else if (c.includes('mrp') || c.includes('m.r.p')) mrpCol = idx;
+              else if (c.includes('rate') || c.includes('price') || c.includes('net') || c.includes('selling')) rateCol = idx;
+              else if (c.includes('product type') || c.includes('mode') || c === 'type') typeCol = idx;
+            });
+            break;
+          }
+        }
+
+        const startIdx = headerRowIdx !== -1 ? headerRowIdx + 1 : 0;
+        const parsedList: any[] = [];
+        let currentCategory = 'General';
+        const startingSl = replaceExisting ? 0 : getNextSlNoForType(bulkUploadType) - 1;
+
+        for (let r = startIdx; r < rawRows.length; r++) {
+          const row = rawRows[r];
+          if (!row || !Array.isArray(row) || row.every((c) => String(c || '').trim() === '')) continue;
+
+          let pName = '';
+          let pCat = currentCategory;
+          let pUnit = 'Box';
+          let pMrp = 0;
+          let pRate = 0;
+          let pSlNo = startingSl + parsedList.length + 1;
+          let pType: ProductType = bulkUploadType;
+
+          if (nameCol !== -1 && row[nameCol] !== undefined && String(row[nameCol]).trim() !== '') {
+            pName = String(row[nameCol]).trim();
+            if (slCol !== -1 && row[slCol]) pSlNo = Number(String(row[slCol]).replace(/[^\d]/g, '')) || pSlNo;
+            if (catCol !== -1 && row[catCol] && String(row[catCol]).trim()) {
+              pCat = String(row[catCol]).trim();
+              currentCategory = pCat;
+            }
+            if (unitCol !== -1 && row[unitCol] && String(row[unitCol]).trim()) pUnit = String(row[unitCol]).trim();
+            if (mrpCol !== -1 && row[mrpCol]) pMrp = Number(String(row[mrpCol]).replace(/[^\d.]/g, '')) || 0;
+            if (rateCol !== -1 && row[rateCol]) pRate = Number(String(row[rateCol]).replace(/[^\d.]/g, '')) || 0;
+            if (typeCol !== -1 && row[typeCol]) {
+              const val = String(row[typeCol]).trim().toLowerCase();
+              if (val.includes('wholesale')) pType = 'Wholesale';
+              else if (val.includes('both')) pType = 'Both';
+              else if (val.includes('retail')) pType = 'Retail';
+            }
+          } else {
+            // Fallback parsing
+            const nonEmpty = row.map((c) => String(c || '').trim()).filter((x) => x.length > 0);
+            if (nonEmpty.length === 1 && isNaN(Number(nonEmpty[0]))) {
+              currentCategory = nonEmpty[0];
+              continue;
+            }
+            const textCandidates = nonEmpty.filter((x) => isNaN(Number(x.replace(/[₹,Rs\.\s]/gi, ''))));
+            const numCandidates = nonEmpty
+              .map((x) => parseFloat(x.replace(/[₹,Rs\.\s]/gi, '')))
+              .filter((n) => !isNaN(n) && n > 0);
+
+            if (textCandidates.length > 0) {
+              pName = textCandidates[0];
+              if (textCandidates.length > 1) pCat = textCandidates[1];
+              if (numCandidates.length >= 2) {
+                pMrp = numCandidates[0];
+                pRate = numCandidates[1];
+              } else if (numCandidates.length === 1) {
+                pRate = numCandidates[0];
+              }
+            }
+          }
+
+          if (pName && pName.length >= 2) {
+            parsedList.push({
+              slNo: pSlNo,
+              name: pName,
+              category: pCat || 'General',
+              unit: pUnit || 'Box',
+              mrp: pMrp,
+              rate: pRate,
+              productType: pType,
+            });
+          }
+        }
+
+        if (parsedList.length === 0) {
+          alert('Could not find valid products in the uploaded file.');
+          return;
+        }
+
+        setPreviewItems(parsedList);
+        setUploadFileName(file.name);
+      } catch (err) {
+        console.error('File parsing error:', err);
+        alert('Failed to parse the file. Please check format.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleConfirmBulkImport = async () => {
+    if (previewItems.length === 0) return;
+    try {
+      setUploading(true);
+      const itemsToImport = previewItems.map((item) => ({
+        ...item,
+        productType: bulkUploadType === 'Both' ? 'Both' : (item.productType || bulkUploadType),
+      }));
+
+      await ProductsApi.bulkImport({
+        items: itemsToImport,
+        defaultType: bulkUploadType,
+        replaceExisting: replaceExisting,
+      });
+
+      setBulkUploadOpen(false);
+      setPreviewItems([]);
+      setUploadFileName('');
+      fetchProductsAndCategories();
+      setToast({
+        open: true,
+        message: `Successfully imported ${previewItems.length} products to ${bulkUploadType}!`,
+        severity: 'success',
+      });
+    } catch (err: any) {
+      console.error('Bulk import failed:', err);
+      alert(err.message || 'Failed to import products.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Download Sample Template with S.No starting from 1
+  const handleDownloadSampleExcel = () => {
+    const currentMode = activeTabType === 'ALL' ? 'Retail' : activeTabType;
+    const sampleData = [
+      {
+        'S.No': 1,
+        'Product Name': `${currentMode} 28 Chorsa Crackers`,
+        'Category': 'Sound Crackers',
+        'Unit': 'Box',
+        'MRP': 120,
+        'Rate': 95,
+        'Product Type': currentMode,
+      },
+      {
+        'S.No': 2,
+        'Product Name': `${currentMode} Ground Chakkar Special (10 Pcs)`,
+        'Category': 'Chakkars',
+        'Unit': 'Box',
+        'MRP': 180,
+        'Rate': 140,
+        'Product Type': currentMode,
+      },
+      {
+        'S.No': 3,
+        'Product Name': `${currentMode} Flower Pots Giant (10 Pcs)`,
+        'Category': 'Flower Pots',
+        'Unit': 'Box',
+        'MRP': 350,
+        'Rate': 280,
+        'Product Type': currentMode,
+      },
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(sampleData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Products Template');
+    XLSX.writeFile(wb, `SVM_Crackers_${currentMode}_Products_Template.xlsx`);
+  };
+
   const handlePrint = () => {
-    printProductsListDirectly(filteredProducts, selectedCategory);
+    printProductsListDirectly(filteredProducts, selectedCategory, activeTabType);
   };
 
   return (
@@ -289,25 +556,98 @@ export const ProductsPage: FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 1,
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Inventory2RoundedIcon sx={{ fontSize: 18, color: '#0284C7' }} />
-            <Typography
-              sx={{
-                fontSize: '13px',
-                fontWeight: 700,
-                color: '#0F172A',
-                letterSpacing: '0.01em',
-              }}
-            >
+            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', letterSpacing: '0.01em' }}>
               Product Master & Price Catalog
             </Typography>
           </Box>
 
-          <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#1E3A8A' }}>
-            Total Products: {products.length} ({filteredProducts.length} shown)
-          </Typography>
+          {/* Type Counts Badges */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Chip
+                label={`🛒 Retail: ${retailCount}`}
+                size="small"
+                sx={{
+                  bgcolor: activeTabType === 'Retail' ? '#0284C7' : '#E0F2FE',
+                  color: activeTabType === 'Retail' ? '#FFFFFF' : '#0369A1',
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  height: '22px',
+                }}
+              />
+              <Chip
+                label={`🏢 Wholesale: ${wholesaleCount}`}
+                size="small"
+                sx={{
+                  bgcolor: activeTabType === 'Wholesale' ? '#7C3AED' : '#F3E8FF',
+                  color: activeTabType === 'Wholesale' ? '#FFFFFF' : '#6D28D9',
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  height: '22px',
+                }}
+              />
+              <Chip
+                label={`Total: ${products.length}`}
+                size="small"
+                sx={{
+                  bgcolor: '#E2E8F0',
+                  color: '#334155',
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  height: '22px',
+                }}
+              />
+            </Box>
+          </Box>
+        </Box>
+
+        {/* Tab Selector: Retail vs Wholesale vs All */}
+        <Box sx={{ bgcolor: '#F8FAFC', borderBottom: '1px solid #CBD5E1', px: 1.5, pt: 0.5 }}>
+          <Tabs
+            value={activeTabType}
+            onChange={(_, val) => {
+              setActiveTabType(val);
+              setSelectedIds([]);
+            }}
+            textColor="primary"
+            indicatorColor="primary"
+            sx={{
+              minHeight: '36px',
+              '& .MuiTab-root': {
+                minHeight: '36px',
+                py: 0.5,
+                px: 2,
+                fontSize: '12px',
+                fontWeight: 700,
+                textTransform: 'none',
+              },
+            }}
+          >
+            <Tab
+              value="Retail"
+              icon={<ShoppingCartRoundedIcon sx={{ fontSize: 16 }} />}
+              iconPosition="start"
+              label={`🛒 Retail Products (S.No 1 to ${retailCount || 0})`}
+            />
+            <Tab
+              value="Wholesale"
+              icon={<StorefrontRoundedIcon sx={{ fontSize: 16 }} />}
+              iconPosition="start"
+              label={`🏢 Wholesale Products (S.No 1 to ${wholesaleCount || 0})`}
+            />
+            <Tab
+              value="ALL"
+              icon={<ViewListRoundedIcon sx={{ fontSize: 16 }} />}
+              iconPosition="start"
+              label={`📋 All Products (${products.length})`}
+            />
+          </Tabs>
         </Box>
 
         {/* Inner Content Area */}
@@ -336,7 +676,7 @@ export const ProductsPage: FC = () => {
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 className="erp-input"
-                style={{ fontSize: '12px', minWidth: '150px' }}
+                style={{ fontSize: '12px', minWidth: '140px' }}
               >
                 <option value="ALL">All Categories</option>
                 {categories.map((c) => (
@@ -351,11 +691,11 @@ export const ProductsPage: FC = () => {
               </Typography>
               <input
                 type="text"
-                placeholder="Filter by name, rate, code..."
+                placeholder={`Search ${activeTabType === 'ALL' ? '' : activeTabType} products...`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="erp-input"
-                style={{ width: '200px' }}
+                style={{ width: '210px' }}
               />
               {searchTerm && (
                 <IconButton size="small" onClick={() => setSearchTerm('')} sx={{ p: 0.2 }}>
@@ -365,14 +705,14 @@ export const ProductsPage: FC = () => {
             </Box>
 
             {/* Right: Actions */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
               {selectedIds.length > 0 && (
                 <Button
                   onClick={() => setBulkDeleteDialogOpen(true)}
                   startIcon={<DeleteSweepRoundedIcon sx={{ fontSize: 14 }} />}
                   size="small"
                   sx={{
-                    height: '26px',
+                    height: '28px',
                     bgcolor: '#FEF2F2',
                     border: '1px solid #FECACA',
                     color: '#DC2626',
@@ -388,12 +728,38 @@ export const ProductsPage: FC = () => {
                 </Button>
               )}
 
+              {/* Bulk Upload Button */}
+              <Button
+                onClick={() => {
+                  setBulkUploadType(activeTabType === 'ALL' ? 'Retail' : activeTabType);
+                  setPreviewItems([]);
+                  setUploadFileName('');
+                  setBulkUploadOpen(true);
+                }}
+                startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 15 }} />}
+                size="small"
+                sx={{
+                  height: '28px',
+                  bgcolor: '#F0FDF4',
+                  border: '1px solid #86EFAC',
+                  color: '#15803D',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  px: 1.5,
+                  borderRadius: '3px',
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: '#DCFCE7' },
+                }}
+              >
+                Bulk Upload ({activeTabType === 'ALL' ? 'Retail' : activeTabType})
+              </Button>
+
               <Button
                 onClick={handlePrint}
                 startIcon={<PrintOutlinedIcon sx={{ fontSize: 14 }} />}
                 size="small"
                 sx={{
-                  height: '26px',
+                  height: '28px',
                   bgcolor: '#EDF4FB',
                   border: '1px solid #94A3B8',
                   color: '#0F172A',
@@ -409,11 +775,11 @@ export const ProductsPage: FC = () => {
               </Button>
 
               <Button
-                onClick={fetchProductsAndPrices}
+                onClick={fetchProductsAndCategories}
                 startIcon={<RefreshRoundedIcon sx={{ fontSize: 14 }} />}
                 size="small"
                 sx={{
-                  height: '26px',
+                  height: '28px',
                   bgcolor: '#EDF4FB',
                   border: '1px solid #94A3B8',
                   color: '#0F172A',
@@ -428,12 +794,13 @@ export const ProductsPage: FC = () => {
                 Refresh
               </Button>
 
+              {/* Single Add Product */}
               <Button
                 onClick={handleOpenAdd}
                 startIcon={<AddRoundedIcon sx={{ fontSize: 15 }} />}
                 size="small"
                 sx={{
-                  height: '26px',
+                  height: '28px',
                   bgcolor: '#741748',
                   color: '#FFFFFF',
                   fontSize: '11.5px',
@@ -444,7 +811,7 @@ export const ProductsPage: FC = () => {
                   '&:hover': { bgcolor: '#580e34' },
                 }}
               >
-                Add Product
+                + Add {activeTabType === 'ALL' ? 'Retail' : activeTabType} Product
               </Button>
             </Box>
           </Box>
@@ -458,7 +825,7 @@ export const ProductsPage: FC = () => {
               overflow: 'hidden',
             }}
           >
-            <TableContainer sx={{ maxHeight: 'calc(100vh - 210px)', minHeight: '380px' }}>
+            <TableContainer sx={{ maxHeight: 'calc(100vh - 245px)', minHeight: '380px' }}>
               <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow sx={{ bgcolor: '#DCE7F5' }}>
@@ -476,19 +843,22 @@ export const ProductsPage: FC = () => {
                     <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Product Name
                     </TableCell>
-                    <TableCell sx={{ width: '160px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                    <TableCell sx={{ width: '150px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Category
                     </TableCell>
-                    <TableCell sx={{ width: '80px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                    <TableCell sx={{ width: '70px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Unit
                     </TableCell>
-                    <TableCell sx={{ width: '100px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                    <TableCell sx={{ width: '100px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Type
+                    </TableCell>
+                    <TableCell sx={{ width: '90px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       MRP (₹)
                     </TableCell>
-                    <TableCell sx={{ width: '110px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                    <TableCell sx={{ width: '100px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Rate (₹)
                     </TableCell>
-                    <TableCell align="center" sx={{ width: '130px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                    <TableCell align="center" sx={{ width: '120px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Actions
                     </TableCell>
                   </TableRow>
@@ -496,20 +866,21 @@ export const ProductsPage: FC = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                      <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
                         <CircularProgress size={24} sx={{ color: '#1E40AF' }} />
                       </TableCell>
                     </TableRow>
                   ) : filteredProducts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
-                        {searchTerm ? 'No products match your search.' : 'No products found.'}
+                      <TableCell colSpan={9} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
+                        {searchTerm ? 'No products match your search.' : `No ${activeTabType} products found. Click "+ Add Product" or "Bulk Upload" to add.`}
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredProducts.map((p, idx) => {
                       const pId = p._id || p.id || '';
                       const isChecked = selectedIds.includes(pId);
+                      const typeVal = p.productType || 'Retail';
 
                       return (
                         <TableRow
@@ -528,8 +899,9 @@ export const ProductsPage: FC = () => {
                             />
                           </TableCell>
 
-                          <TableCell sx={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748B' }}>
-                            {p.slNo || idx + 1}
+                          {/* S.No starts from 1 for Retail, 1 for Wholesale, and continuous 1..N for All Products */}
+                          <TableCell sx={{ textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#1E3A8A' }}>
+                            {activeTabType === 'ALL' ? idx + 1 : (p.slNo || idx + 1)}
                           </TableCell>
 
                           <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
@@ -542,6 +914,31 @@ export const ProductsPage: FC = () => {
 
                           <TableCell sx={{ fontSize: '12px', color: '#334155' }}>
                             {p.unit || 'Box'}
+                          </TableCell>
+
+                          {/* Product Type Badge */}
+                          <TableCell sx={{ textAlign: 'center' }}>
+                            <Chip
+                              label={typeVal}
+                              size="small"
+                              sx={{
+                                height: '20px',
+                                fontSize: '10.5px',
+                                fontWeight: 700,
+                                bgcolor:
+                                  typeVal === 'Retail'
+                                    ? '#E0F2FE'
+                                    : typeVal === 'Wholesale'
+                                      ? '#F3E8FF'
+                                      : '#DCFCE7',
+                                color:
+                                  typeVal === 'Retail'
+                                    ? '#0369A1'
+                                    : typeVal === 'Wholesale'
+                                      ? '#7C3AED'
+                                      : '#15803D',
+                              }}
+                            />
                           </TableCell>
 
                           <TableCell sx={{ textAlign: 'right', fontSize: '12px', color: '#64748B' }}>
@@ -601,18 +998,18 @@ export const ProductsPage: FC = () => {
         </Box>
       </Box>
 
-      {/* Add / Edit Product Modal */}
+      {/* -------------------- Single Add / Edit Modal -------------------- */}
       <Dialog
         open={openModal}
-        onClose={() => setOpenModal(false)}
+        onClose={() => !modalLoading && setOpenModal(false)}
         maxWidth="xs"
         fullWidth
         slotProps={{
           paper: {
             sx: {
-              borderRadius: '4px',
               border: '1px solid #9BB3CC',
-              overflow: 'hidden',
+              borderRadius: '4px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
             },
           },
         }}
@@ -621,133 +1018,222 @@ export const ProductsPage: FC = () => {
           sx={{
             background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
             borderBottom: '1px solid #A8C2DC',
-            fontWeight: 700,
-            fontSize: '13.5px',
-            color: '#0F172A',
             py: 1,
             px: 2,
+            fontSize: '13px',
+            fontWeight: 700,
+            color: '#0F172A',
           }}
         >
-          {editingProduct ? 'Edit Product' : 'Add New Product'}
+          {editingProduct ? 'Edit Product Details' : `Add New ${productType} Product (தனி பதிவு)`}
         </DialogTitle>
 
-        <DialogContent sx={{ bgcolor: '#F0F5FA', display: 'flex', flexDirection: 'column', gap: 1.2, p: 2 }}>
-          <Box>
-            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.3 }}>
-              Product Name *
-            </Typography>
-            <input
-              type="text"
-              placeholder="e.g. 2 3/4 Kuruvi Crackers"
-              value={productName}
-              onChange={(e) => setProductName(e.target.value)}
-              className="erp-input"
-              style={{ width: '100%' }}
-            />
-          </Box>
-
-          <Box>
-            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.3 }}>
-              Category
-            </Typography>
-            <select
-              value={productCategory}
-              onChange={(e) => setProductCategory(e.target.value)}
-              className="erp-input"
-              style={{ width: '100%' }}
-            >
-              {categories.map((c) => (
-                <option key={c.name} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-              {categories.length === 0 && <option value="General">General</option>}
-            </select>
-          </Box>
-
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+        <DialogContent sx={{ p: 2, bgcolor: '#F8FAFC' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0.5 }}>
+            {/* Type Selection */}
             <Box>
-              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.3 }}>
-                Unit
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                Product Type (வகை): *
               </Typography>
-              <input
-                type="text"
-                placeholder="e.g. Box / Pkt"
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0.8 }}>
+                <Button
+                  size="small"
+                  onClick={() => handleSelectProductTypeInModal('Retail')}
+                  variant={productType === 'Retail' ? 'contained' : 'outlined'}
+                  sx={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    py: 0.6,
+                    bgcolor: productType === 'Retail' ? '#0284C7' : '#FFFFFF',
+                    color: productType === 'Retail' ? '#FFFFFF' : '#0369A1',
+                    borderColor: '#0284C7',
+                  }}
+                >
+                  🛒 Retail
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => handleSelectProductTypeInModal('Wholesale')}
+                  variant={productType === 'Wholesale' ? 'contained' : 'outlined'}
+                  sx={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    py: 0.6,
+                    bgcolor: productType === 'Wholesale' ? '#7C3AED' : '#FFFFFF',
+                    color: productType === 'Wholesale' ? '#FFFFFF' : '#7C3AED',
+                    borderColor: '#7C3AED',
+                  }}
+                >
+                  🏢 Wholesale
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => handleSelectProductTypeInModal('Both')}
+                  variant={productType === 'Both' ? 'contained' : 'outlined'}
+                  sx={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    py: 0.6,
+                    bgcolor: productType === 'Both' ? '#059669' : '#FFFFFF',
+                    color: productType === 'Both' ? '#FFFFFF' : '#059669',
+                    borderColor: '#059669',
+                  }}
+                >
+                  🔄 Both
+                </Button>
+              </Box>
+            </Box>
+
+            {/* S.No & Product Name */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: 1 }}>
+              <Box>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                  S.No: *
+                </Typography>
+                <input
+                  type="number"
+                  min="1"
+                  value={productSlNo}
+                  onChange={(e) => setProductSlNo(Number(e.target.value) || 1)}
+                  className="erp-input"
+                  style={{ width: '100%', fontSize: '12px', padding: '6px 8px', fontWeight: 700 }}
+                />
+              </Box>
+
+              <Box>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                  Product Name: *
+                </Typography>
+                <input
+                  type="text"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  placeholder="e.g. 28 Chorsa Crackers"
+                  className="erp-input"
+                  style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
+                  autoFocus
+                />
+              </Box>
+            </Box>
+
+            {/* Category */}
+            <Box>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                Category:
+              </Typography>
+              <select
+                value={productCategory}
+                onChange={(e) => setProductCategory(e.target.value)}
+                className="erp-input"
+                style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
+              >
+                {categories.length > 0 ? (
+                  categories.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="General">General</option>
+                )}
+              </select>
+            </Box>
+
+            {/* Unit */}
+            <Box>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                Unit:
+              </Typography>
+              <select
                 value={productUnit}
                 onChange={(e) => setProductUnit(e.target.value)}
                 className="erp-input"
-                style={{ width: '100%' }}
-              />
+                style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
+              >
+                <option value="Box">Box</option>
+                <option value="Pcs">Pcs</option>
+                <option value="Pkt">Pkt</option>
+                <option value="Bag">Bag</option>
+                <option value="Bundle">Bundle</option>
+                <option value="Case">Case</option>
+              </select>
             </Box>
 
-            <Box>
-              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.3 }}>
-                Rate / Price (₹) *
-              </Typography>
-              <input
-                type="number"
-                value={productRate}
-                onChange={(e) => setProductRate(e.target.value)}
-                className="erp-input"
-                style={{ width: '100%', textAlign: 'right', fontWeight: 700 }}
-              />
-            </Box>
-          </Box>
+            {/* Rates */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+              <Box>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                  MRP (₹):
+                </Typography>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={productMrp}
+                  onChange={(e) => setProductMrp(e.target.value)}
+                  className="erp-input"
+                  style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
+                />
+              </Box>
 
-          <Box>
-            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.3 }}>
-              M.R.P (₹)
-            </Typography>
-            <input
-              type="number"
-              value={productMrp}
-              onChange={(e) => setProductMrp(e.target.value)}
-              className="erp-input"
-              style={{ width: '100%', textAlign: 'right' }}
-            />
+              <Box>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                  Rate / Price (₹): *
+                </Typography>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={productRate}
+                  onChange={(e) => setProductRate(e.target.value)}
+                  className="erp-input"
+                  style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
+                />
+              </Box>
+            </Box>
           </Box>
         </DialogContent>
 
-        <DialogActions sx={{ bgcolor: '#EDF4FB', borderTop: '1px solid #B0C4DE', p: 1 }}>
+        <DialogActions sx={{ p: 1.5, bgcolor: '#EDF2F7', borderTop: '1px solid #CBD5E1' }}>
           <Button
+            size="small"
             onClick={() => setOpenModal(false)}
-            sx={{ textTransform: 'none', color: '#0F172A', fontWeight: 700, fontSize: '12px' }}
+            disabled={modalLoading}
+            sx={{ fontSize: '11.5px', color: '#64748B' }}
           >
             Cancel
           </Button>
           <Button
-            onClick={handleSaveProduct}
-            disabled={modalLoading}
-            variant="contained"
             size="small"
+            variant="contained"
+            onClick={handleSaveProduct}
+            disabled={modalLoading || !productName.trim()}
             sx={{
+              fontSize: '11.5px',
               bgcolor: '#741748',
-              color: '#FFFFFF',
-              fontWeight: 700,
-              fontSize: '12px',
-              textTransform: 'none',
-              px: 2.5,
-              borderRadius: '3px',
               '&:hover': { bgcolor: '#580e34' },
             }}
           >
-            {modalLoading ? <CircularProgress size={16} color="inherit" /> : 'Save Product'}
+            {modalLoading ? <CircularProgress size={16} color="inherit" /> : editingProduct ? 'Update Product' : 'Save Product'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Bulk Delete Confirm Dialog */}
+      {/* -------------------- Bulk Upload Modal -------------------- */}
       <Dialog
-        open={bulkDeleteDialogOpen}
-        onClose={() => setBulkDeleteDialogOpen(false)}
-        maxWidth="xs"
+        open={bulkUploadOpen}
+        onClose={() => !uploading && setBulkUploadOpen(false)}
+        maxWidth="md"
         fullWidth
         slotProps={{
           paper: {
             sx: {
-              borderRadius: '4px',
               border: '1px solid #9BB3CC',
-              overflow: 'hidden',
+              borderRadius: '4px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
             },
           },
         }}
@@ -756,40 +1242,276 @@ export const ProductsPage: FC = () => {
           sx={{
             background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
             borderBottom: '1px solid #A8C2DC',
-            fontWeight: 700,
-            fontSize: '13.5px',
-            color: '#0F172A',
             py: 1,
             px: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          Confirm Bulk Deletion
-        </DialogTitle>
-        <DialogContent sx={{ bgcolor: '#F0F5FA', p: 2 }}>
-          <Typography sx={{ fontSize: '12.5px', color: '#0F172A' }}>
-            Are you sure you want to permanently delete {selectedIds.length} selected products?
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ bgcolor: '#EDF4FB', borderTop: '1px solid #B0C4DE', p: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CloudUploadRoundedIcon sx={{ color: '#0284C7', fontSize: 20 }} />
+            <Typography sx={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+              Bulk Product Upload (மொத்த பதிவு)
+            </Typography>
+          </Box>
           <Button
-            onClick={() => setBulkDeleteDialogOpen(false)}
-            sx={{ textTransform: 'none', color: '#0F172A', fontWeight: 700, fontSize: '12px' }}
+            size="small"
+            onClick={handleDownloadSampleExcel}
+            startIcon={<FileDownloadRoundedIcon sx={{ fontSize: 14 }} />}
+            sx={{
+              fontSize: '11px',
+              fontWeight: 700,
+              textTransform: 'none',
+              color: '#0284C7',
+              bgcolor: '#E0F2FE',
+              '&:hover': { bgcolor: '#BAE6FD' },
+            }}
+          >
+            Download {bulkUploadType} Excel Template
+          </Button>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 2, bgcolor: '#F8FAFC' }}>
+          {/* Target Type Selector */}
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '4px' }}>
+            <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', mb: 1 }}>
+              Step 1: Select Target Product Type (எந்த பிரிவுக்கு சேர்க்க வேண்டும்):
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Button
+                size="small"
+                onClick={() => setBulkUploadType('Retail')}
+                variant={bulkUploadType === 'Retail' ? 'contained' : 'outlined'}
+                sx={{
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  bgcolor: bulkUploadType === 'Retail' ? '#0284C7' : '#FFFFFF',
+                  color: bulkUploadType === 'Retail' ? '#FFFFFF' : '#0369A1',
+                  borderColor: '#0284C7',
+                }}
+              >
+                🛒 Add as Retail (Starts from {retailCount + 1})
+              </Button>
+              <Button
+                size="small"
+                onClick={() => setBulkUploadType('Wholesale')}
+                variant={bulkUploadType === 'Wholesale' ? 'contained' : 'outlined'}
+                sx={{
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  bgcolor: bulkUploadType === 'Wholesale' ? '#7C3AED' : '#FFFFFF',
+                  color: bulkUploadType === 'Wholesale' ? '#FFFFFF' : '#7C3AED',
+                  borderColor: '#7C3AED',
+                }}
+              >
+                🏢 Add as Wholesale (Starts from {wholesaleCount + 1})
+              </Button>
+              <Button
+                size="small"
+                onClick={() => setBulkUploadType('Both')}
+                variant={bulkUploadType === 'Both' ? 'contained' : 'outlined'}
+                sx={{
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  bgcolor: bulkUploadType === 'Both' ? '#059669' : '#FFFFFF',
+                  color: bulkUploadType === 'Both' ? '#FFFFFF' : '#059669',
+                  borderColor: '#059669',
+                }}
+              >
+                🔄 Add as Both
+              </Button>
+            </Box>
+          </Box>
+
+          {/* Upload Drop Zone */}
+          <Box
+            onDragOver={(e: DragEvent) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={(e: DragEvent) => {
+              e.preventDefault();
+              setIsDragging(false);
+              const file = e.dataTransfer.files?.[0];
+              if (file) handleFileChosen(file);
+            }}
+            sx={{
+              border: `2px dashed ${isDragging ? '#0284C7' : '#94A3B8'}`,
+              bgcolor: isDragging ? '#E0F2FE' : '#FFFFFF',
+              borderRadius: '4px',
+              p: 3,
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              id="bulk-product-file-input"
+              style={{ display: 'none' }}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileChosen(file);
+                e.target.value = '';
+              }}
+            />
+            <label htmlFor="bulk-product-file-input" style={{ cursor: 'pointer', display: 'block' }}>
+              <CloudUploadRoundedIcon sx={{ fontSize: 36, color: '#0284C7', mb: 1 }} />
+              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                {uploadFileName ? `Selected: ${uploadFileName}` : 'Click here or Drag & Drop Excel/CSV File'}
+              </Typography>
+              <Typography sx={{ fontSize: '11px', color: '#64748B', mt: 0.5 }}>
+                Supports .xlsx, .xls, .csv files with columns: S.No, Product Name, Category, Unit, MRP, Rate
+              </Typography>
+            </label>
+          </Box>
+
+          {/* Preview Table */}
+          {previewItems.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.8 }}>
+                <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
+                  Parsed Products Preview ({previewItems.length} items ready to import):
+                </Typography>
+                <Chip
+                  label={`Importing into: ${bulkUploadType}`}
+                  size="small"
+                  sx={{ bgcolor: '#0284C7', color: '#FFFFFF', fontWeight: 700, fontSize: '11px' }}
+                />
+              </Box>
+
+              <TableContainer sx={{ maxHeight: '220px', border: '1px solid #CBD5E1', borderRadius: '3px' }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#F1F5F9' }}>
+                      <TableCell sx={{ fontSize: '11px', fontWeight: 700, width: '45px' }}>S.No</TableCell>
+                      <TableCell sx={{ fontSize: '11px', fontWeight: 700 }}>Name</TableCell>
+                      <TableCell sx={{ fontSize: '11px', fontWeight: 700, width: '130px' }}>Category</TableCell>
+                      <TableCell sx={{ fontSize: '11px', fontWeight: 700, width: '60px' }}>Unit</TableCell>
+                      <TableCell sx={{ fontSize: '11px', fontWeight: 700, width: '70px', textAlign: 'right' }}>MRP</TableCell>
+                      <TableCell sx={{ fontSize: '11px', fontWeight: 700, width: '70px', textAlign: 'right' }}>Rate</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {previewItems.slice(0, 50).map((item, idx) => (
+                      <TableRow key={idx} sx={{ '& td': { py: 0.3, fontSize: '11px' } }}>
+                        <TableCell sx={{ fontWeight: 700, color: '#1E3A8A' }}>{item.slNo || idx + 1}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{item.name}</TableCell>
+                        <TableCell sx={{ color: '#1E40AF' }}>{item.category}</TableCell>
+                        <TableCell>{item.unit}</TableCell>
+                        <TableCell sx={{ textAlign: 'right' }}>{item.mrp ? `₹${item.mrp}` : '-'}</TableCell>
+                        <TableCell sx={{ textAlign: 'right', fontWeight: 700 }}>₹{item.rate}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              {previewItems.length > 50 && (
+                <Typography sx={{ fontSize: '11px', color: '#64748B', mt: 0.5, textAlign: 'center' }}>
+                  Showing first 50 items of {previewItems.length} total products.
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          {/* Replace option */}
+          <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Checkbox
+              size="small"
+              checked={replaceExisting}
+              onChange={(e) => setReplaceExisting(e.target.checked)}
+              sx={{ p: 0.2 }}
+            />
+            <Typography sx={{ fontSize: '11.5px', color: '#475569' }}>
+              Replace existing products in <b>{bulkUploadType}</b> (Serial numbers will reset and restart from 1)
+            </Typography>
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 1.5, bgcolor: '#EDF2F7', borderTop: '1px solid #CBD5E1' }}>
+          <Button
+            size="small"
+            onClick={() => setBulkUploadOpen(false)}
+            disabled={uploading}
+            sx={{ fontSize: '11.5px', color: '#64748B' }}
           >
             Cancel
           </Button>
           <Button
+            size="small"
+            variant="contained"
+            onClick={handleConfirmBulkImport}
+            disabled={uploading || previewItems.length === 0}
+            sx={{
+              fontSize: '11.5px',
+              bgcolor: '#15803D',
+              '&:hover': { bgcolor: '#166534' },
+            }}
+          >
+            {uploading ? (
+              <CircularProgress size={16} color="inherit" />
+            ) : (
+              `Confirm & Import ${previewItems.length} Products`
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* -------------------- Bulk Delete Confirmation Modal -------------------- */}
+      <Dialog
+        open={bulkDeleteDialogOpen}
+        onClose={() => !bulkDeleting && setBulkDeleteDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              border: '1px solid #FECACA',
+              borderRadius: '4px',
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            bgcolor: '#FEF2F2',
+            color: '#DC2626',
+            fontSize: '13px',
+            fontWeight: 700,
+            py: 1,
+            px: 2,
+          }}
+        >
+          Confirm Bulk Delete
+        </DialogTitle>
+        <DialogContent sx={{ p: 2 }}>
+          <Typography sx={{ fontSize: '12px', color: '#334155' }}>
+            Are you sure you want to delete <b>{selectedIds.length}</b> selected products? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 1.5, bgcolor: '#F8FAFC' }}>
+          <Button
+            size="small"
+            onClick={() => setBulkDeleteDialogOpen(false)}
+            disabled={bulkDeleting}
+            sx={{ fontSize: '11.5px', color: '#64748B' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
             onClick={handleConfirmBulkDelete}
             disabled={bulkDeleting}
-            variant="contained"
-            size="small"
             sx={{
+              fontSize: '11.5px',
               bgcolor: '#DC2626',
-              color: '#FFFFFF',
-              fontWeight: 700,
-              fontSize: '12px',
-              textTransform: 'none',
-              px: 2,
-              borderRadius: '3px',
               '&:hover': { bgcolor: '#B91C1C' },
             }}
           >
@@ -797,6 +1519,22 @@ export const ProductsPage: FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* -------------------- Snackbar Notification -------------------- */}
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={4000}
+        onClose={() => setToast((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setToast((prev) => ({ ...prev, open: false }))}
+          severity={toast.severity}
+          sx={{ width: '100%', fontSize: '12px' }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

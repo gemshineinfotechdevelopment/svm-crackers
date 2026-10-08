@@ -102,12 +102,14 @@ export const CompaniesApi = {
 
 // Products API
 export const ProductsApi = {
-  getAll: () => request<any[]>('/products'),
+  getAll: (type?: string) => request<any[]>(type && type !== 'ALL' ? `/products?type=${encodeURIComponent(type)}` : '/products'),
   getById: (id: string) => request<any>(`/products/${id}`),
   create: (data: any) => request<any>('/products', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => request<any>(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) => request<any>(`/products/${id}`, { method: 'DELETE' }),
   bulkDelete: (ids: string[]) => request<any>('/products/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
+  bulkImport: (data: { items: any[]; defaultType?: string; replaceExisting?: boolean }) =>
+    request<any>('/products/bulk-import', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Categories API

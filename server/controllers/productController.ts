@@ -2,9 +2,18 @@ import type { Request, Response, NextFunction } from 'express';
 import { Product } from '../models/Product';
 import PriceList from '../models/PriceList';
 
-export const getProducts = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const products = await Product.find().lean().sort({ slNo: 1, createdAt: 1 });
+    const { type } = req.query;
+    const filter: any = {};
+    if (type && typeof type === 'string' && type !== 'ALL') {
+      filter.$or = [
+        { productType: type },
+        { productType: 'Both' },
+        ...(type === 'Retail' ? [{ productType: { $exists: false } }, { productType: null }, { productType: '' }] : []),
+      ];
+    }
+    const products = await Product.find(filter).lean().sort({ slNo: 1, createdAt: 1 });
     res.status(200).json({ success: true, count: products.length, data: products });
   } catch (error) {
     next(error);
@@ -27,6 +36,20 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { shopStock, godownStock, stock, ...rest } = req.body;
+    const targetType = rest.productType || 'Retail';
+
+    if (!rest.slNo || Number(rest.slNo) <= 0) {
+      const highestProd = await Product.findOne({
+        $or: [
+          { productType: targetType },
+          { productType: 'Both' },
+          ...(targetType === 'Retail' ? [{ productType: { $exists: false } }, { productType: null }, { productType: '' }] : []),
+        ],
+      }).sort({ slNo: -1 });
+
+      rest.slNo = (highestProd?.slNo || 0) + 1;
+    }
+
     const product = await Product.create(rest);
 
     // Sync to PriceList
@@ -152,3 +175,73 @@ export const bulkDeleteProducts = async (req: Request, res: Response, next: Next
     next(error);
   }
 };
+
+export const bulkImportProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { items, defaultType = 'Retail', replaceExisting = false } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ success: false, error: 'Please provide items array for bulk import' });
+      return;
+    }
+
+    if (replaceExisting) {
+      if (defaultType && defaultType !== 'ALL') {
+        await Product.deleteMany({
+          $or: [
+            { productType: defaultType },
+            ...(defaultType === 'Retail' ? [{ productType: { $exists: false } }, { productType: null }, { productType: '' }] : []),
+          ],
+        });
+      } else {
+        await Product.deleteMany({});
+      }
+    }
+
+    let startingSl = 0;
+    if (!replaceExisting) {
+      const highestProd = await Product.findOne({
+        $or: [
+          { productType: defaultType },
+          { productType: 'Both' },
+          ...(defaultType === 'Retail' ? [{ productType: { $exists: false } }, { productType: null }, { productType: '' }] : []),
+        ],
+      }).sort({ slNo: -1 });
+      startingSl = highestProd?.slNo || 0;
+    }
+
+    const formattedDocs = items
+      .map((item: any, idx: number) => {
+        const name = String(item.name || item.itemName || '').trim();
+        if (!name) return null;
+        const targetType = item.productType || defaultType || 'Retail';
+        return {
+          slNo: Number(item.slNo) || startingSl + idx + 1,
+          sku: item.sku || undefined,
+          name,
+          category: String(item.category || 'General').trim() || 'General',
+          rate: Number(item.rate || item.price || 0),
+          mrp: Number(item.mrp || 0),
+          unit: String(item.unit || 'Box').trim() || 'Box',
+          productType: targetType,
+        };
+      })
+      .filter(Boolean);
+
+    if (formattedDocs.length === 0) {
+      res.status(400).json({ success: false, error: 'No valid products found in import payload' });
+      return;
+    }
+
+    const inserted = await Product.insertMany(formattedDocs, { ordered: false });
+
+    res.status(201).json({
+      success: true,
+      message: `Successfully imported ${inserted.length} products into ${defaultType}`,
+      count: inserted.length,
+      data: inserted,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
