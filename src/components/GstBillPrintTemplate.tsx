@@ -106,10 +106,10 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
   // Display Company Name
   const rawComp = bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
     ? bill.companyName
-    : storeSettings.companyName || 'APSARA TRADERS';
+    : storeSettings.companyName || 'SVM TRADERS';
   const displayCompanyName = rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-    ? 'APSARA TRADERS'
-    : (rawComp.toUpperCase().includes('APSARA') ? 'APSARA TRADERS' : rawComp.toUpperCase());
+    ? 'SVM TRADERS'
+    : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
 
   // GSTIN
   const gstinNo = bill.gstin || storeSettings.gstin || '33ABFFA6758B1ZP';

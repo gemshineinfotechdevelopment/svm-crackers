@@ -59,11 +59,11 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
   const rawComp =
     bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
       ? bill.companyName
-      : storeSettings.companyName || 'APSARA TRADERS';
+      : storeSettings.companyName || 'SVM TRADERS';
   const displayCompanyName =
     rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-      ? 'APSARA TRADERS'
-      : (rawComp.toUpperCase().includes('APSARA') ? 'APSARA TRADERS' : rawComp.toUpperCase());
+      ? 'SVM TRADERS'
+      : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
 
   const formatCur = (val: string | number | undefined | null) => {
     if (val === undefined || val === null || val === '') return '0.00';
@@ -577,11 +577,11 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
   const rawComp =
     bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
       ? bill.companyName
-      : storeSettings.companyName || 'APSARA TRADERS';
+      : storeSettings.companyName || 'SVM TRADERS';
   const displayCompanyName =
     rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-      ? 'APSARA TRADERS'
-      : (rawComp.toUpperCase().includes('APSARA') ? 'APSARA TRADERS' : rawComp.toUpperCase());
+      ? 'SVM TRADERS'
+      : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
 
   const gstinNo = bill.gstin || storeSettings.gstin || '33ABFFA6758B1ZP';
 
@@ -1094,6 +1094,9 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
   `;
 };
 
+/**
+ * Print GST Bill Directly using hidden iframe
+ */
 export const printGstBillDirectly = (bill: GstBillPrintData, copiesCount: number = 1) => {
   const htmlContent = generateGstBillHtml(bill, copiesCount);
   triggerBrowserPrint(htmlContent);
@@ -1111,7 +1114,7 @@ export const generateCustomerListPrintHtml = (
   dateRangeText?: string
 ): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'APSARA CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
   const compSub = storeSettings.tagline || `Wholesale & Retail Trading • ${storeSettings.city || 'Sivakasi'}`;
   const phoneVal = (storeSettings.phone && !storeSettings.phone.includes('98765')) ? storeSettings.phone : '9843067073, 8778429299';
 
@@ -1443,7 +1446,7 @@ export const generateLedgerStatementHtml = (
   dateRangeText?: string
 ): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'APSARA CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
   const compSub = storeSettings.tagline || `Wholesale & Retail Trading • ${storeSettings.city || 'Sivakasi'}`;
 
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
@@ -1547,7 +1550,7 @@ export const printLedgerStatementDirectly = (customerName: string, ledgerEntries
  */
 export const generateParticularsListPrintHtml = (particulars: any[], dateRangeText?: string): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'APSARA CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
   const compSub = storeSettings.tagline || `Wholesale & Retail Trading • ${storeSettings.city || 'Sivakasi'}`;
 
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
@@ -1647,7 +1650,7 @@ export const printParticularsListDirectly = (particulars: any[], dateRangeText?:
  */
 export const generateCompaniesListPrintHtml = (companies: any[]): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'APSARA CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
   const rowsHtml = companies.map((c, idx) => `
     <tr>
@@ -1713,7 +1716,7 @@ export const printCompaniesListDirectly = (companies: any[]) => {
  */
 export const generateProductsListPrintHtml = (products: any[]): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'APSARA CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
   const rowsHtml = products.map((p, idx) => `
     <tr>

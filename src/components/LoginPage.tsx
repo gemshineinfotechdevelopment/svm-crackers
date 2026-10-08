@@ -36,7 +36,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
         const data = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res;
         if (data && typeof data === 'object') {
           const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha'))
-            ? 'Apsara Crackers'
+            ? 'SVM Crackers'
             : (data.companyName ?? DEFAULT_COMPANY_SETTINGS.companyName);
 
           const remoteSettings = { ...DEFAULT_COMPANY_SETTINGS, ...data, companyName: compName };

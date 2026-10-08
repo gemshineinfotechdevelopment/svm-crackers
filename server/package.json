@@ -1,7 +1,7 @@
 {
-  "name": "apsara-crackers-backend",
+  "name": "svm-crackers-backend",
   "version": "1.0.0",
-  "description": "Backend API Server for Apsara Crackers application",
+  "description": "Backend API Server for SVM Crackers application",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch index.ts",
@@ -17,7 +17,7 @@
     "express",
     "typescript",
     "mongodb",
-    "apsara-crackers"
+    "svm-crackers"
   ],
   "author": "",
   "license": "ISC",

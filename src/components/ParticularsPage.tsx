@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo, type FC } from 'react';
+import { useState, useEffect, useMemo, type FC, type ChangeEvent } from 'react';
 import {
   Box,
   Typography,
   Button,
-  Paper,
   TextField,
   Autocomplete,
   Table,
@@ -13,19 +12,18 @@ import {
   TableHead,
   TableRow,
   IconButton,
-  Tooltip,
   CircularProgress,
-  Grid,
-  Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Snackbar,
+  Alert,
 } from '@mui/material';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
-import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
-import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import RotateLeftRoundedIcon from '@mui/icons-material/RotateLeftRounded';
-import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import {
   CustomersApi,
   CompaniesApi,
@@ -49,6 +47,7 @@ interface ProductRowItem {
 
 interface CustomerOptionItem {
   id: string;
+  idCode?: string;
   name: string;
   mobile?: string;
   address?: string;
@@ -57,6 +56,7 @@ interface CustomerOptionItem {
 
 interface ProductCatalogOption {
   id: string;
+  sku?: string;
   name: string;
   category?: string;
   rate?: number;
@@ -70,407 +70,322 @@ interface ParticularsPageProps {
   onEditSuccess?: () => void;
 }
 
-const DRAFT_BILL_STORAGE_KEY = 'apsara_draft_bill';
-
-interface DraftBillState {
-  customerName?: string;
-  customerPhone?: string;
-  customerAddress?: string;
-  billNo?: string;
-  billDate?: string;
-  discount?: string;
-  transport?: string;
-  packing?: string;
-  tax?: string;
-  productRows?: ProductRowItem[];
-}
-
-const getSavedDraft = (): DraftBillState => {
-  try {
-    const raw = localStorage.getItem(DRAFT_BILL_STORAGE_KEY);
-    if (raw) {
-      return JSON.parse(raw);
-    }
-  } catch (e) {
-    console.error('Failed to load draft bill from localStorage', e);
-  }
-  return {};
+const getInitialDateStr = () => {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
 };
 
-export const ParticularsPage: FC<ParticularsPageProps> = ({ initialCustomerName, editBillData, onEditSuccess }) => {
-  const [storeSettings, setStoreSettings] = useState(() => getStoredSettings());
-  const draft = useMemo(() => getSavedDraft(), []);
+export const ParticularsPage: FC<ParticularsPageProps> = ({
+  initialCustomerName,
+  editBillData,
+  onEditSuccess,
+}) => {
+  const [storeSettings] = useState(() => getStoredSettings());
 
   // Dropdown options
   const [customerOptions, setCustomerOptions] = useState<CustomerOptionItem[]>([]);
   const [, setCompanyOptions] = useState<{ id: string; name: string }[]>([]);
   const [productOptions, setProductOptions] = useState<ProductCatalogOption[]>([]);
 
-  // Bill Form State (Restores from Draft if page was refreshed)
-  const [customerName, setCustomerName] = useState<string>(() => {
-    return initialCustomerName || draft.customerName || '';
-  });
-  const [customerPhone, setCustomerPhone] = useState<string>(() => draft.customerPhone || '');
-  const [customerAddress, setCustomerAddress] = useState<string>(() => draft.customerAddress || '');
-  const [company, setCompany] = useState<string>(() => {
-    return storeSettings.companyName || 'Apsara Crackers';
-  });
-  const [billNo, setBillNo] = useState<string>(() => draft.billNo || '');
-  const [billDate, setBillDate] = useState<string>(() => {
-    if (draft.billDate) return draft.billDate;
-    const today = new Date();
-    return today.toLocaleDateString('en-GB').replace(/\//g, '-');
-  });
-  const [discount, setDiscount] = useState<string>(() => draft.discount ?? '0');
-  const [transport, setTransport] = useState<string>(() => draft.transport ?? '0');
-  const [packing, setPacking] = useState<string>(() => draft.packing ?? '0');
-  const [tax, setTax] = useState<string>(() => draft.tax ?? '0');
+  // 1. Customer Info Left Box State
+  const [customerNo, setCustomerNo] = useState<string>('');
+  const [billDate, setBillDate] = useState<string>(getInitialDateStr);
+  const [billNo, setBillNo] = useState<string>('');
+  const [rateType, setRateType] = useState<string>('Befor Rate');
+  const [customerGst, setCustomerGst] = useState<string>('');
 
-  // Product Entry Form State
-  const [selectedProduct, setSelectedProduct] = useState<string>('');
-  const [quantity, setQuantity] = useState<string>('1');
-  const [rate, setRate] = useState<string>('0');
-  const [unit, setUnit] = useState<string>('Box');
-  const [productRows, setProductRows] = useState<ProductRowItem[]>(() => draft.productRows || []);
+  // 2. Customer Middle Selection & Right New Customer Form
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOptionItem | null>(null);
+  const [customerName, setCustomerName] = useState<string>(initialCustomerName || '');
+  const [customerMobile, setCustomerMobile] = useState<string>('');
+  const [customerAddress, setCustomerAddress] = useState<string>('');
+  const [companyName, setCompanyName] = useState<string>(() => storeSettings.companyName || 'SVM Crackers');
+
+  // 3. Product Selection Bar State
+  const [quickCode, setQuickCode] = useState<string>('');
+  const [selectedCatalogProduct, setSelectedCatalogProduct] = useState<ProductCatalogOption | null>(null);
+  const [quickUnit, setQuickUnit] = useState<string>('1 Box');
+  const [productCatalogModalOpen, setProductCatalogModalOpen] = useState<boolean>(false);
+  const [catalogSearchTerm, setCatalogSearchTerm] = useState<string>('');
+
+  // 4. Products Table Rows (Starts clean with 1 empty editable row)
+  const [productRows, setProductRows] = useState<ProductRowItem[]>([
+    { id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', amount: '0' },
+  ]);
+
+  // 5. Payment Info Right Box State
+  const [discountPercent, setDiscountPercent] = useState<string>('0');
+  const [discountRs, setDiscountRs] = useState<string>('0');
+  const [packingRs, setPackingRs] = useState<string>('');
+  const [packingPercent, setPackingPercent] = useState<string>('');
+  const [remarks, setRemarks] = useState<string>('');
+  const [paymentMode, setPaymentMode] = useState<string>('Cash');
+
+  // UI status
   const [savingBill, setSavingBill] = useState<boolean>(false);
-
-  // Track whether we are in edit mode
-  const isEditMode = Boolean(editBillData && (editBillData._id || editBillData.id));
-
-  // When editBillData prop changes, load it into the form
-  useEffect(() => {
-    if (editBillData && (editBillData._id || editBillData.id)) {
-      setCustomerName(editBillData.customerName || '');
-      setCustomerPhone(editBillData.customerPhone || '');
-      setCustomerAddress(editBillData.customerAddress || '');
-      setCompany(editBillData.companyName || storeSettings.companyName || 'Apsara Crackers');
-      setBillNo(String(editBillData.billNo || ''));
-      setBillDate(editBillData.date || new Date().toLocaleDateString('en-GB').replace(/\//g, '-'));
-      setDiscount(String(editBillData.discount ?? '0'));
-      setTransport(String(editBillData.transport ?? '0'));
-      setPacking(String(editBillData.packing ?? '0'));
-      setTax(String(editBillData.tax ?? '0'));
-      const rows: ProductRowItem[] = Array.isArray(editBillData.products) && editBillData.products.length > 0
-        ? editBillData.products.map((p: any, i: number) => ({
-            id: `edit-row-${i}-${Date.now()}`,
-            particular: p.particular || p.name || '',
-            quantity: String(p.quantity ?? '1'),
-            rate: String(p.rate ?? '0'),
-            pktUnit: p.pktUnit || 'Box',
-            amount: String(p.amount ?? ((parseFloat(String(p.quantity)) || 0) * (parseFloat(String(p.rate)) || 0)).toFixed(2)),
-          }))
-        : [];
-      setProductRows(rows);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editBillData]);
-
-  // Print Preview Modal State
+  const [snackbarMessage, setSnackbarMessage] = useState<string>('');
+  const [snackbarOpen, setSnackbarOpen] = useState<boolean>(false);
   const [printModalOpen, setPrintModalOpen] = useState<boolean>(false);
   const [selectedBillForPrint, setSelectedBillForPrint] = useState<BillPrintData | null>(null);
 
-  // Auto-persist draft bill to localStorage
-  useEffect(() => {
-    const draftPayload: DraftBillState = {
-      customerName,
-      customerPhone,
-      customerAddress,
-      billNo,
-      billDate,
-      discount,
-      transport,
-      packing,
-      tax,
-      productRows,
-    };
-    try {
-      localStorage.setItem(DRAFT_BILL_STORAGE_KEY, JSON.stringify(draftPayload));
-    } catch (e) {
-      console.warn('Failed to auto-save draft bill to localStorage', e);
-    }
-  }, [customerName, customerPhone, customerAddress, billNo, billDate, discount, transport, packing, tax, productRows]);
+  const isEditMode = Boolean(editBillData && (editBillData._id || editBillData.id));
 
-  // Listen for settings update (when user updates company name/logo/tax settings in Settings)
-  useEffect(() => {
-    const handleSettingsUpdate = () => {
-      const updated = getStoredSettings();
-      setStoreSettings(updated);
-      setCompany(updated.companyName || 'Apsara Crackers');
-      if (updated.enableTax && (!tax || tax === '0')) {
-        setTax(updated.defaultTaxRate || '0');
-      } else if (!updated.enableTax) {
-        setTax('0');
-      }
-    };
-    window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
-    return () => {
-      window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
-    };
-  }, [tax]);
-
-  // Load Dropdown Options (Customers, Companies, Unified Products & Price List)
+  // Load backend data
   const loadOptions = async () => {
     try {
-      const [custRes, compRes, prodRes, priceRes] = await Promise.all([
+      const [custRes, compRes, prodRes, priceRes, lastBillRes] = await Promise.all([
         CustomersApi.getAll().catch(() => []),
         CompaniesApi.getAll().catch(() => []),
         ProductsApi.getAll().catch(() => []),
         PriceListsApi.getAll().catch(() => []),
+        ParticularsApi.getNextBillNo('REGULAR').catch(() => ({ nextBillNo: '1001' })),
       ]);
 
       if (Array.isArray(custRes) && custRes.length > 0) {
-        const mapped: CustomerOptionItem[] = custRes.map((c: any) => ({
+        const mapped: CustomerOptionItem[] = custRes.map((c: any, idx: number) => ({
           id: c._id || c.id,
+          idCode: c.idCode || `C${450 + idx}`,
           name: c.name,
           mobile: c.mobile && c.mobile !== 'N/A' && c.mobile !== '-' ? c.mobile : '',
           address: c.address && c.address !== 'N/A' && c.address !== '-' ? c.address : '',
           gst: c.gst && c.gst !== 'N/A' && c.gst !== '-' ? c.gst : '',
         }));
         setCustomerOptions(mapped);
+
+        // Match initial customer if provided
+        if (initialCustomerName) {
+          const match = mapped.find(
+            (c) => c.name.toLowerCase().trim() === initialCustomerName.toLowerCase().trim()
+          );
+          if (match) {
+            setSelectedCustomer(match);
+            setCustomerName(match.name);
+            setCustomerMobile(match.mobile || '');
+            setCustomerAddress(match.address || '');
+            setCustomerGst(match.gst || '');
+            setCustomerNo(match.idCode || 'C452');
+          }
+        }
       }
 
       if (Array.isArray(compRes) && compRes.length > 0) {
-        const mapped = compRes.map((c: any) => ({ id: c._id || c.id, name: c.name }));
-        setCompanyOptions(mapped);
-        if (mapped.length > 0 && (!company || company === 'General')) {
-          setCompany(storeSettings.companyName || mapped[0].name);
-        }
+        setCompanyOptions(compRes.map((c: any) => ({ id: c._id || c.id, name: c.name })));
+      }
+
+      // Auto-assign Next Bill No if not editing
+      if (!isEditMode && !billNo) {
+        setBillNo(lastBillRes.nextBillNo || '1001');
       }
 
       // Merge Products & Price List
       const prodMap = new Map<string, ProductCatalogOption>();
-
       if (Array.isArray(prodRes)) {
-        prodRes.forEach((p: any) => {
+        prodRes.forEach((p: any, idx: number) => {
           const key = (p.name || '').trim();
           if (key) {
             prodMap.set(key.toLowerCase(), {
               id: p._id || p.id,
+              sku: p.sku || `P${100 + idx}`,
               name: key,
               category: p.category || 'General',
-              rate: p.rate || 0,
-              mrp: p.mrp || 0,
-              unit: p.unit || 'Box',
+              rate: typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0,
+              mrp: typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0,
+              unit: p.unit || '1 Box',
             });
           }
         });
       }
 
       if (Array.isArray(priceRes)) {
-        priceRes.forEach((item: any) => {
-          const key = (item.itemName || '').trim();
-          if (key) {
-            const existing = prodMap.get(key.toLowerCase());
+        priceRes.forEach((p: any, idx: number) => {
+          const key = (p.itemName || '').trim();
+          if (key && !prodMap.has(key.toLowerCase())) {
             prodMap.set(key.toLowerCase(), {
-              id: item._id || item.id || existing?.id || key,
+              id: p._id || p.id,
+              sku: `PL-${100 + idx}`,
               name: key,
-              category: item.category || existing?.category || 'General',
-              rate: item.rate !== undefined && item.rate > 0 ? item.rate : (existing?.rate || 0),
-              mrp: item.mrp !== undefined && item.mrp > 0 ? item.mrp : (existing?.mrp || 0),
-              unit: item.unit || existing?.unit || 'Box',
+              category: p.category || 'General',
+              rate: typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0,
+              mrp: typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0,
+              unit: p.unit || '1 Box',
             });
           }
         });
       }
 
-      const mergedList = Array.from(prodMap.values());
-      setProductOptions(mergedList);
-    } catch (err) {
-      console.error('Failed to load billing options:', err);
-    }
-  };
-
-  // Fetch Next Bill Number
-  const fetchNextBillNo = async () => {
-    try {
-      const res = await ParticularsApi.getNextBillNo('REGULAR');
-      if (res?.nextBillNo) {
-        setBillNo(res.nextBillNo);
-      } else {
-        setBillNo(`INV-${Date.now().toString().slice(-4)}`);
+      const unified = Array.from(prodMap.values());
+      if (unified.length > 0) {
+        setProductOptions(unified);
       }
-    } catch {
-      setBillNo(`INV-${Date.now().toString().slice(-4)}`);
+    } catch (err) {
+      console.error('Error loading data for Quotation page:', err);
     }
-  };
-
-  // Always keep date current today
-  const refreshDate = () => {
-    const today = new Date();
-    setBillDate(today.toLocaleDateString('en-GB').replace(/\//g, '-'));
   };
 
   useEffect(() => {
     loadOptions();
-    fetchNextBillNo();
-    refreshDate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update customer name, phone, address if prop changes
+  // Handle Edit Mode population
   useEffect(() => {
-    if (initialCustomerName) {
-      setCustomerName(initialCustomerName);
-      const matched = customerOptions.find(
-        (c) => c.name.toLowerCase() === initialCustomerName.toLowerCase().trim()
-      );
-      if (matched) {
-        if (matched.mobile) setCustomerPhone(matched.mobile);
-        if (matched.address) setCustomerAddress(matched.address);
+    if (editBillData && (editBillData._id || editBillData.id)) {
+      setCustomerName(editBillData.customerName || '');
+      setCustomerMobile(editBillData.customerPhone || '');
+      setCustomerAddress(editBillData.customerAddress || '');
+      setCustomerGst(editBillData.customerGst || '');
+      setBillNo(String(editBillData.billNo || ''));
+      setBillDate(editBillData.date || getInitialDateStr());
+      setDiscountRs(String(editBillData.discount ?? '0'));
+      setPackingRs(String(editBillData.packing ?? ''));
+      setCompanyName(editBillData.companyName || storeSettings.companyName || 'Sri Vignatha Traders');
+      setPaymentMode(editBillData.paymentMode || 'Cash');
+      if (editBillData.notes) setRemarks(editBillData.notes);
+
+      if (Array.isArray(editBillData.products) && editBillData.products.length > 0) {
+        setProductRows(
+          editBillData.products.map((p: any, i: number) => ({
+            id: `edit-${i}-${Date.now()}`,
+            particular: p.particular || p.name || '',
+            quantity: String(p.quantity ?? '1'),
+            rate: String(p.rate ?? '0'),
+            pktUnit: p.pktUnit || p.unit || '1 Box',
+            amount: String(p.amount ?? ((parseFloat(p.quantity) || 0) * (parseFloat(p.rate) || 0)).toFixed(2)),
+          }))
+        );
       }
     }
-  }, [initialCustomerName, customerOptions]);
+  }, [editBillData, storeSettings]);
 
-  // Add Product Item to Bill Row
-  const handleAddProductItem = () => {
-    if (!selectedProduct.trim()) {
-      alert('Please select or enter a product name');
-      return;
+  // When Customer dropdown is selected
+  const handleSelectCustomer = (_: any, opt: CustomerOptionItem | null) => {
+    setSelectedCustomer(opt);
+    if (opt) {
+      setCustomerName(opt.name);
+      setCustomerMobile(opt.mobile || '');
+      setCustomerAddress(opt.address || '');
+      setCustomerGst(opt.gst || '');
+      if (opt.idCode) setCustomerNo(opt.idCode);
     }
-    const qNum = parseFloat(quantity) || 1;
-    const rNum = parseFloat(rate) || 0;
-
-    const existingIndex = productRows.findIndex(
-      (r) => r.particular.toLowerCase() === selectedProduct.trim().toLowerCase()
-    );
-
-    if (existingIndex !== -1) {
-      setProductRows((prev) =>
-        prev.map((row, idx) => {
-          if (idx === existingIndex) {
-            const updatedQty = (parseFloat(row.quantity) || 0) + qNum;
-            const updatedRate = parseFloat(row.rate) || rNum;
-            const updatedAmt = (updatedQty * updatedRate).toFixed(2);
-            return {
-              ...row,
-              quantity: String(updatedQty),
-              rate: String(updatedRate),
-              amount: updatedAmt,
-            };
-          }
-          return row;
-        })
-      );
-    } else {
-      const amt = (qNum * rNum).toFixed(2);
-      const newRow: ProductRowItem = {
-        id: `row-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        particular: selectedProduct.trim(),
-        quantity: String(qNum),
-        rate: String(rNum),
-        pktUnit: unit || 'Box',
-        amount: amt,
-      };
-      setProductRows((prev) => [...prev, newRow]);
-    }
-
-    // Clear all product entry fields completely
-    setSelectedProduct('');
-    setRate('0');
-    setQuantity('1');
-    setUnit('Box');
   };
 
-  // Change quantity directly in table row
-  const handleQuantityChange = (id: string, newQty: string) => {
+  // Calculations
+  const subtotal = useMemo(() => {
+    return productRows.reduce((sum, r) => {
+      const q = parseFloat(r.quantity) || 0;
+      const rateVal = parseFloat(r.rate) || 0;
+      return sum + q * rateVal;
+    }, 0);
+  }, [productRows]);
+
+  const discountAmount = useMemo(() => {
+    const dVal = parseFloat(discountRs) || 0;
+    const dPct = parseFloat(discountPercent) || 0;
+    if (dVal > 0) return dVal;
+    if (dPct > 0) return (subtotal * dPct) / 100;
+    return 0;
+  }, [discountRs, discountPercent, subtotal]);
+
+  const packingAmount = useMemo(() => {
+    const pVal = parseFloat(packingRs) || 0;
+    const pPct = parseFloat(packingPercent) || 0;
+    if (pVal > 0) return pVal;
+    if (pPct > 0) return (subtotal * pPct) / 100;
+    return 0;
+  }, [packingRs, packingPercent, subtotal]);
+
+  const netPayment = useMemo(() => {
+    return Math.max(0, subtotal - discountAmount + packingAmount);
+  }, [subtotal, discountAmount, packingAmount]);
+
+  // Row Management
+  const handleRowChange = (id: string, field: keyof ProductRowItem, val: string) => {
     setProductRows((prev) =>
-      prev.map((r) => {
-        if (r.id === id) {
-          const qNum = parseFloat(newQty) || 0;
-          const rNum = parseFloat(r.rate) || 0;
-          return {
-            ...r,
-            quantity: newQty,
-            amount: (qNum * rNum).toFixed(2),
-          };
-        }
-        return r;
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        const updated = { ...row, [field]: val };
+        const q = parseFloat(field === 'quantity' ? val : row.quantity) || 0;
+        const r = parseFloat(field === 'rate' ? val : row.rate) || 0;
+        updated.amount = (q * r).toFixed(0);
+        return updated;
       })
     );
   };
 
-  // Change rate directly in table row
-  const handleRateChange = (id: string, newRate: string) => {
-    setProductRows((prev) =>
-      prev.map((r) => {
-        if (r.id === id) {
-          const qNum = parseFloat(r.quantity) || 0;
-          const rNum = parseFloat(newRate) || 0;
-          return {
-            ...r,
-            rate: newRate,
-            amount: (qNum * rNum).toFixed(2),
-          };
-        }
-        return r;
-      })
-    );
+  const handleAddRow = () => {
+    const newId = String(Date.now());
+    setProductRows((prev) => [
+      ...prev,
+      {
+        id: newId,
+        particular: '',
+        pktUnit: '1 Box',
+        rate: '0',
+        quantity: '1',
+        amount: '0',
+      },
+    ]);
   };
 
-  // Delete product row from current bill
   const handleDeleteRow = (id: string) => {
     setProductRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  // Bill Financial Totals Calculation
-  const subtotal = useMemo(() => {
-    return productRows.reduce((acc, row) => acc + (parseFloat(row.amount) || 0), 0);
-  }, [productRows]);
+  // Add selected product from top product bar
+  const handleAddProductFromBar = (prod: ProductCatalogOption | null) => {
+    if (!prod) return;
+    const newRow: ProductRowItem = {
+      id: String(Date.now()),
+      particular: prod.name,
+      pktUnit: prod.unit || quickUnit || '1 Box',
+      rate: String(prod.rate || '0'),
+      quantity: '1',
+      amount: String(prod.rate || '0'),
+    };
+    setProductRows((prev) => [...prev, newRow]);
+    setSelectedCatalogProduct(null);
+    setQuickCode('');
+  };
 
-  const discountAmount = useMemo(() => {
-    const rawDisc = parseFloat(discount) || 0;
-    if (rawDisc <= 0) return 0;
-    if (rawDisc <= 100) {
-      return (subtotal * rawDisc) / 100;
-    }
-    return rawDisc;
-  }, [subtotal, discount]);
-
-  const totalCases = useMemo(() => {
-    return productRows.reduce((acc, row) => acc + (parseFloat(row.quantity) || 0), 0);
-  }, [productRows]);
-
-  const grandTotal = useMemo(() => {
-    const transportAmt = parseFloat(transport) || 0;
-    const packingAmt = parseFloat(packing) || 0;
-    const isTaxEnabled = Boolean(storeSettings.enableTax);
-    const taxPercent = isTaxEnabled ? (parseFloat(tax) || 0) : 0;
-
-    const afterDiscount = Math.max(0, subtotal - discountAmount);
-    const withAdditions = afterDiscount + transportAmt + packingAmt;
-    const taxAmt = taxPercent > 0 ? (withAdditions * taxPercent) / 100 : 0;
-    return withAdditions + taxAmt;
-  }, [subtotal, discountAmount, transport, packing, tax, storeSettings.enableTax]);
-
-  // Save Bill to DB
-  const handleSaveBill = async (actionType: 'save' | 'print' | 'share' = 'save') => {
+  // Save Quotation / Bill
+  const handleSaveBill = async () => {
     if (!customerName.trim()) {
-      alert('Please select or enter Customer Name');
-      return;
-    }
-    if (productRows.length === 0) {
-      alert('Please add at least one product item to the bill');
+      setSnackbarMessage('Please enter or select Customer Name.');
+      setSnackbarOpen(true);
       return;
     }
 
+    const validRows = productRows.filter((r) => r.particular.trim() !== '');
+    if (validRows.length === 0) {
+      setSnackbarMessage('Please add at least one product item.');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    setSavingBill(true);
     try {
-      setSavingBill(true);
-      const isTaxEnabled = Boolean(storeSettings.enableTax);
       const payload = {
-        billNo: billNo.trim() || `INV-${Date.now().toString().slice(-4)}`,
-        date: billDate,
         customerName: customerName.trim(),
-        customerPhone: customerPhone.trim() || undefined,
-        customerAddress: customerAddress.trim() || undefined,
-        companyName: company || storeSettings.companyName || 'General',
-        transport: transport || '0',
-        caseCount: String(totalCases),
-        discount: discount || '0',
-        packing: packing || '0',
-        tax: isTaxEnabled ? (tax || '0') : '0',
-        amount: String(subtotal.toFixed(2)),
-        total: String(grandTotal.toFixed(2)),
-        billType: 'REGULAR',
-        products: productRows.map((r) => ({
+        customerPhone: customerMobile.trim(),
+        customerAddress: customerAddress.trim(),
+        customerGst: customerGst.trim(),
+        companyName: companyName || storeSettings.companyName || 'Sri Vignatha Traders',
+        billNo: billNo || '1001',
+        date: billDate,
+        discount: String(discountAmount),
+        packing: String(packingAmount),
+        transport: '0',
+        tax: '0',
+        amount: subtotal.toFixed(2),
+        total: netPayment.toFixed(2),
+        paymentMode: paymentMode || 'Cash',
+        paymentStatus: paymentMode === 'Cash' || paymentMode === 'UPI' ? 'PAID' : 'UNPAID',
+        paidAmount: paymentMode === 'Cash' || paymentMode === 'UPI' ? netPayment.toFixed(2) : '0.00',
+        notes: remarks,
+        products: validRows.map((r) => ({
           particular: r.particular,
           quantity: r.quantity,
           rate: r.rate,
@@ -479,943 +394,923 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({ initialCustomerName,
         })),
       };
 
-      if (isEditMode) {
-        const billId = editBillData._id || editBillData.id;
-        await ParticularsApi.update(billId, payload);
+      if (isEditMode && editBillData) {
+        const id = editBillData._id || editBillData.id;
+        await ParticularsApi.update(id, payload);
+        setSnackbarMessage('Quotation / Bill updated successfully!');
       } else {
         await ParticularsApi.create(payload);
+        setSnackbarMessage('Quotation / Bill saved successfully!');
       }
 
-      if (actionType === 'print' || actionType === 'share') {
-        const matchingCustomer = customerOptions.find((c) => c.name.toLowerCase() === payload.customerName.toLowerCase());
-        const printData: BillPrintData = {
-          billNo: payload.billNo,
-          date: payload.date,
-          customerName: payload.customerName,
-          customerPhone: payload.customerPhone,
-          customerAddress: payload.customerAddress,
-          customerGst: matchingCustomer?.gst,
-          customerPan: matchingCustomer?.gst,
-          companyName: payload.companyName,
-          transport: payload.transport,
-          caseCount: payload.caseCount,
-          discount: payload.discount,
-          packing: payload.packing,
-          tax: payload.tax,
-          amount: payload.amount,
-          total: payload.total,
-          products: payload.products,
-          dispatchFrom: 'Sivakasi',
-          dispatchTo: payload.customerAddress || '',
-        };
-        if (actionType === 'print') {
-          printBillDirectly(printData);
-        } else {
-          setSelectedBillForPrint(printData);
-          setPrintModalOpen(true);
-        }
-      }
+      setSnackbarOpen(true);
 
-      // Reset form after save/update
-      if (isEditMode) {
-        // After update, notify parent to go back & refresh
-        if (onEditSuccess) onEditSuccess();
-        if (actionType === 'save') alert(`Bill #${payload.billNo} updated successfully!`);
-      } else {
-        // Reset Bill Form & Reload Recent Bills
-        setProductRows([]);
-        setCustomerName('');
-        setCustomerPhone('');
-        setCustomerAddress('');
-        setDiscount('0');
-        setTransport('0');
-        setPacking('0');
-        setTax(storeSettings.enableTax ? (storeSettings.defaultTaxRate || '0') : '0');
-        localStorage.removeItem(DRAFT_BILL_STORAGE_KEY);
-        localStorage.removeItem('apsara_active_customer');
-        ['varun_draft_bill', 'dheeksha_draft_bill', 'varun_active_customer', 'dheeksha_active_customer'].forEach(k => localStorage.removeItem(k));
-        fetchNextBillNo();
-        refreshDate();
-        loadOptions();
-        if (actionType === 'save') alert(`Bill #${payload.billNo} saved successfully!`);
+      if (onEditSuccess) {
+        setTimeout(onEditSuccess, 1000);
       }
     } catch (err: any) {
       console.error('Failed to save bill:', err);
-      alert(err.message || 'Error saving bill');
+      setSnackbarMessage(err.message || 'Failed to save Quotation.');
+      setSnackbarOpen(true);
     } finally {
       setSavingBill(false);
     }
   };
 
-  // Clear Draft Bill Form
-  const handleClearDraft = () => {
-    if (productRows.length > 0 || customerName.trim() !== '') {
-      if (!window.confirm('Are you sure you want to clear this draft bill?')) return;
-    }
-    setProductRows([]);
-    setCustomerName('');
-    setCustomerPhone('');
-    setCustomerAddress('');
-    setDiscount('0');
-    setTransport('0');
-    setPacking('0');
-    setTax(storeSettings.enableTax ? (storeSettings.defaultTaxRate || '0') : '0');
-    localStorage.removeItem(DRAFT_BILL_STORAGE_KEY);
-    localStorage.removeItem('apsara_active_customer');
-    ['varun_draft_bill', 'dheeksha_draft_bill', 'varun_active_customer', 'dheeksha_active_customer'].forEach(k => localStorage.removeItem(k));
-    fetchNextBillNo();
-    refreshDate();
+  // Direct Print Handler
+  const handlePrint = () => {
+    const validRows = productRows.filter((r) => r.particular.trim() !== '');
+    const billData: BillPrintData = {
+      billNo: billNo || '1001',
+      date: billDate,
+      customerName: customerName || 'Valued Customer',
+      customerPhone: customerMobile,
+      customerAddress: customerAddress,
+      customerGst: customerGst,
+      companyName: companyName || storeSettings.companyName || 'Sri Vignatha Traders',
+      subtotal: subtotal,
+      discount: discountAmount,
+      packing: packingAmount,
+      total: netPayment,
+      invoiceTitle: 'QUOTATION',
+      products: validRows.map((r) => ({
+        particular: r.particular,
+        quantity: r.quantity,
+        rate: r.rate,
+        pktUnit: r.pktUnit,
+        amount: r.amount,
+      })),
+    };
+
+    setSelectedBillForPrint(billData);
+    printBillDirectly(billData);
   };
 
+  // Reset / Exit Form
+  const handleExitReset = () => {
+    setCustomerName('');
+    setCustomerMobile('');
+    setCustomerAddress('');
+    setCustomerGst('');
+    setSelectedCustomer(null);
+    setProductRows([
+      { id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', amount: '0' },
+    ]);
+    setDiscountRs('0');
+    setDiscountPercent('0');
+    setPackingRs('');
+    setPackingPercent('');
+    setRemarks('');
+  };
+
+  // Filter products in catalog modal
+  const filteredCatalog = useMemo(() => {
+    if (!catalogSearchTerm.trim()) return productOptions;
+    const term = catalogSearchTerm.toLowerCase();
+    return productOptions.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        (p.category && p.category.toLowerCase().includes(term)) ||
+        (p.sku && p.sku.toLowerCase().includes(term))
+    );
+  }, [productOptions, catalogSearchTerm]);
+
+  // Generate visual empty filler rows to mirror the classic ERP look in the screenshot
+  const minRowsDisplay = 12;
+  const emptyRowsCount = Math.max(0, minRowsDisplay - productRows.length);
+
   return (
-    <Box
-      sx={{
-        width: '100%',
-        px: { xs: 2, sm: 3, md: 4 },
-        py: { xs: 2.5, md: 3 },
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* Page Header */}
+    <Box sx={{ width: '100%', p: { xs: 1, sm: 1.5 }, bgcolor: '#D9E4F2', minHeight: 'calc(100vh - 70px)' }}>
+      {/* Outer Window / Card */}
       <Box
         sx={{
+          bgcolor: '#FFFFFF',
+          border: '1px solid #9BB3CC',
+          borderRadius: '4px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+          overflow: 'hidden',
           display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          gap: 1.5,
-          mb: 3,
+          flexDirection: 'column',
         }}
       >
-        <Box>
-          <Typography
-            variant="h1"
-            sx={{
-              fontSize: { xs: '24px', sm: '28px', md: '30px' },
-              fontWeight: 800,
-              color: '#B91C1C',
-              letterSpacing: '-0.025em',
-              lineHeight: 1.2,
-            }}
-          >
-            {isEditMode ? `Edit Bill #${billNo}` : 'Create Customer Bill'}
-          </Typography>
-          <Typography sx={{ fontSize: '13.5px', color: '#64748B', mt: 0.5, fontWeight: 600 }}>
-            {isEditMode
-              ? 'Modify invoice details, update line items, quantities and charges, then save.'
-              : 'Generate standard invoice, itemize goods, apply tax/discounts, and print bills.'}
-          </Typography>
-        </Box>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={handleClearDraft}
-            startIcon={<RotateLeftRoundedIcon sx={{ fontSize: 18 }} />}
-            sx={{
-              color: '#64748B',
-              borderColor: '#E2E8F0',
-              textTransform: 'none',
-              fontWeight: 700,
-              fontSize: '13px',
-              borderRadius: '8px',
-              px: 2,
-              height: '38px',
-              '&:hover': {
-                borderColor: '#DC2626',
-                color: '#DC2626',
-                backgroundColor: '#FEF2F2',
-              },
-            }}
-          >
-            Clear Draft
-          </Button>
-        </Box>
-      </Box>
-
-      {/* Main Two-Column Grid: Create Bill Form + Items Table */}
-      <Grid container spacing={2.5}>
-        {/* Left Column: Customer & Invoice Details */}
-        <Grid size={{ xs: 12, lg: 4 }}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: { xs: 2, sm: 2.5 },
-              borderRadius: '14px',
-              border: '1.5px solid #E2E8F0',
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
-              height: '100%',
-              boxSizing: 'border-box',
-            }}
-          >
-            <Typography sx={{ fontSize: '16px', fontWeight: 800, color: '#B91C1C', mb: 2 }}>
-              1. Invoice Information
+        {/* Window Title Header Bar: "Customer Factory" */}
+        <Box
+          sx={{
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            px: 1.5,
+            py: 0.8,
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          {/* Window Icon + Title */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <HubRoundedIcon sx={{ fontSize: 18, color: '#0284C7' }} />
+            <Typography
+              sx={{
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#0F172A',
+                letterSpacing: '0.01em',
+              }}
+            >
+              Customer Factory
             </Typography>
+          </Box>
+        </Box>
 
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {/* Customer Selector */}
-              <Box>
-                <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#64748B', mb: 0.6 }}>
-                  Customer Name *
+        {/* Inner Form Content */}
+        <Box sx={{ p: { xs: 1, sm: 1.5 }, bgcolor: '#F0F5FA' }}>
+          {/* ========================================================= */}
+          {/* TOP SECTION: 4 FIELDSET PANELS (Customer Info, Selection, New Customer, Address) */}
+          {/* ========================================================= */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: '260px 1fr 280px 240px',
+              },
+              gap: 1,
+              mb: 1,
+              alignItems: 'stretch',
+            }}
+          >
+            {/* Box 1: Customer Info (Left) */}
+            <fieldset className="erp-fieldset">
+              <legend className="erp-legend">Customer Info</legend>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6 }}>
+                {/* Custmer No */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '75px' }}>
+                    Custmer No
+                  </Typography>
+                  <input
+                    type="text"
+                    value={customerNo}
+                    onChange={(e) => setCustomerNo(e.target.value)}
+                    className="erp-input"
+                    style={{ width: '120px' }}
+                  />
+                </Box>
+
+                {/* Date */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '75px' }}>
+                    Date
+                  </Typography>
+                  <input
+                    type="text"
+                    value={billDate}
+                    onChange={(e) => setBillDate(e.target.value)}
+                    className="erp-input"
+                    style={{ width: '120px' }}
+                  />
+                </Box>
+
+                {/* Bill No */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '75px' }}>
+                    Bill No
+                  </Typography>
+                  <input
+                    type="text"
+                    value={billNo}
+                    onChange={(e) => setBillNo(e.target.value)}
+                    placeholder="Auto"
+                    className="erp-input"
+                    style={{ width: '120px' }}
+                  />
+                </Box>
+
+                {/* Rate Type */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '75px' }}>
+                    Rate Type
+                  </Typography>
+                  <select
+                    value={rateType}
+                    onChange={(e) => setRateType(e.target.value)}
+                    className="erp-input"
+                    style={{ width: '120px', fontSize: '11.5px' }}
+                  >
+                    <option value="Befor Rate">Befor Rate</option>
+                    <option value="Net Rate">Net Rate</option>
+                    <option value="Wholesale Rate">Wholesale Rate</option>
+                    <option value="Retail Rate">Retail Rate</option>
+                  </select>
+                </Box>
+
+                {/* GST No */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '75px' }}>
+                    GST No
+                  </Typography>
+                  <input
+                    type="text"
+                    value={customerGst}
+                    onChange={(e) => setCustomerGst(e.target.value)}
+                    className="erp-input"
+                    style={{ width: '120px' }}
+                  />
+                </Box>
+              </Box>
+            </fieldset>
+
+            {/* Box 2: Customer Selection (Middle) with bold blue OR */}
+            <fieldset className="erp-fieldset" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <legend className="erp-legend">Customer Info</legend>
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap' }}>
+                  Customer
                 </Typography>
                 <Autocomplete
-                  freeSolo
                   size="small"
-                  options={customerOptions.map((c) => c.name)}
-                  value={customerName || ''}
-                  onChange={(_, val) => {
-                    const newName = val || '';
-                    setCustomerName(newName);
-                    const matched = customerOptions.find(
-                      (c) => c.name.toLowerCase() === newName.trim().toLowerCase()
-                    );
-                    if (matched) {
-                      setCustomerPhone(matched.mobile || '');
-                      setCustomerAddress(matched.address || '');
-                    }
-                  }}
-                  onInputChange={(_, val, reason) => {
-                    if (reason === 'input') {
-                      setCustomerName(val);
-                      const matched = customerOptions.find(
-                        (c) => c.name.toLowerCase() === val.trim().toLowerCase()
-                      );
-                      if (matched) {
-                        setCustomerPhone(matched.mobile || '');
-                        setCustomerAddress(matched.address || '');
-                      }
-                    } else if (reason === 'clear') {
-                      setCustomerName('');
-                      setCustomerPhone('');
-                      setCustomerAddress('');
-                    }
-                  }}
+                  fullWidth
+                  options={customerOptions}
+                  getOptionLabel={(opt) => opt.name}
+                  value={selectedCustomer}
+                  onChange={handleSelectCustomer}
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      placeholder="Select or enter customer name..."
+                      placeholder="Select / Search Customer..."
                       sx={{
-                        '& .MuiInputBase-input': { fontSize: '13.5px', fontWeight: 600 },
+                        '& .MuiOutlinedInput-root': {
+                          height: '28px',
+                          fontSize: '12px',
+                          padding: '0 4px',
+                          bgcolor: '#FFFFFF',
+                          borderColor: '#94A3B8',
+                        },
                       }}
                     />
                   )}
                 />
               </Box>
 
-              {/* Optional Customer Phone & Address */}
-              <Grid container spacing={1.5}>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#64748B', mb: 0.6 }}>
-                    Phone (Optional)
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Enter phone..."
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    sx={{
-                      backgroundColor: '#FFFFFF',
-                      borderRadius: '6px',
-                      '& .MuiInputBase-input': { fontSize: '13px', fontWeight: 600 },
-                    }}
-                  />
-                </Grid>
-
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#64748B', mb: 0.6 }}>
-                    Address (Optional)
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Enter address..."
-                    value={customerAddress}
-                    onChange={(e) => setCustomerAddress(e.target.value)}
-                    sx={{
-                      backgroundColor: '#FFFFFF',
-                      borderRadius: '6px',
-                      '& .MuiInputBase-input': { fontSize: '13px', fontWeight: 600 },
-                    }}
-                  />
-                </Grid>
-              </Grid>
-
-              {/* Bill No & Date (Auto-generated & Non-editable / Read-only) */}
-              <Grid container spacing={1.5}>
-                <Grid size={{ xs: 6 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.6 }}>
-                    <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#64748B' }}>
-                      Bill / Inv No
-                    </Typography>
-                    <Tooltip title="Auto Generated (Protected)" arrow>
-                      <LockOutlinedIcon sx={{ fontSize: 13, color: '#9CA3AF' }} />
-                    </Tooltip>
-                  </Box>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={billNo}
-                    disabled
-                    sx={{
-                      backgroundColor: '#FEF2F2',
-                      borderRadius: '6px',
-                      '& .MuiInputBase-input': {
-                        fontSize: '13.5px',
-                        fontWeight: 800,
-                        color: '#B91C1C !important',
-                        WebkitTextFillColor: '#B91C1C !important',
-                      },
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#FECACA !important',
-                      },
-                    }}
-                  />
-                </Grid>
-
-                <Grid size={{ xs: 6 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.6 }}>
-                    <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#64748B' }}>
-                      Bill Date
-                    </Typography>
-                    <Tooltip title="Auto Set to Today" arrow>
-                      <LockOutlinedIcon sx={{ fontSize: 13, color: '#9CA3AF' }} />
-                    </Tooltip>
-                  </Box>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={billDate}
-                    disabled
-                    sx={{
-                      backgroundColor: '#F8FAFC',
-                      borderRadius: '6px',
-                      '& .MuiInputBase-input': {
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        color: '#475569 !important',
-                        WebkitTextFillColor: '#475569 !important',
-                      },
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#E2E8F0 !important',
-                      },
-                    }}
-                  />
-                </Grid>
-              </Grid>
-
-              <Divider sx={{ my: 0.5, borderColor: '#F1F5F9' }} />
-
-              {/* Additional Adjustments: Discount, Transport, Packing, (Tax only if enabled) */}
-              <Typography sx={{ fontSize: '14px', fontWeight: 700, color: '#475569' }}>
-                Adjustments & Charges
-              </Typography>
-
-              <Grid container spacing={1.5}>
-                <Grid size={{ xs: storeSettings.enableTax ? 6 : 4 }}>
-                  <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#64748B', mb: 0.4 }}>
-                    Discount (% or ₹)
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={discount}
-                    onChange={(e) => setDiscount(e.target.value)}
-                    sx={{
-                      '& .MuiInputBase-input': { fontSize: '13px', fontWeight: 600 },
-                    }}
-                  />
-                </Grid>
-
-                <Grid size={{ xs: storeSettings.enableTax ? 6 : 4 }}>
-                  <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#64748B', mb: 0.4 }}>
-                    Transport (₹)
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={transport}
-                    onChange={(e) => setTransport(e.target.value)}
-                    sx={{
-                      '& .MuiInputBase-input': { fontSize: '13px', fontWeight: 600 },
-                    }}
-                  />
-                </Grid>
-
-                <Grid size={{ xs: storeSettings.enableTax ? 6 : 4 }}>
-                  <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#64748B', mb: 0.4 }}>
-                    Packing (₹)
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={packing}
-                    onChange={(e) => setPacking(e.target.value)}
-                    sx={{
-                      '& .MuiInputBase-input': { fontSize: '13px', fontWeight: 600 },
-                    }}
-                  />
-                </Grid>
-
-                {storeSettings.enableTax && (
-                  <Grid size={{ xs: 6 }}>
-                    <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#64748B', mb: 0.4 }}>
-                      Tax / GST (%)
-                    </Typography>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      value={tax}
-                      onChange={(e) => setTax(e.target.value)}
-                      placeholder="e.g. 18"
-                      sx={{
-                        '& .MuiInputBase-input': { fontSize: '13px', fontWeight: 600 },
-                      }}
-                    />
-                  </Grid>
-                )}
-              </Grid>
-
-              {/* Summary Total Card with Complete Breakdown */}
-              <Box
+              {/* Bold Blue OR Label in center */}
+              <Typography
                 sx={{
-                  p: 2,
-                  borderRadius: '10px',
-                  backgroundColor: '#F8FAFC',
-                  border: '1.5px solid #E2E8F0',
-                  mt: 1,
+                  fontWeight: 900,
+                  fontSize: '14px',
+                  color: '#1E40AF',
+                  px: 1,
+                  userSelect: 'none',
                 }}
               >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.6 }}>
-                  <Typography sx={{ fontSize: '13px', color: '#64748B', fontWeight: 600 }}>Subtotal (Items):</Typography>
-                  <Typography sx={{ fontSize: '13px', color: '#1F1714', fontWeight: 700 }}>
-                    ₹{subtotal.toFixed(2)}
+                OR
+              </Typography>
+            </fieldset>
+
+            {/* Box 3: New Customer Form */}
+            <fieldset className="erp-fieldset">
+              <legend className="erp-legend">New Customer</legend>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '65px' }}>
+                    Name
                   </Typography>
+                  <input
+                    type="text"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="erp-input"
+                    style={{ flex: 1 }}
+                  />
                 </Box>
 
-                {discountAmount > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.6 }}>
-                    <Typography sx={{ fontSize: '13px', color: '#059669', fontWeight: 600 }}>Discount:</Typography>
-                    <Typography sx={{ fontSize: '13px', color: '#059669', fontWeight: 700 }}>
-                      -₹{discountAmount.toFixed(2)}
-                    </Typography>
-                  </Box>
-                )}
-
-                {parseFloat(transport) > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.6 }}>
-                    <Typography sx={{ fontSize: '12.5px', color: '#64748B', fontWeight: 600 }}>Transport Charges:</Typography>
-                    <Typography sx={{ fontSize: '12.5px', color: '#1F1714', fontWeight: 700 }}>
-                      +₹{parseFloat(transport).toFixed(2)}
-                    </Typography>
-                  </Box>
-                )}
-
-                {parseFloat(packing) > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.6 }}>
-                    <Typography sx={{ fontSize: '12.5px', color: '#64748B', fontWeight: 600 }}>Packing Charges:</Typography>
-                    <Typography sx={{ fontSize: '12.5px', color: '#1F1714', fontWeight: 700 }}>
-                      +₹{parseFloat(packing).toFixed(2)}
-                    </Typography>
-                  </Box>
-                )}
-
-                {storeSettings.enableTax && parseFloat(tax) > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.6 }}>
-                    <Typography sx={{ fontSize: '12.5px', color: '#64748B', fontWeight: 600 }}>GST / Tax ({tax}%):</Typography>
-                    <Typography sx={{ fontSize: '12.5px', color: '#1F1714', fontWeight: 700 }}>
-                      +₹{(((Math.max(0, subtotal - discountAmount) + parseFloat(transport || '0') + parseFloat(packing || '0')) * parseFloat(tax)) / 100).toFixed(2)}
-                    </Typography>
-                  </Box>
-                )}
-
-                {totalCases > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.6 }}>
-                    <Typography sx={{ fontSize: '12px', color: '#334155', fontWeight: 600 }}>Total Qty / Cases:</Typography>
-                    <Typography sx={{ fontSize: '12.5px', color: '#334155', fontWeight: 700 }}>
-                      {totalCases}
-                    </Typography>
-                  </Box>
-                )}
-
-                <Divider sx={{ my: 1, borderColor: '#E2E8F0' }} />
-
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#991B1B' }}>
-                    Grand Total:
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '65px' }}>
+                    Mobile No
                   </Typography>
-                  <Typography sx={{ fontSize: '20px', fontWeight: 900, color: '#B91C1C' }}>
-                    ₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Typography>
+                  <input
+                    type="text"
+                    value={customerMobile}
+                    onChange={(e) => setCustomerMobile(e.target.value)}
+                    className="erp-input"
+                    style={{ flex: 1 }}
+                  />
                 </Box>
               </Box>
+            </fieldset>
 
-              {/* Save & Print Action Buttons */}
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
-                <Box sx={{ display: 'flex', gap: 1.5 }}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    onClick={() => handleSaveBill('save')}
-                    disabled={savingBill || productRows.length === 0}
-                    sx={{
-                      borderColor: '#F59E0B',
-                      color: '#334155',
-                      fontWeight: 700,
-                      textTransform: 'none',
-                      py: 1,
-                      borderRadius: '8px',
-                      '&:hover': { borderColor: '#B45309', backgroundColor: '#F8FAFC' },
-                    }}
-                  >
-                    {isEditMode ? 'Update Bill' : 'Save Bill'}
-                  </Button>
+            {/* Box 4: Address Field */}
+            <fieldset className="erp-fieldset">
+              <legend className="erp-legend">Address</legend>
+              <textarea
+                rows={3}
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
+                placeholder="Enter customer address..."
+                className="erp-input"
+                style={{
+                  width: '100%',
+                  height: 'calc(100% - 6px)',
+                  resize: 'none',
+                  fontSize: '12px',
+                }}
+              />
+            </fieldset>
+          </Box>
 
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    disableElevation
-                    onClick={() => handleSaveBill('print')}
-                    disabled={savingBill || productRows.length === 0}
-                    startIcon={savingBill ? <CircularProgress size={16} color="inherit" /> : <PrintOutlinedIcon />}
-                    sx={{
-                      background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
-                      color: '#FFFFFF',
-                      fontWeight: 800,
-                      textTransform: 'none',
-                      py: 1,
-                      borderRadius: '8px',
-                      boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
-                      '&:hover': { background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)' },
-                    }}
-                  >
-                    {isEditMode ? 'Update & Print' : 'Save & Print'}
-                  </Button>
-                </Box>
-
-                <Button
-                  fullWidth
-                  variant="contained"
-                  disableElevation
-                  onClick={() => handleSaveBill('share')}
-                  disabled={savingBill || productRows.length === 0}
-                  startIcon={savingBill ? <CircularProgress size={16} color="inherit" /> : <WhatsAppIcon />}
-                  sx={{
-                    backgroundColor: '#16A34A',
-                    color: '#FFFFFF',
-                    fontWeight: 800,
-                    textTransform: 'none',
-                    py: 1,
-                    borderRadius: '8px',
-                    boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
-                    '&:hover': { backgroundColor: '#15803D' },
-                  }}
-                >
-                  {isEditMode ? 'Update & Share (WhatsApp)' : 'Save & Share (WhatsApp PDF)'}
-                </Button>
-
-                {(productRows.length > 0 || customerName.trim() !== '') && (
-                  <Button
-                    size="small"
-                    variant="text"
-                    onClick={handleClearDraft}
-                    startIcon={<ClearRoundedIcon sx={{ fontSize: 16 }} />}
-                    sx={{
-                      color: '#991B1B',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      textTransform: 'none',
-                      py: 0.4,
-                      '&:hover': { backgroundColor: '#FEF2F2' },
-                    }}
-                  >
-                    Clear Current Draft Form
-                  </Button>
-                )}
-              </Box>
-            </Box>
-          </Paper>
-        </Grid>
-
-        {/* Right Column: Product Selector & Current Bill Table */}
-        <Grid size={{ xs: 12, lg: 8 }}>
-          <Paper
-            elevation={0}
+          {/* ========================================================= */}
+          {/* PRODUCT SELECTION BAR: Code [...] Select Product A/cy */}
+          {/* ========================================================= */}
+          <Box
             sx={{
-              borderRadius: '14px',
-              border: '1.5px solid #E2E8F0',
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
-              overflow: 'hidden',
-              mb: 3,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              bgcolor: '#FFFFFF',
+              border: '1px solid #B0C4DE',
+              borderRadius: '4px',
+              p: 0.8,
+              mb: 1,
+              flexWrap: 'wrap',
             }}
           >
-            {/* Top Product Entry Bar */}
-            <Box
+            {/* Code */}
+            <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>
+              Code
+            </Typography>
+            <input
+              type="text"
+              value={quickCode}
+              onChange={(e) => setQuickCode(e.target.value)}
+              placeholder="Code"
+              className="erp-input"
+              style={{ width: '80px' }}
+            />
+
+            {/* Browse Button (...) */}
+            <Button
+              onClick={() => setProductCatalogModalOpen(true)}
+              variant="outlined"
+              size="small"
               sx={{
-                background: 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)',
-                borderBottom: '2px solid #F59E0B',
-                p: 2,
-                px: { xs: 2, sm: 2.5 },
-                color: '#FFFFFF',
+                minWidth: '28px',
+                px: 1,
+                py: 0.2,
+                height: '26px',
+                bgcolor: '#EDF4FB',
+                borderColor: '#94A3B8',
+                color: '#0F172A',
+                fontWeight: 800,
+                '&:hover': { bgcolor: '#D9E4F2' },
               }}
             >
-              <Typography sx={{ fontSize: '15px', fontWeight: 800, letterSpacing: '-0.01em', mb: 1.5 }}>
-                2. Add Products from Price List
-              </Typography>
+              ...
+            </Button>
 
-              {/* Product Selection + Qty + Rate + Add Row */}
-              <Grid container spacing={1.5} sx={{ alignItems: 'center' }}>
-                {/* Autocomplete Product Dropdown */}
-                <Grid size={{ xs: 12, sm: 5 }}>
-                  <Autocomplete
-                    size="small"
-                    autoHighlight
-                    freeSolo
-                    options={productOptions}
-                    getOptionLabel={(option) => (typeof option === 'string' ? option : option.name || '')}
-                    isOptionEqualToValue={(option, val) => {
-                      const optName = typeof option === 'string' ? option : option?.name;
-                      const valName = typeof val === 'string' ? val : val?.name;
-                      return optName === valName;
-                    }}
-                    value={productOptions.find((p) => p.name === selectedProduct) || (selectedProduct ? selectedProduct : null)}
-                    onChange={(_, val) => {
-                      if (val) {
-                        if (typeof val === 'string') {
-                          setSelectedProduct(val);
-                          const matched = productOptions.find((p) => p.name.toLowerCase() === val.toLowerCase());
-                          if (matched) {
-                            setRate(String(matched.rate || 0));
-                            setUnit(matched.unit || 'Box');
-                          }
-                        } else {
-                          setSelectedProduct(val.name);
-                          if (val.rate !== undefined && val.rate > 0) {
-                            setRate(String(val.rate));
-                          } else {
-                            setRate('0');
-                          }
-                          if (val.unit) {
-                            setUnit(val.unit);
-                          }
-                        }
-                      } else {
-                        setSelectedProduct('');
-                        setRate('0');
-                      }
-                    }}
-                    onInputChange={(_, newInputValue, reason) => {
-                      if (reason === 'input') {
-                        setSelectedProduct(newInputValue);
-                        const matched = productOptions.find((p) => p.name.toLowerCase() === newInputValue.trim().toLowerCase());
-                        if (matched) {
-                          setRate(String(matched.rate || 0));
-                          setUnit(matched.unit || 'Box');
-                        }
-                      } else if (reason === 'clear') {
-                        setSelectedProduct('');
-                        setRate('0');
-                      }
-                    }}
-                    renderOption={(props, option) => {
-                      const { key, ...otherProps } = props;
-                      const optName = typeof option === 'string' ? option : option.name;
-                      const optCategory = typeof option === 'string' ? undefined : option.category;
-                      const optRate = typeof option === 'string' ? undefined : option.rate;
-                      const optUnit = typeof option === 'string' ? undefined : option.unit;
-                      const optKey = key || (typeof option === 'string' ? option : option.id || option.name);
+            {/* Product Dropdown */}
+            <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 1 }}>
+              Product
+            </Typography>
+            <Autocomplete
+              size="small"
+              sx={{ flex: 1, minWidth: '220px' }}
+              options={productOptions}
+              getOptionLabel={(opt) => `${opt.name} - ₹${opt.rate || 0}`}
+              value={selectedCatalogProduct}
+              onChange={(_, opt) => {
+                setSelectedCatalogProduct(opt);
+                if (opt) {
+                  handleAddProductFromBar(opt);
+                }
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder="Select Product..."
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      height: '26px',
+                      fontSize: '12px',
+                      padding: '0 4px',
+                      borderColor: '#94A3B8',
+                    },
+                  }}
+                />
+              )}
+            />
 
-                      return (
-                        <Box
-                          component="li"
-                          key={optKey}
-                          {...otherProps}
-                          sx={{
-                            display: 'flex !important',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            width: '100%',
-                            py: 0.8,
-                            px: 1.5,
-                            gap: 1,
-                            borderBottom: '1px solid #F1F5F9',
-                            '&:last-child': { borderBottom: 'none' },
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                            <Typography sx={{ fontSize: '13.5px', fontWeight: 700, color: '#1F1714' }}>
-                              {optName}
-                            </Typography>
-                            {optCategory && (
-                              <Typography sx={{ fontSize: '11px', color: '#D97706', fontWeight: 600 }}>
-                                {optCategory}
-                              </Typography>
-                            )}
-                          </Box>
-                          <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                            {optRate !== undefined && optRate > 0 && (
-                              <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#B91C1C' }}>
-                                ₹{Number(optRate).toLocaleString('en-IN')}
-                              </Typography>
-                            )}
-                            {optUnit && (
-                              <Typography sx={{ fontSize: '10.5px', color: '#6B7280' }}>
-                                / {optUnit}
-                              </Typography>
-                            )}
-                          </Box>
-                        </Box>
-                      );
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        placeholder="Search product from price list..."
-                        sx={{
-                          backgroundColor: '#FFFFFF',
-                          borderRadius: '6px',
-                          '& .MuiInputBase-input': {
-                            fontSize: '13px',
-                            fontWeight: 600,
-                          },
-                        }}
-                      />
-                    )}
-                  />
-                </Grid>
+            {/* A/cy / Content */}
+            <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 1 }}>
+              A/cy
+            </Typography>
+            <input
+              type="text"
+              value={quickUnit}
+              onChange={(e) => setQuickUnit(e.target.value)}
+              placeholder="1 Box"
+              className="erp-input"
+              style={{ width: '85px' }}
+            />
 
-                {/* Quantity */}
-                <Grid size={{ xs: 6, sm: 2 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Qty"
-                    type="number"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddProductItem();
-                      }
-                    }}
-                    sx={{
-                      backgroundColor: '#FFFFFF',
-                      borderRadius: '6px',
-                      '& .MuiInputBase-input': { fontSize: '13px', fontWeight: 600, textAlign: 'center' },
-                    }}
-                  />
-                </Grid>
+            {/* Add Row Button */}
+            <Button
+              onClick={handleAddRow}
+              startIcon={<AddRoundedIcon sx={{ fontSize: 14 }} />}
+              size="small"
+              sx={{
+                height: '26px',
+                bgcolor: '#EDF4FB',
+                border: '1px solid #94A3B8',
+                color: '#1E40AF',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                ml: 'auto',
+                '&:hover': { bgcolor: '#DCE7F5' },
+              }}
+            >
+              Add Row
+            </Button>
+          </Box>
 
-                {/* Rate */}
-                <Grid size={{ xs: 6, sm: 2.5 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Rate (₹)"
-                    type="number"
-                    value={rate}
-                    onChange={(e) => setRate(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddProductItem();
-                      }
-                    }}
-                    sx={{
-                      backgroundColor: '#FFFFFF',
-                      borderRadius: '6px',
-                      '& .MuiInputBase-input': { fontSize: '13px', fontWeight: 800, color: '#B91C1C' },
-                    }}
-                  />
-                </Grid>
-
-                {/* Add Item Button */}
-                <Grid size={{ xs: 12, sm: 2.5 }}>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    disableElevation
-                    onClick={handleAddProductItem}
-                    startIcon={<AddRoundedIcon sx={{ fontSize: 18 }} />}
-                    sx={{
-                      backgroundColor: '#FFFFFF',
-                      color: '#B91C1C',
-                      border: '1.5px solid #E2E8F0',
-                      fontWeight: 800,
-                      fontSize: '13px',
-                      textTransform: 'none',
-                      height: '38px',
-                      borderRadius: '6px',
-                      boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                      '&:hover': { backgroundColor: '#F8FAFC' },
-                    }}
-                  >
-                    Add Item
-                  </Button>
-                </Grid>
-              </Grid>
-            </Box>
-
-            {/* Current Bill Items Table */}
-            <TableContainer sx={{ minHeight: '260px', maxHeight: '460px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-              <Table stickyHeader size="small" aria-label="bill items table" sx={{ minWidth: { xs: '540px', sm: '100%' } }}>
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: '#F8FAFC' }}>
-                    <TableCell sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', width: '45px', backgroundColor: '#F8FAFC' }}>
-                      #
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', backgroundColor: '#F8FAFC' }}>
-                      PRODUCT / PARTICULAR
-                    </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', width: '75px', backgroundColor: '#F8FAFC' }}>
-                      UNIT
-                    </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', width: '140px', backgroundColor: '#F8FAFC' }}>
-                      QTY
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', width: '110px', backgroundColor: '#F8FAFC' }}>
-                      RATE (₹)
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', width: '110px', backgroundColor: '#F8FAFC' }}>
-                      AMOUNT (₹)
-                    </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', width: '60px', backgroundColor: '#F8FAFC' }}>
-                      ACTION
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {productRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 6, color: '#9CA3AF' }}>
-                        <Typography sx={{ fontSize: '14px', fontWeight: 600, color: '#64748B' }}>
-                          No products added to this invoice yet.
-                        </Typography>
-                        <Typography sx={{ fontSize: '12px', color: '#A8998A' }}>
-                          Select a product from the top bar and click "Add Item" to build the bill.
-                        </Typography>
+          {/* ========================================================= */}
+          {/* MAIN SPLIT SECTION: TABLE (Left ~68%) | PAYMENT INFO (Right ~32%) */}
+          {/* ========================================================= */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', lg: '1fr 340px' },
+              gap: 1.5,
+              alignItems: 'start',
+            }}
+          >
+            {/* Left Side: Products Table */}
+            <Box
+              sx={{
+                bgcolor: '#FFFFFF',
+                border: '1px solid #B0C4DE',
+                borderRadius: '3px',
+                overflow: 'hidden',
+              }}
+            >
+              <TableContainer sx={{ maxHeight: '520px', minHeight: '380px' }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#DCE7F5' }}>
+                      <TableCell sx={{ width: '45px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                        S.No
                       </TableCell>
+                      <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                        Product
+                      </TableCell>
+                      <TableCell sx={{ width: '100px', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                        Content
+                      </TableCell>
+                      <TableCell sx={{ width: '90px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                        Rate
+                      </TableCell>
+                      <TableCell sx={{ width: '75px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                        Qty
+                      </TableCell>
+                      <TableCell sx={{ width: '100px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                        Total
+                      </TableCell>
+                      <TableCell sx={{ width: '35px', textAlign: 'center', bgcolor: '#DCE7F5', p: 0.5 }} />
                     </TableRow>
-                  ) : (
-                    productRows.map((row, idx) => (
-                      <TableRow key={row.id} sx={{ '&:hover': { backgroundColor: '#FEFDF5' } }}>
-                        <TableCell sx={{ fontSize: '13px', fontWeight: 700, color: '#64748B' }}>
+                  </TableHead>
+                  <TableBody>
+                    {/* Active Product Rows */}
+                    {productRows.map((row, idx) => (
+                      <TableRow
+                        key={row.id}
+                        sx={{
+                          '&:hover': { bgcolor: '#F1F7FD' },
+                          '& td': { borderBottom: '1px solid #E2E8F0', py: 0.4 },
+                        }}
+                      >
+                        {/* S.No */}
+                        <TableCell sx={{ textAlign: 'center', fontSize: '12px', fontWeight: 600 }}>
                           {idx + 1}
                         </TableCell>
-                        <TableCell sx={{ fontSize: '13.5px', fontWeight: 700, color: '#1F1714' }}>
-                          {row.particular}
-                        </TableCell>
-                        <TableCell align="center" sx={{ fontSize: '12px', color: '#57463A' }}>
-                          {row.pktUnit}
-                        </TableCell>
-                        <TableCell align="center" sx={{ py: 0.8 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                const current = parseFloat(row.quantity) || 1;
-                                if (current > 1) {
-                                  handleQuantityChange(row.id, String(current - 1));
-                                }
-                              }}
-                              sx={{
-                                p: 0.3,
-                                border: '1px solid #CBD5E1',
-                                borderRadius: '4px',
-                                color: '#64748B',
-                                '&:hover': { backgroundColor: '#FEF2F2', color: '#B91C1C', borderColor: '#FCA5A5' },
-                              }}
-                            >
-                              <RemoveRoundedIcon sx={{ fontSize: 13 }} />
-                            </IconButton>
-                            <TextField
-                              size="small"
-                              type="number"
-                              value={row.quantity}
-                              onChange={(e) => handleQuantityChange(row.id, e.target.value)}
-                              slotProps={{
-                                htmlInput: {
-                                  min: 1,
-                                  style: { textAlign: 'center', fontWeight: 800, padding: '3px 4px', fontSize: '13px' },
-                                },
-                              }}
-                              sx={{
-                                width: '56px',
-                                backgroundColor: '#FFFFFF',
-                                borderRadius: '6px',
-                                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#CBD5E1' },
-                                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B91C1C' },
-                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#B91C1C' },
-                              }}
-                            />
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                const current = parseFloat(row.quantity) || 0;
-                                handleQuantityChange(row.id, String(current + 1));
-                              }}
-                              sx={{
-                                p: 0.3,
-                                border: '1px solid #CBD5E1',
-                                borderRadius: '4px',
-                                color: '#64748B',
-                                '&:hover': { backgroundColor: '#F0FDF4', color: '#166534', borderColor: '#86EFAC' },
-                              }}
-                            >
-                              <AddRoundedIcon sx={{ fontSize: 13 }} />
-                            </IconButton>
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right" sx={{ py: 0.8 }}>
-                          <TextField
-                            size="small"
-                            type="number"
-                            value={row.rate}
-                            onChange={(e) => handleRateChange(row.id, e.target.value)}
-                            slotProps={{
-                              htmlInput: {
-                                min: 0,
-                                style: { textAlign: 'right', fontWeight: 700, padding: '3px 6px', fontSize: '13px', color: '#475569' },
-                              },
-                            }}
-                            sx={{
-                              width: '85px',
-                              backgroundColor: '#FFFFFF',
-                              borderRadius: '6px',
-                              '& .MuiOutlinedInput-notchedOutline': { borderColor: '#CBD5E1' },
-                              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B91C1C' },
-                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#B91C1C' },
+
+                        {/* Product Name */}
+                        <TableCell sx={{ p: 0.5 }}>
+                          <input
+                            type="text"
+                            value={row.particular}
+                            onChange={(e) => handleRowChange(row.id, 'particular', e.target.value)}
+                            placeholder="Enter item name..."
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              outline: 'none',
+                              background: 'transparent',
+                              fontSize: '12.5px',
+                              fontWeight: 600,
+                              color: '#0F172A',
                             }}
                           />
                         </TableCell>
-                        <TableCell align="right" sx={{ fontSize: '14px', fontWeight: 800, color: '#B91C1C' }}>
-                          ₹{Number(row.amount || 0).toFixed(2)}
+
+                        {/* Content */}
+                        <TableCell sx={{ p: 0.5 }}>
+                          <input
+                            type="text"
+                            value={row.pktUnit}
+                            onChange={(e) => handleRowChange(row.id, 'pktUnit', e.target.value)}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              outline: 'none',
+                              background: 'transparent',
+                              fontSize: '12px',
+                              color: '#334155',
+                            }}
+                          />
                         </TableCell>
-                        <TableCell align="center">
+
+                        {/* Rate */}
+                        <TableCell sx={{ textAlign: 'right', p: 0.5 }}>
+                          <input
+                            type="number"
+                            value={row.rate}
+                            onChange={(e) => handleRowChange(row.id, 'rate', e.target.value)}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              outline: 'none',
+                              background: 'transparent',
+                              fontSize: '12.5px',
+                              textAlign: 'right',
+                              fontWeight: 600,
+                              color: '#0F172A',
+                            }}
+                          />
+                        </TableCell>
+
+                        {/* Qty */}
+                        <TableCell sx={{ textAlign: 'center', p: 0.5 }}>
+                          <input
+                            type="number"
+                            value={row.quantity}
+                            onChange={(e) => handleRowChange(row.id, 'quantity', e.target.value)}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              outline: 'none',
+                              background: 'transparent',
+                              fontSize: '12.5px',
+                              textAlign: 'center',
+                              fontWeight: 600,
+                              color: '#0F172A',
+                            }}
+                          />
+                        </TableCell>
+
+                        {/* Total */}
+                        <TableCell sx={{ textAlign: 'right', fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                          {row.amount}
+                        </TableCell>
+
+                        {/* Delete Button */}
+                        <TableCell sx={{ textAlign: 'center', p: 0.2 }}>
                           <IconButton
                             size="small"
                             onClick={() => handleDeleteRow(row.id)}
-                            sx={{ color: '#DC2626', p: 0.5, '&:hover': { backgroundColor: '#FEF2F2' } }}
+                            sx={{ color: '#94A3B8', '&:hover': { color: '#DC2626' }, p: 0.2 }}
                           >
-                            <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
+                            <DeleteOutlineRoundedIcon sx={{ fontSize: 15 }} />
                           </IconButton>
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Grid>
-      </Grid>
+                    ))}
 
-      {/* Print Bill Modal */}
-      {printModalOpen && selectedBillForPrint && (
+                    {/* Empty Grid Visual Fillers to match the software screenshot height */}
+                    {Array.from({ length: emptyRowsCount }).map((_, i) => (
+                      <TableRow key={`empty-${i}`} sx={{ height: '28px', '& td': { borderBottom: '1px solid #F1F5F9' } }}>
+                        <TableCell sx={{ textAlign: 'center', color: '#CBD5E1', fontSize: '11px' }}>
+                          {productRows.length + i + 1}
+                        </TableCell>
+                        <TableCell />
+                        <TableCell />
+                        <TableCell />
+                        <TableCell />
+                        <TableCell />
+                        <TableCell />
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            {/* Right Side: Payment Info & Action Buttons */}
+            <Box
+              sx={{
+                bgcolor: '#FFFFFF',
+                border: '1px solid #B0C4DE',
+                borderRadius: '3px',
+                p: 1.5,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.8,
+              }}
+            >
+              <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#1E3A8A', borderBottom: '1px solid #E2E8F0', pb: 0.5, mb: 0.5 }}>
+                Payment Info
+              </Typography>
+
+              {/* Total ( Rs. ) */}
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>
+                  Total ( Rs. )
+                </Typography>
+                <input
+                  type="text"
+                  readOnly
+                  value={subtotal.toFixed(0)}
+                  className="erp-input"
+                  style={{ width: '150px', fontWeight: 700, textAlign: 'right', backgroundColor: '#F8FAFC' }}
+                />
+              </Box>
+
+              {/* Discount ( % ) */}
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>
+                  Discount ( % )
+                </Typography>
+                <input
+                  type="number"
+                  value={discountPercent}
+                  onChange={(e) => {
+                    setDiscountPercent(e.target.value);
+                    const pct = parseFloat(e.target.value) || 0;
+                    setDiscountRs(((subtotal * pct) / 100).toFixed(0));
+                  }}
+                  className="erp-input"
+                  style={{ width: '150px', textAlign: 'right' }}
+                />
+              </Box>
+
+              {/* Discount ( Rs. ) */}
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>
+                  Discount ( Rs. )
+                </Typography>
+                <input
+                  type="number"
+                  value={discountRs}
+                  onChange={(e) => {
+                    setDiscountRs(e.target.value);
+                    const val = parseFloat(e.target.value) || 0;
+                    setDiscountPercent(subtotal > 0 ? ((val / subtotal) * 100).toFixed(2) : '0');
+                  }}
+                  className="erp-input"
+                  style={{ width: '150px', textAlign: 'right' }}
+                />
+              </Box>
+
+              {/* Packing ( Rs. ) */}
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>
+                  Packing ( Rs. )
+                </Typography>
+                <input
+                  type="number"
+                  value={packingRs}
+                  onChange={(e) => setPackingRs(e.target.value)}
+                  className="erp-input"
+                  style={{ width: '150px', textAlign: 'right' }}
+                />
+              </Box>
+
+              {/* Packing ( % ) */}
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>
+                  Packing ( % )
+                </Typography>
+                <input
+                  type="number"
+                  value={packingPercent}
+                  onChange={(e) => setPackingPercent(e.target.value)}
+                  className="erp-input"
+                  style={{ width: '150px', textAlign: 'right' }}
+                />
+              </Box>
+
+              {/* Net Payment ( Rs. ) */}
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+                <Typography sx={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>
+                  Net Payment ( Rs. )
+                </Typography>
+                <input
+                  type="text"
+                  readOnly
+                  value={netPayment.toFixed(0)}
+                  className="erp-input"
+                  style={{
+                    width: '150px',
+                    fontWeight: 900,
+                    fontSize: '13.5px',
+                    textAlign: 'right',
+                    color: '#0F172A',
+                    backgroundColor: '#F1F5F9',
+                  }}
+                />
+              </Box>
+
+              {/* Remarks */}
+              <Box sx={{ mt: 1 }}>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', mb: 0.3 }}>
+                  Remarks
+                </Typography>
+                <textarea
+                  rows={2}
+                  value={remarks}
+                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setRemarks(e.target.value)}
+                  className="erp-input"
+                  style={{ width: '100%', resize: 'none', fontSize: '11.5px' }}
+                />
+              </Box>
+
+              {/* Next Payment Mode */}
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A' }}>
+                  Next Payment Mode
+                </Typography>
+                <select
+                  value={paymentMode}
+                  onChange={(e) => setPaymentMode(e.target.value)}
+                  className="erp-input"
+                  style={{ width: '150px', fontSize: '11.5px' }}
+                >
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI / GPay</option>
+                  <option value="Bank">Bank Transfer</option>
+                  <option value="Credit">Credit / Due</option>
+                </select>
+              </Box>
+
+              {/* Action Buttons: [ Save ] [ Print ] [ Exit ] */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: 1,
+                  mt: 2,
+                  pt: 1,
+                  borderTop: '1px solid #E2E8F0',
+                }}
+              >
+                {/* Save Button (Deep burgundy/plum as in screenshot) */}
+                <Button
+                  onClick={handleSaveBill}
+                  disabled={savingBill}
+                  variant="contained"
+                  sx={{
+                    bgcolor: '#741748',
+                    color: '#FFFFFF',
+                    fontWeight: 700,
+                    fontSize: '12.5px',
+                    px: 2.5,
+                    py: 0.5,
+                    minWidth: '70px',
+                    borderRadius: '3px',
+                    '&:hover': { bgcolor: '#580e34' },
+                  }}
+                >
+                  {savingBill ? <CircularProgress size={16} color="inherit" /> : 'Save'}
+                </Button>
+
+                {/* Print Button (Grey desktop button) */}
+                <Button
+                  onClick={handlePrint}
+                  variant="outlined"
+                  sx={{
+                    bgcolor: '#E5ECF4',
+                    borderColor: '#94A3B8',
+                    color: '#0F172A',
+                    fontWeight: 700,
+                    fontSize: '12.5px',
+                    px: 2,
+                    py: 0.5,
+                    minWidth: '65px',
+                    borderRadius: '3px',
+                    '&:hover': { bgcolor: '#D9E4F2' },
+                  }}
+                >
+                  Print
+                </Button>
+
+                {/* Exit Button (Grey desktop button) */}
+                <Button
+                  onClick={handleExitReset}
+                  variant="outlined"
+                  sx={{
+                    bgcolor: '#E5ECF4',
+                    borderColor: '#94A3B8',
+                    color: '#0F172A',
+                    fontWeight: 700,
+                    fontSize: '12.5px',
+                    px: 2,
+                    py: 0.5,
+                    minWidth: '65px',
+                    borderRadius: '3px',
+                    '&:hover': { bgcolor: '#D9E4F2' },
+                  }}
+                >
+                  Exit
+                </Button>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* ========================================================= */}
+      {/* QUICK PRODUCT CATALOG MODAL (...) */}
+      {/* ========================================================= */}
+      <Dialog
+        open={productCatalogModalOpen}
+        onClose={() => setProductCatalogModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '4px',
+              border: '1px solid #B0C4DE',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ bgcolor: '#EDF4FB', borderBottom: '1px solid #B0C4DE', py: 1.2, fontSize: '14px', fontWeight: 700 }}>
+          Select Product from Catalog
+        </DialogTitle>
+        <DialogContent sx={{ p: 1.5 }}>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search product by name or category..."
+            value={catalogSearchTerm}
+            onChange={(e) => setCatalogSearchTerm(e.target.value)}
+            slotProps={{
+              input: {
+                startAdornment: <SearchRoundedIcon sx={{ fontSize: 18, color: '#64748B', mr: 1 }} />,
+              },
+            }}
+            sx={{ mb: 1.5 }}
+          />
+
+          <TableContainer sx={{ maxHeight: '350px' }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>SKU</TableCell>
+                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Product Name</TableCell>
+                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Category</TableCell>
+                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Unit</TableCell>
+                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, textAlign: 'right' }}>Rate</TableCell>
+                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, textAlign: 'center' }}>Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredCatalog.map((prod) => (
+                  <TableRow key={prod.id} hover>
+                    <TableCell sx={{ fontSize: '11.5px', color: '#64748B' }}>{prod.sku || '-'}</TableCell>
+                    <TableCell sx={{ fontSize: '12.5px', fontWeight: 600 }}>{prod.name}</TableCell>
+                    <TableCell sx={{ fontSize: '12px', color: '#475569' }}>{prod.category || 'General'}</TableCell>
+                    <TableCell sx={{ fontSize: '12px' }}>{prod.unit || '1 Box'}</TableCell>
+                    <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, textAlign: 'right' }}>
+                      ₹ {prod.rate || 0}
+                    </TableCell>
+                    <TableCell sx={{ textAlign: 'center' }}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() => {
+                          handleAddProductFromBar(prod);
+                          setProductCatalogModalOpen(false);
+                        }}
+                        sx={{ fontSize: '11px', py: 0.2, px: 1, bgcolor: '#1E40AF' }}
+                      >
+                        Select
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions sx={{ p: 1, borderTop: '1px solid #E2E8F0' }}>
+          <Button onClick={() => setProductCatalogModalOpen(false)} sx={{ fontSize: '12px' }}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ========================================================= */}
+      {/* PRINT PREVIEW MODAL */}
+      {/* ========================================================= */}
+      {selectedBillForPrint && (
         <BillPrintModal
           open={printModalOpen}
           onClose={() => {
@@ -1425,6 +1320,24 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({ initialCustomerName,
           bill={selectedBillForPrint}
         />
       )}
+
+      {/* Snackbar Feedback */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={snackbarMessage.includes('Failed') || snackbarMessage.includes('Please') ? 'error' : 'success'}
+          onClose={() => setSnackbarOpen(false)}
+          sx={{ fontWeight: 600, fontSize: '13px' }}
+        >
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
+
+export default ParticularsPage;
