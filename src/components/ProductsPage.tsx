@@ -210,7 +210,7 @@ export const ProductsPage: FC = () => {
   const handleOpenAdd = () => {
     const currentSystemYear = new Date().getFullYear();
     if (Number(selectedYear) !== currentSystemYear) {
-      triggerYearRestrictionDialog(selectedYear, 'add products');
+      triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
       return;
     }
 
@@ -238,7 +238,7 @@ export const ProductsPage: FC = () => {
   const handleOpenEdit = (product: ProductItem) => {
     const currentSystemYear = new Date().getFullYear();
     if (Number(selectedYear) !== currentSystemYear) {
-      triggerYearRestrictionDialog(selectedYear, 'edit products');
+      triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
       return;
     }
 
@@ -326,7 +326,7 @@ export const ProductsPage: FC = () => {
     if (selectedIds.length === 0) return;
     const currentSystemYear = new Date().getFullYear();
     if (Number(selectedYear) !== currentSystemYear) {
-      triggerYearRestrictionDialog(selectedYear, 'delete products');
+      triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
       return;
     }
 
@@ -352,7 +352,7 @@ export const ProductsPage: FC = () => {
   const handleDeleteProduct = async (product: ProductItem) => {
     const currentSystemYear = new Date().getFullYear();
     if (Number(selectedYear) !== currentSystemYear) {
-      triggerYearRestrictionDialog(selectedYear, 'delete products');
+      triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
       return;
     }
 
@@ -518,7 +518,7 @@ export const ProductsPage: FC = () => {
     if (previewItems.length === 0) return;
     const currentSystemYear = new Date().getFullYear();
     if (Number(selectedYear) !== currentSystemYear) {
-      triggerYearRestrictionDialog(selectedYear, 'import products');
+      triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
       return;
     }
 
@@ -690,8 +690,8 @@ export const ProductsPage: FC = () => {
                 }}
               >
                 {yearOptions.map((y) => (
-                  <option key={y.value} value={y.value}>
-                    {y.label}
+                  <option key={y} value={y}>
+                    {y}
                   </option>
                 ))}
               </select>
@@ -825,7 +825,7 @@ export const ProductsPage: FC = () => {
                 onClick={() => {
                   const currentSystemYear = new Date().getFullYear();
                   if (Number(selectedYear) !== currentSystemYear) {
-                    triggerYearRestrictionDialog(selectedYear, 'bulk upload products');
+                    triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
                     return;
                   }
                   setBulkUploadType(activeTabType === 'ALL' ? 'Retail' : activeTabType);
