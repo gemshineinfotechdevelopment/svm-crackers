@@ -20,18 +20,11 @@ import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
-<<<<<<< HEAD
-import PhoneInTalkRoundedIcon from '@mui/icons-material/PhoneInTalkRounded';
-import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
-import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
-import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
-=======
->>>>>>> f16873a0221a59354a75045db1f01914c614c6fa
 import CircularProgress from '@mui/material/CircularProgress';
 import defaultProjectLogo from '../assets/logo.png';
 import { SettingsApi } from '../services/api';
@@ -477,13 +470,8 @@ export const SettingsPage: React.FC = () => {
       console.error('Failed to save settings to server:', err);
       setToast({
         open: true,
-<<<<<<< HEAD
-        message: err?.message || 'Billing year cannot be changed manually. The billing year must remain synchronized with the current system date.',
+        message: err?.message || 'Failed to save settings. Please try again.',
         severity: 'error',
-=======
-        message: 'Profile saved locally!',
-        severity: 'success',
->>>>>>> f16873a0221a59354a75045db1f01914c614c6fa
       });
     } finally {
       setIsSaving(false);
@@ -560,34 +548,31 @@ export const SettingsPage: React.FC = () => {
             </Typography>
           </Box>
 
-<<<<<<< HEAD
           {/* Actions & Top Right Annual Billing Indicator & Bill Year Switcher */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
             {/* Interactive Bill Year View Switcher Button */}
             <Button
               variant="outlined"
               onClick={(e) => setBillYearAnchorEl(e.currentTarget)}
-              startIcon={<CalendarMonthRoundedIcon sx={{ fontSize: 18, color: '#FEF08A' }} />}
-              endIcon={<ArrowDropDownRoundedIcon sx={{ fontSize: 20, color: '#FEF08A' }} />}
+              startIcon={<CalendarMonthRoundedIcon sx={{ fontSize: 18, color: '#1E40AF' }} />}
+              endIcon={<ArrowDropDownRoundedIcon sx={{ fontSize: 20, color: '#1E40AF' }} />}
               sx={{
-                color: '#FFFFFF',
-                backgroundColor: 'rgba(255, 255, 255, 0.18)',
-                backdropFilter: 'blur(6px)',
-                borderColor: 'rgba(254, 240, 138, 0.6)',
+                color: '#1E40AF',
+                backgroundColor: '#EFF6FF',
+                borderColor: '#93C5FD',
                 borderRadius: '8px',
                 fontSize: '12.5px',
                 fontWeight: 800,
                 textTransform: 'none',
                 px: 1.8,
                 height: '36px',
-                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
                 '&:hover': {
-                  borderColor: '#FEF08A',
-                  backgroundColor: 'rgba(255, 255, 255, 0.28)',
+                  borderColor: '#2563EB',
+                  backgroundColor: '#DBEAFE',
                 },
               }}
             >
-              📅 Bill Year: <span style={{ color: '#FEF08A', marginLeft: '4px' }}>{selectedBillYear}</span>
+              📅 Bill Year: <span style={{ color: '#1E40AF', marginLeft: '4px' }}>{selectedBillYear}</span>
             </Button>
 
             {/* Dropdown Menu for Bill View Year */}
@@ -655,10 +640,6 @@ export const SettingsPage: React.FC = () => {
                 </MenuItem>
               ))}
             </Menu>
-
-=======
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
->>>>>>> f16873a0221a59354a75045db1f01914c614c6fa
             <Button
               size="small"
               onClick={handleResetToDefault}
@@ -1073,8 +1054,7 @@ export const SettingsPage: React.FC = () => {
                   </Box>
                 </Grid>
               </Grid>
-<<<<<<< HEAD
-            </Paper>
+            </fieldset>
 
             {/* Section 5: Annual Billing Restriction & Billing Period */}
             <Paper
@@ -1123,66 +1103,69 @@ export const SettingsPage: React.FC = () => {
                 </Alert>
               )}
 
-              <Grid container spacing={2}>
+              <Grid container spacing={1.2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="System Date"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    System Date
+                  </Typography>
+                  <input
+                    type="text"
+                    readOnly
+                    className="erp-input"
                     value={settings.systemDate || `${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`}
-                    slotProps={{
-                      input: {
-                        readOnly: true,
-                      },
-                    }}
-                    helperText="Authoritative server system date"
+                    style={{ width: '100%', backgroundColor: '#F1F5F9' }}
                   />
+                  <Typography sx={{ fontSize: '10.5px', color: '#64748B', mt: 0.3 }}>
+                    Authoritative server system date
+                  </Typography>
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Current Billing Year *"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Current Billing Year *
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
                     value={settings.billingYear || ''}
-                    onChange={(e) => handleChange('billingYear', e.target.value)}
-                    error={String(settings.billingYear) !== String(settings.systemYear || new Date().getFullYear())}
-                    helperText={
-                      String(settings.billingYear) !== String(settings.systemYear || new Date().getFullYear())
-                        ? "Mismatched year! Must equal system year"
-                        : "Synchronized with system date"
-                    }
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleChange('billingYear', e.target.value)}
+                    style={{ width: '100%' }}
                   />
+                  <Typography sx={{ fontSize: '10.5px', color: '#64748B', mt: 0.3 }}>
+                    Synchronized with system date
+                  </Typography>
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Billing Start Date"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Billing Start Date
+                  </Typography>
+                  <input
+                    type="text"
+                    readOnly
+                    className="erp-input"
                     value={settings.billingStartDate || `01-01-${new Date().getFullYear()}`}
-                    slotProps={{
-                      input: {
-                        readOnly: true,
-                      },
-                    }}
-                    helperText="January 1 of current billing year"
+                    style={{ width: '100%', backgroundColor: '#F1F5F9' }}
                   />
+                  <Typography sx={{ fontSize: '10.5px', color: '#64748B', mt: 0.3 }}>
+                    January 1 of current billing year
+                  </Typography>
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Billing End Date"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Billing End Date
+                  </Typography>
+                  <input
+                    type="text"
+                    readOnly
+                    className="erp-input"
                     value={settings.billingEndDate || `31-12-${new Date().getFullYear()}`}
-                    slotProps={{
-                      input: {
-                        readOnly: true,
-                      },
-                    }}
-                    helperText="December 31 of current billing year"
+                    style={{ width: '100%', backgroundColor: '#F1F5F9' }}
                   />
+                  <Typography sx={{ fontSize: '10.5px', color: '#64748B', mt: 0.3 }}>
+                    December 31 of current billing year
+                  </Typography>
                 </Grid>
               </Grid>
 
@@ -1268,9 +1251,6 @@ export const SettingsPage: React.FC = () => {
                 )}
               </Box>
             </Paper>
-=======
-            </fieldset>
->>>>>>> f16873a0221a59354a75045db1f01914c614c6fa
           </Box>
         </Box>
       </Paper>
