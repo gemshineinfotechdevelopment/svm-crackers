@@ -4,7 +4,6 @@ import {
   Typography,
   Paper,
   Grid,
-  TextField,
   Button,
   Snackbar,
   Alert,
@@ -14,12 +13,8 @@ import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
-import BusinessRoundedIcon from '@mui/icons-material/BusinessRounded';
+import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
-import PhoneInTalkRoundedIcon from '@mui/icons-material/PhoneInTalkRounded';
-import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
-import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
-import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import CircularProgress from '@mui/material/CircularProgress';
 import defaultProjectLogo from '../assets/logo.png';
 import { SettingsApi } from '../services/api';
@@ -93,7 +88,6 @@ export const removeWhiteBackgroundFromDataUrl = (
       let minX = w, minY = h, maxX = 0, maxY = 0;
       let hasVisiblePixel = false;
 
-      // Make white/near-white pixels transparent and calculate tight bounding box
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const idx = (y * w + x) * 4;
@@ -103,7 +97,7 @@ export const removeWhiteBackgroundFromDataUrl = (
           const a = data[idx + 3];
 
           if (a === 0 || (r >= threshold && g >= threshold && b >= threshold)) {
-            data[idx + 3] = 0; // Transparent
+            data[idx + 3] = 0;
           } else {
             hasVisiblePixel = true;
             if (x < minX) minX = x;
@@ -116,7 +110,6 @@ export const removeWhiteBackgroundFromDataUrl = (
 
       ctx.putImageData(imgData, 0, 0);
 
-      // Auto-crop to remove empty side paddings so logo sits directly adjacent to text
       if (hasVisiblePixel && maxX >= minX && maxY >= minY) {
         const cropW = maxX - minX + 1;
         const cropH = maxY - minY + 1;
@@ -144,7 +137,7 @@ export const getStoredSettings = (): CompanySettings => {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (!parsed.companyName || parsed.companyName.toLowerCase().includes('varun') || parsed.companyName.toLowerCase().includes('dheeksha')) {
-        parsed.companyName = 'Apsara Crackers';
+        parsed.companyName = 'SVM Crackers';
       }
       if (!parsed.logoUrl || parsed.logoUrl.includes('varun-traders.png')) {
         parsed.logoUrl = defaultProjectLogo;
@@ -185,7 +178,6 @@ export const SettingsPage: React.FC = () => {
     severity: 'success',
   });
 
-  // Fetch settings from MongoDB backend on mount
   React.useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -193,7 +185,7 @@ export const SettingsPage: React.FC = () => {
         const data = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res;
         if (data && typeof data === 'object') {
           const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha'))
-            ? 'Apsara Crackers'
+            ? 'SVM Crackers'
             : data.companyName;
 
           const logo = (!data.logoUrl || data.logoUrl.includes('varun-traders.png'))
@@ -231,8 +223,6 @@ export const SettingsPage: React.FC = () => {
           };
           setSettings(remoteSettings);
           localStorage.setItem('apsara_app_settings', JSON.stringify(remoteSettings));
-          localStorage.removeItem('varun_app_settings');
-          localStorage.removeItem('dheeksha_app_settings');
           window.dispatchEvent(new Event('apsara_settings_updated'));
         }
       } catch (err) {
@@ -278,7 +268,7 @@ export const SettingsPage: React.FC = () => {
           setSettings((prev) => ({ ...prev, logoUrl: transparentDataUrl }));
           setToast({
             open: true,
-            message: '✨ Logo uploaded & white background removed! Click "Save Profile" to apply.',
+            message: 'Logo uploaded & processed! Click "Save Settings" to apply.',
             severity: 'success',
           });
         } catch {
@@ -299,7 +289,7 @@ export const SettingsPage: React.FC = () => {
       setSettings((prev) => ({ ...prev, logoUrl: transparentDataUrl }));
       setToast({
         open: true,
-        message: '✂️ White background removed from logo successfully!',
+        message: 'White background removed from logo successfully!',
         severity: 'success',
       });
     } catch (err) {
@@ -343,13 +333,9 @@ export const SettingsPage: React.FC = () => {
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      // 1. Immediately cache in localStorage for instant UI feedback
       localStorage.setItem('apsara_app_settings', JSON.stringify(settings));
-      localStorage.removeItem('varun_app_settings');
-      localStorage.removeItem('dheeksha_app_settings');
       window.dispatchEvent(new Event('apsara_settings_updated'));
 
-      // 2. Persist to MongoDB database so it syncs across all devices & deployments!
       const saveRes = await SettingsApi.update(settings);
       const data = (saveRes && typeof saveRes === 'object' && 'data' in saveRes && saveRes.data) ? saveRes.data : saveRes;
       if (data && typeof data === 'object' && (data.companyName !== undefined || data._id)) {
@@ -372,21 +358,19 @@ export const SettingsPage: React.FC = () => {
         };
         setSettings(syncedSettings);
         localStorage.setItem('apsara_app_settings', JSON.stringify(syncedSettings));
-        localStorage.removeItem('varun_app_settings');
-        localStorage.removeItem('dheeksha_app_settings');
         window.dispatchEvent(new Event('apsara_settings_updated'));
       }
 
       setToast({
         open: true,
-        message: '✅ Company Profile, Logo & Settings saved to MongoDB Database successfully!',
+        message: 'Company profile & settings saved successfully!',
         severity: 'success',
       });
     } catch (err: any) {
       console.error('Failed to save settings to server:', err);
       setToast({
         open: true,
-        message: '✅ Profile saved locally! (Backend sync will retry automatically)',
+        message: 'Profile saved locally!',
         severity: 'success',
       });
     } finally {
@@ -398,8 +382,6 @@ export const SettingsPage: React.FC = () => {
     if (window.confirm('Reset company profile details to default values?')) {
       setSettings(DEFAULT_COMPANY_SETTINGS);
       localStorage.setItem('apsara_app_settings', JSON.stringify(DEFAULT_COMPANY_SETTINGS));
-      localStorage.removeItem('varun_app_settings');
-      localStorage.removeItem('dheeksha_app_settings');
       window.dispatchEvent(new Event('apsara_settings_updated'));
       try {
         await SettingsApi.update(DEFAULT_COMPANY_SETTINGS);
@@ -408,7 +390,7 @@ export const SettingsPage: React.FC = () => {
       }
       setToast({
         open: true,
-        message: '🔄 Company profile reset to default.',
+        message: 'Company profile reset to default.',
         severity: 'info',
       });
     }
@@ -418,185 +400,120 @@ export const SettingsPage: React.FC = () => {
     <Box
       sx={{
         width: '100%',
-        minHeight: { xs: 'auto', md: 'calc(100vh - 72px)' },
-        height: { xs: 'auto', md: 'calc(100vh - 72px)' },
-        px: { xs: 1, sm: 1.5, md: 2 },
-        py: { xs: 1, md: 0.5 },
+        minHeight: 'calc(100vh - 48px)',
+        bgcolor: '#D9E4F2',
+        p: { xs: 1, sm: 1.5 },
         boxSizing: 'border-box',
-        display: 'flex',
-        flexDirection: 'column',
       }}
     >
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleFileInputChange}
+      />
+
+      {/* Main ERP Window Card */}
       <Paper
         elevation={0}
         sx={{
-          flex: 1,
-          width: '100%',
-          backgroundColor: '#FFFFFF',
-          borderRadius: '14px',
-          border: '1.5px solid #E2E8F0',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
-          overflow: { xs: 'visible', md: 'hidden' },
+          bgcolor: '#FFFFFF',
+          border: '1px solid #9BB3CC',
+          borderRadius: '4px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+          overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
         }}
       >
-        {/* Festive Crimson & Gold Header Banner */}
+        {/* Window Title Header Bar */}
         <Box
           sx={{
-            background: 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)',
-            borderBottom: '2px solid #F59E0B',
-            px: { xs: 2, sm: 3 },
-            py: 1.2,
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            px: 1.5,
+            py: 0.8,
             display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            alignItems: { xs: 'stretch', sm: 'center' },
+            alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 1.5,
-            minHeight: '56px',
-            flexShrink: 0,
+            flexWrap: 'wrap',
+            gap: 1,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Box
-              sx={{
-                width: 38,
-                height: 38,
-                borderRadius: '8px',
-                backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <BusinessRoundedIcon sx={{ color: '#FEF08A', fontSize: 22 }} />
-            </Box>
-            <Box>
-              <Typography
-                sx={{
-                  color: '#FFFFFF',
-                  fontSize: '18px',
-                  fontWeight: 800,
-                  letterSpacing: '-0.01em',
-                  lineHeight: 1.2,
-                }}
-              >
-                Company Profile & Settings
-              </Typography>
-              <Typography sx={{ color: '#FEF08A', fontSize: '11.5px', fontWeight: 600 }}>
-                Configure store identity, logo upload, and bill invoice header details
-              </Typography>
-            </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SettingsRoundedIcon sx={{ fontSize: 18, color: '#1E3A8A' }} />
+            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', letterSpacing: 0.2 }}>
+              System & Company Profile Settings
+            </Typography>
           </Box>
 
-          {/* Actions */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
             <Button
-              variant="outlined"
+              size="small"
               onClick={handleResetToDefault}
-              startIcon={<RestartAltRoundedIcon sx={{ fontSize: 18 }} />}
+              startIcon={<RestartAltRoundedIcon sx={{ fontSize: 15 }} />}
               sx={{
-                color: '#FEF08A',
-                borderColor: 'rgba(254, 240, 138, 0.5)',
-                borderRadius: '8px',
-                fontSize: '13px',
+                bgcolor: '#EDF4FB',
+                border: '1px solid #94A3B8',
+                color: '#0F172A',
+                fontSize: '11.5px',
                 fontWeight: 700,
                 textTransform: 'none',
-                px: 2,
-                height: '36px',
-                '&:hover': {
-                  borderColor: '#FEF08A',
-                  backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                },
+                borderRadius: '3px',
+                px: 1.2,
+                py: 0.3,
+                '&:hover': { bgcolor: '#E2E8F0' },
               }}
             >
-              Reset to Default
+              Reset Default
             </Button>
-
             <Button
+              size="small"
               variant="contained"
-              disableElevation
               disabled={isSaving}
               onClick={handleSave}
-              startIcon={isSaving ? <CircularProgress size={18} sx={{ color: '#B91C1C' }} /> : <SaveRoundedIcon sx={{ fontSize: 18 }} />}
+              startIcon={isSaving ? <CircularProgress size={14} color="inherit" /> : <SaveRoundedIcon sx={{ fontSize: 16 }} />}
               sx={{
-                backgroundColor: '#FFFFFF',
-                color: '#B91C1C',
-                border: '1.5px solid #E2E8F0',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 800,
+                bgcolor: '#741748',
+                color: '#FFFFFF',
+                fontSize: '12px',
+                fontWeight: 700,
                 textTransform: 'none',
-                px: 2.5,
-                height: '36px',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                '&:hover': {
-                  backgroundColor: '#F8FAFC',
-                },
-                '&.Mui-disabled': {
-                  backgroundColor: '#F3F4F6',
-                  color: '#9CA3AF',
-                },
+                borderRadius: '3px',
+                px: 1.8,
+                py: 0.4,
+                '&:hover': { bgcolor: '#580e34' },
               }}
             >
-              {isSaving ? 'Saving...' : 'Save Profile'}
+              {isSaving ? 'Saving...' : 'Save Settings'}
             </Button>
           </Box>
         </Box>
 
-        {/* Content Body: Split Left & Right filling full available height */}
+        {/* Content Body: Split Left & Right */}
         <Box
           sx={{
-            flex: 1,
+            p: 1.5,
             display: 'flex',
             flexDirection: { xs: 'column', md: 'row' },
-            overflow: { xs: 'visible', md: 'hidden' },
-            backgroundColor: '#FFFFFF',
+            gap: 1.5,
           }}
         >
-          {/* Left Panel: Logo & Brand Identity (Full Height Scrollable) */}
+          {/* Left Panel: Logo & Invoice Header Preview */}
           <Box
             sx={{
-              width: { xs: '100%', md: '340px', lg: '380px' },
-              borderRight: { xs: 'none', md: '1.5px solid #E2E8F0' },
-              borderBottom: { xs: '1.5px solid #E2E8F0', md: 'none' },
-              p: { xs: 2, sm: 2.5 },
+              width: { xs: '100%', md: '300px', lg: '320px' },
               display: 'flex',
               flexDirection: 'column',
-              gap: 2,
-              overflowY: { xs: 'visible', md: 'auto' },
-              backgroundColor: '#FFFFFF',
-              boxSizing: 'border-box',
+              gap: 1.5,
               flexShrink: 0,
             }}
           >
-            {/* Logo Card */}
-            <Box
-              sx={{
-                p: 2,
-                borderRadius: '12px',
-                border: '1.5px solid #E2E8F0',
-                backgroundColor: '#FFFFFF',
-                textAlign: 'center',
-              }}
-            >
-              <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#991B1B', mb: 0.3 }}>
-                Company Logo
-              </Typography>
-              <Typography sx={{ fontSize: '11.5px', color: '#786C58', mb: 1.5 }}>
-                Displayed on top navigation and printed invoices
-              </Typography>
+            {/* Logo Fieldset */}
+            <fieldset className="erp-fieldset">
+              <legend className="erp-legend">Company Logo</legend>
 
-              {/* Hidden File Input */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={handleFileInputChange}
-              />
-
-              {/* Logo Display / Drop Zone */}
               <Box
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -604,27 +521,22 @@ export const SettingsPage: React.FC = () => {
                 onClick={() => fileInputRef.current?.click()}
                 sx={{
                   width: '100%',
-                  height: '170px',
-                  borderRadius: '10px',
+                  height: '140px',
+                  borderRadius: '2px',
                   border: isDraggingLogo
-                    ? '2.5px dashed #DC2626'
+                    ? '1.5px dashed #DC2626'
                     : settings.logoUrl
-                    ? '1.5px solid #E2E8F0'
-                    : '2px dashed #D97706',
-                  backgroundColor: isDraggingLogo ? '#FEF2F2' : settings.logoUrl ? '#FFFFFF' : '#F8FAFC',
+                    ? '1px solid #CBD5E1'
+                    : '1px dashed #94A3B8',
+                  bgcolor: isDraggingLogo ? '#FEF2F2' : settings.logoUrl ? '#FFFFFF' : '#F8FAFC',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  p: 1.5,
+                  p: 1,
                   boxSizing: 'border-box',
-                  position: 'relative',
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    borderColor: '#DC2626',
-                    backgroundColor: '#FFF5F5',
-                  },
+                  '&:hover': { bgcolor: '#F1F7FD', borderColor: '#1E3A8A' },
                 }}
               >
                 {settings.logoUrl ? (
@@ -636,468 +548,327 @@ export const SettingsPage: React.FC = () => {
                       maxWidth: '100%',
                       maxHeight: '100%',
                       objectFit: 'contain',
-                      borderRadius: '6px',
                     }}
                   />
                 ) : (
                   <>
-                    <Box
-                      sx={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: '50%',
-                        backgroundColor: '#F1F5F9',
-                        color: '#B91C1C',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        mb: 1,
-                        border: '1px solid #E2E8F0',
-                      }}
-                    >
-                      <PhotoCameraRoundedIcon sx={{ fontSize: 26 }} />
-                    </Box>
-                    <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#475569' }}>
+                    <PhotoCameraRoundedIcon sx={{ fontSize: 28, color: '#94A3B8', mb: 0.5 }} />
+                    <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#475569' }}>
                       Click or Drag Logo Image
                     </Typography>
-                    <Typography sx={{ fontSize: '11px', color: '#334155', mt: 0.3 }}>
-                      PNG, JPG, SVG or WEBP (Max 5MB)
+                    <Typography sx={{ fontSize: '10.5px', color: '#94A3B8' }}>
+                      PNG, JPG, SVG (Max 5MB)
                     </Typography>
                   </>
                 )}
               </Box>
 
               {/* Logo Action Buttons */}
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1.5, width: '100%', justifyContent: 'center' }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.6, mt: 1, justifyContent: 'center' }}>
                 <Button
-                  variant="outlined"
                   size="small"
                   onClick={() => fileInputRef.current?.click()}
-                  startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 16 }} />}
+                  startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 14 }} />}
                   sx={{
-                    borderColor: '#E2E8F0',
-                    color: '#991B1B',
-                    fontSize: '12px',
+                    bgcolor: '#EDF4FB',
+                    border: '1px solid #94A3B8',
+                    color: '#0F172A',
+                    fontSize: '11px',
                     fontWeight: 700,
                     textTransform: 'none',
-                    borderRadius: '8px',
-                    '&:hover': { borderColor: '#DC2626', backgroundColor: '#F8FAFC' },
+                    borderRadius: '2px',
+                    py: 0.2,
+                    px: 1,
+                    '&:hover': { bgcolor: '#E2E8F0' },
                   }}
                 >
-                  {settings.logoUrl ? 'Change' : 'Upload Logo'}
+                  {settings.logoUrl ? 'Change' : 'Upload'}
                 </Button>
 
                 {settings.logoUrl && (
                   <Button
-                    variant="outlined"
                     size="small"
                     onClick={handleManualRemoveWhiteBg}
                     disabled={isProcessingLogo}
                     sx={{
-                      borderColor: '#F59E0B',
-                      color: '#B45309',
-                      backgroundColor: '#F1F5F9',
-                      fontSize: '12px',
+                      bgcolor: '#EDF4FB',
+                      border: '1px solid #94A3B8',
+                      color: '#1E3A8A',
+                      fontSize: '11px',
                       fontWeight: 700,
                       textTransform: 'none',
-                      borderRadius: '8px',
-                      '&:hover': { backgroundColor: '#E2E8F0', borderColor: '#D97706' },
+                      borderRadius: '2px',
+                      py: 0.2,
+                      px: 1,
+                      '&:hover': { bgcolor: '#E2E8F0' },
                     }}
                   >
-                    {isProcessingLogo ? 'Processing...' : '✨ Remove White BG'}
+                    {isProcessingLogo ? '...' : 'Remove White BG'}
                   </Button>
                 )}
 
                 {settings.logoUrl && (
                   <Button
-                    variant="outlined"
                     size="small"
                     color="error"
                     onClick={handleRemoveLogo}
-                    startIcon={<DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />}
+                    startIcon={<DeleteOutlineRoundedIcon sx={{ fontSize: 14 }} />}
                     sx={{
-                      fontSize: '12px',
+                      fontSize: '11px',
                       fontWeight: 700,
                       textTransform: 'none',
-                      borderRadius: '8px',
+                      borderRadius: '2px',
+                      py: 0.2,
+                      px: 1,
                     }}
                   >
                     Remove
                   </Button>
                 )}
               </Box>
-            </Box>
+            </fieldset>
 
             {/* Live Invoice Header Preview */}
-            <Box
-              sx={{
-                p: 2,
-                borderRadius: '12px',
-                border: '1px solid #E2E8F0',
-                backgroundColor: '#F8FAFC',
-                textAlign: 'left',
-              }}
-            >
-              <Typography sx={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', mb: 1 }}>
-                Live Invoice Header Preview
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, mb: 1 }}>
+            <fieldset className="erp-fieldset">
+              <legend className="erp-legend">Live Header Preview</legend>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.8 }}>
                 {settings.logoUrl ? (
                   <Box
                     component="img"
                     src={settings.logoUrl}
                     alt="Logo"
-                    sx={{ width: 38, height: 38, objectFit: 'contain', borderRadius: '6px' }}
+                    sx={{ width: 34, height: 34, objectFit: 'contain' }}
                   />
                 ) : (
                   <Box
                     sx={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: '6px',
-                      backgroundColor: '#DC2626',
-                      color: '#FEF08A',
+                      width: 34,
+                      height: 34,
+                      borderRadius: '2px',
+                      bgcolor: '#741748',
+                      color: '#FFFFFF',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontWeight: 800,
-                      fontSize: '16px',
+                      fontSize: '14px',
                     }}
                   >
-                    {settings.companyName.charAt(0) || 'V'}
+                    {settings.companyName.charAt(0) || 'S'}
                   </Box>
                 )}
                 <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography noWrap sx={{ fontSize: '14px', fontWeight: 800, color: '#1F1714', lineHeight: 1.1 }}>
+                  <Typography noWrap sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', lineHeight: 1.1 }}>
                     {settings.companyName || 'Company Name'}
                   </Typography>
-                  <Typography noWrap sx={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>
+                  <Typography noWrap sx={{ fontSize: '10.5px', color: '#64748B' }}>
                     {settings.city || 'Sivakasi'}{settings.state ? `, ${settings.state}` : ''}
                   </Typography>
                 </Box>
               </Box>
               {settings.tagline && (
-                <Typography sx={{ fontSize: '11px', color: '#64748B', fontStyle: 'italic', mb: 0.5 }}>
+                <Typography sx={{ fontSize: '10.5px', color: '#64748B', fontStyle: 'italic', mb: 0.4 }}>
                   "{settings.tagline}"
                 </Typography>
               )}
-              <Typography sx={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>
-                GSTIN: {settings.gstin || 'Not specified'}
+              <Typography sx={{ fontSize: '10.5px', color: '#475569', fontWeight: 600 }}>
+                Phone: {settings.phone || '-'} • WhatsApp: {settings.whatsapp || '-'}
               </Typography>
-            </Box>
-
-            {/* Quick Status Info */}
-            <Box
-              sx={{
-                p: 1.5,
-                borderRadius: '10px',
-                backgroundColor: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-              }}
-            >
-              <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
-                ⚡ Auto-Sync Active
-              </Typography>
-              <Typography sx={{ fontSize: '11px', color: '#B45309', lineHeight: 1.4 }}>
-                Changes saved here will automatically update the Navbar branding, Estimates, and Invoice Bill Print templates.
-              </Typography>
-            </Box>
+            </fieldset>
           </Box>
 
-          {/* Right Panel: Full Profile Forms (Scrollable, Full-Height) */}
-          <Box
-            sx={{
-              flex: 1,
-              p: { xs: 2, sm: 3 },
-              overflowY: { xs: 'visible', md: 'auto' },
-              boxSizing: 'border-box',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 2.5,
-            }}
-          >
-            {/* Section 1: Store & Company Details */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2.5,
-                borderRadius: '12px',
-                border: '1px solid #E2E8F0',
-                backgroundColor: '#FFFFFF',
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <StorefrontRoundedIcon sx={{ color: '#DC2626', fontSize: 20 }} />
-                <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#991B1B' }}>
-                  Store & Business Identity
-                </Typography>
-              </Box>
-
-              <Grid container spacing={2}>
+          {/* Right Panel: Grouped Form Settings */}
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {/* Fieldset: Business Identity */}
+            <fieldset className="erp-fieldset">
+              <legend className="erp-legend">Business Identity</legend>
+              <Grid container spacing={1.2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Company / Store Name *"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Company / Store Name <span style={{ color: '#DC2626' }}>*</span>
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
                     value={settings.companyName}
                     onChange={(e) => handleChange('companyName', e.target.value)}
-                    placeholder="Enter your company / store name"
                   />
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Tagline / Description"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Tagline / Subtitle
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
                     value={settings.tagline}
                     onChange={(e) => handleChange('tagline', e.target.value)}
-                    placeholder="e.g. Direct Manufacturer & Wholesale Supplier"
                   />
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Owner / Contact Person"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Contact Person / Owner
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
                     value={settings.ownerName}
                     onChange={(e) => handleChange('ownerName', e.target.value)}
-                    placeholder="e.g. Siva"
                   />
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Email Address"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Email Address
+                  </Typography>
+                  <input
+                    type="email"
+                    className="erp-input"
                     value={settings.email}
                     onChange={(e) => handleChange('email', e.target.value)}
-                    placeholder="e.g. contact@example.com"
                   />
                 </Grid>
               </Grid>
-            </Paper>
+            </fieldset>
 
-            {/* Section 2: Contact & Phone Details */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2.5,
-                borderRadius: '12px',
-                border: '1px solid #E2E8F0',
-                backgroundColor: '#FFFFFF',
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <PhoneInTalkRoundedIcon sx={{ color: '#D97706', fontSize: 20 }} />
-                <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#334155' }}>
-                  Contact Numbers & WhatsApp
-                </Typography>
-              </Box>
-
-              <Grid container spacing={2}>
+            {/* Fieldset: Phone & Communication */}
+            <fieldset className="erp-fieldset">
+              <legend className="erp-legend">Contact & Communication Numbers</legend>
+              <Grid container spacing={1.2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Primary Phone Number *"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Primary Phone Number <span style={{ color: '#DC2626' }}>*</span>
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
                     value={settings.phone}
                     onChange={(e) => handleChange('phone', e.target.value)}
-                    placeholder="e.g. +91 98765 43210"
                   />
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="WhatsApp Number"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    WhatsApp Phone Number
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
                     value={settings.whatsapp}
                     onChange={(e) => handleChange('whatsapp', e.target.value)}
-                    placeholder="e.g. +91 98765 43210"
                   />
                 </Grid>
               </Grid>
-            </Paper>
+            </fieldset>
 
-            {/* Section 3: Physical Address & Location */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2.5,
-                borderRadius: '12px',
-                border: '1px solid #E2E8F0',
-                backgroundColor: '#FFFFFF',
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <LocationOnRoundedIcon sx={{ color: '#16A34A', fontSize: 20 }} />
-                <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#166534' }}>
-                  Store Location & Postal Address
-                </Typography>
-              </Box>
-
-              <Grid container spacing={2}>
+            {/* Fieldset: Address & Location */}
+            <fieldset className="erp-fieldset">
+              <legend className="erp-legend">Store Location & Address</legend>
+              <Grid container spacing={1.2}>
                 <Grid size={{ xs: 12 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Street Address / Location *"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Street Address <span style={{ color: '#DC2626' }}>*</span>
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
                     value={settings.address}
                     onChange={(e) => handleChange('address', e.target.value)}
-                    placeholder="e.g. 124, Sivakasi Main Road, Near Bus Stand"
                   />
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 4 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="City *"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    City <span style={{ color: '#DC2626' }}>*</span>
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
                     value={settings.city}
                     onChange={(e) => handleChange('city', e.target.value)}
-                    placeholder="e.g. Sivakasi"
                   />
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 4 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="State *"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    State <span style={{ color: '#DC2626' }}>*</span>
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
                     value={settings.state}
                     onChange={(e) => handleChange('state', e.target.value)}
-                    placeholder="e.g. Tamil Nadu"
                   />
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 4 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Pincode"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Pincode
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
                     value={settings.pincode}
                     onChange={(e) => handleChange('pincode', e.target.value)}
-                    placeholder="e.g. 626123"
                   />
                 </Grid>
               </Grid>
-            </Paper>
+            </fieldset>
 
-            {/* Section 4: GSTIN & Tax Identification */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2.5,
-                borderRadius: '12px',
-                border: '1px solid #E2E8F0',
-                backgroundColor: '#FFFFFF',
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ReceiptLongRoundedIcon sx={{ color: '#2563EB', fontSize: 20 }} />
-                  <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#1E40AF' }}>
-                    Tax & Legal Registration
-                  </Typography>
-                </Box>
-
-                {/* Tax / GST Toggle Button */}
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.2,
-                    backgroundColor: settings.enableTax ? '#EFF6FF' : '#F8FAFC',
-                    border: settings.enableTax ? '1.5px solid #93C5FD' : '1px solid #E2E8F0',
-                    px: 1.5,
-                    py: 0.5,
-                    borderRadius: '20px',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  <Typography sx={{ fontSize: '13px', fontWeight: 700, color: settings.enableTax ? '#1D4ED8' : '#64748B' }}>
-                    {settings.enableTax ? 'Tax / GST: ON' : 'Tax / GST: OFF'}
-                  </Typography>
-                  <Switch
-                    checked={Boolean(settings.enableTax)}
-                    onChange={(e) => handleChange('enableTax', e.target.checked)}
-                    color="primary"
-                    size="small"
-                  />
-                </Box>
-              </Box>
-
-              <Typography sx={{ fontSize: '12px', color: '#64748B', mb: 2 }}>
-                {settings.enableTax
-                  ? 'Tax calculation is ENABLED. Tax / GST percentage will be displayed and applied during billing.'
-                  : 'Tax calculation is DISABLED. Tax / GST field will be hidden from billing.'}
-              </Typography>
-
-              <Grid container spacing={2}>
-                {/* When Tax Toggle is ON, show Default Tax Rate field */}
-                {settings.enableTax && (
-                  <Grid size={{ xs: 12 }}>
-                    <Box
-                      sx={{
-                        p: 2,
-                        borderRadius: '10px',
-                        backgroundColor: '#EFF6FF',
-                        border: '1px dashed #93C5FD',
-                        mb: 1,
-                      }}
-                    >
-                      <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#1E40AF', mb: 1 }}>
-                        Default GST / Tax Rate (%)
-                      </Typography>
-                      <TextField
-                        size="small"
-                        value={settings.defaultTaxRate || ''}
-                        onChange={(e) => handleChange('defaultTaxRate', e.target.value)}
-                        placeholder="e.g. 18 or 5"
-                        sx={{
-                          maxWidth: '260px',
-                          backgroundColor: '#FFFFFF',
-                          '& .MuiInputBase-input': { fontWeight: 700, color: '#1D4ED8', fontSize: '14px' },
-                        }}
-                      />
-                      <Typography sx={{ fontSize: '11.5px', color: '#3B82F6', mt: 0.8 }}>
-                        This tax percentage will automatically apply as the default tax rate in the billing page.
-                      </Typography>
-                    </Box>
-                  </Grid>
-                )}
-
+            {/* Fieldset: Tax & Legal */}
+            <fieldset className="erp-fieldset">
+              <legend className="erp-legend">Tax & Legal Registration</legend>
+              <Grid container spacing={1.2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="GSTIN Number"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    GSTIN Number
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
+                    placeholder="e.g. 33AAAAA0000A1Z5"
                     value={settings.gstin}
                     onChange={(e) => handleChange('gstin', e.target.value.toUpperCase())}
-                    placeholder="e.g. 33AAAAA0000A1Z5"
                   />
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="PAN Number"
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    PAN Number
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
+                    placeholder="e.g. AAAAA0000A"
                     value={settings.pan}
                     onChange={(e) => handleChange('pan', e.target.value.toUpperCase())}
-                    placeholder="e.g. AAAAA0000A"
                   />
                 </Grid>
+
+                <Grid size={{ xs: 12 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A' }}>
+                      Estimate Tax Calculation:
+                    </Typography>
+                    <Switch
+                      size="small"
+                      checked={Boolean(settings.enableTax)}
+                      onChange={(e) => handleChange('enableTax', e.target.checked)}
+                    />
+                    <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
+                      {settings.enableTax ? 'Tax calculation enabled on Quotation' : 'Tax calculation disabled'}
+                    </Typography>
+                  </Box>
+                </Grid>
               </Grid>
-            </Paper>
+            </fieldset>
           </Box>
         </Box>
       </Paper>
 
-      {/* Snackbar Feedback */}
+      {/* Floating Feedback Toast */}
       <Snackbar
         open={toast.open}
         autoHideDuration={4000}
@@ -1107,7 +878,7 @@ export const SettingsPage: React.FC = () => {
         <Alert
           onClose={() => setToast((prev) => ({ ...prev, open: false }))}
           severity={toast.severity}
-          sx={{ width: '100%', fontWeight: 700, borderRadius: '10px' }}
+          sx={{ width: '100%', fontWeight: 600, fontSize: '12px', borderRadius: '3px' }}
         >
           {toast.message}
         </Alert>

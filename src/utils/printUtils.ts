@@ -1714,10 +1714,11 @@ export const printCompaniesListDirectly = (companies: any[]) => {
 /**
  * Print Products List (A4 Standard)
  */
-export const generateProductsListPrintHtml = (products: any[]): string => {
+export const generateProductsListPrintHtml = (products: any[], categoryTitle?: string): string => {
   const storeSettings = getStoredSettings();
   const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
+  const catTitle = categoryTitle && categoryTitle !== 'ALL' ? ` (${categoryTitle})` : '';
   const rowsHtml = products.map((p, idx) => `
     <tr>
       <td class="text-center" style="width:40px;">${idx + 1}</td>
@@ -1747,7 +1748,7 @@ export const generateProductsListPrintHtml = (products: any[]): string => {
   <div class="header">
     <div>
       <div style="font-size:24px; font-weight:900; color:#0B4DB7;">${compName}</div>
-      <h2 style="font-size:15px;">PRODUCTS PRICE CATALOG</h2>
+      <h2 style="font-size:15px;">PRODUCTS PRICE CATALOG${catTitle}</h2>
     </div>
     <div style="text-align:right; font-size:11.5px;">
       <div>Date: <b>${currentDate}</b></div>
@@ -1772,8 +1773,8 @@ export const generateProductsListPrintHtml = (products: any[]): string => {
   `;
 };
 
-export const printProductsListDirectly = (products: any[]) => {
-  const htmlContent = generateProductsListPrintHtml(products);
+export const printProductsListDirectly = (products: any[], categoryTitle?: string) => {
+  const htmlContent = generateProductsListPrintHtml(products, categoryTitle);
   triggerBrowserPrint(htmlContent);
 };
 
