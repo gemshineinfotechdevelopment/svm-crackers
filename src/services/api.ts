@@ -102,7 +102,13 @@ export const CompaniesApi = {
 
 // Products API
 export const ProductsApi = {
-  getAll: () => request<any[]>('/products'),
+  getAll: (search?: string, year?: string) => {
+    const query = new URLSearchParams();
+    if (search) query.append('search', search);
+    if (year && year !== 'ALL') query.append('year', year);
+    const qs = query.toString();
+    return request<any[]>(`/products${qs ? `?${qs}` : ''}`);
+  },
   getById: (id: string) => request<any>(`/products/${id}`),
   create: (data: any) => request<any>('/products', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => request<any>(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -122,10 +128,11 @@ export const CategoriesApi = {
 
 // Price Lists API
 export const PriceListsApi = {
-  getAll: (params?: { category?: string; search?: string }) => {
+  getAll: (params?: { category?: string; search?: string; year?: string }) => {
     const query = new URLSearchParams();
     if (params?.category && params.category !== 'ALL') query.append('category', params.category);
     if (params?.search) query.append('search', params.search);
+    if (params?.year && params.year !== 'ALL') query.append('year', params.year);
     const queryString = query.toString();
     return request<any[]>(`/pricelists${queryString ? `?${queryString}` : ''}`);
   },
@@ -140,10 +147,11 @@ export const PriceListsApi = {
 
 // Particulars API
 export const ParticularsApi = {
-  getAll: (customerName?: string, billType?: 'REGULAR' | 'GST' | 'ALL') => {
+  getAll: (customerName?: string, billType?: 'REGULAR' | 'GST' | 'ALL', year?: string) => {
     const params = new URLSearchParams();
     if (customerName && customerName !== 'ALL') params.append('customerName', customerName);
     if (billType && billType !== 'ALL') params.append('billType', billType);
+    if (year && year !== 'ALL') params.append('year', year);
     const qs = params.toString();
     return request<any[]>(`/particulars${qs ? `?${qs}` : ''}`);
   },

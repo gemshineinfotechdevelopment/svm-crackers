@@ -42,6 +42,7 @@ import { DateRangePrintModal } from './DateRangePrintModal';
 import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
 import { getStoredSettings } from './SettingsPage';
+import { getSelectedBillYear } from '../utils/billYearUtils';
 
 export interface CustomerItem {
   _id?: string;
@@ -159,7 +160,8 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
   const fetchRecentBills = async () => {
     try {
       setLoadingRecentBills(true);
-      const bills = await ParticularsApi.getAll(undefined, 'REGULAR');
+      const selectedYear = getSelectedBillYear();
+      const bills = await ParticularsApi.getAll(undefined, 'REGULAR', selectedYear);
       const regularBills = (Array.isArray(bills) ? bills : []).filter(
         (b: any) => b.billType !== 'GST' && !(b.billNo && String(b.billNo).toUpperCase().startsWith('GST'))
       );
@@ -211,9 +213,14 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
     const handleSettingsUpdate = () => {
       setStoreSettings(getStoredSettings());
     };
+    const handleYearChange = () => {
+      fetchRecentBills();
+    };
     window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
+    window.addEventListener('apsara_bill_year_changed', handleYearChange);
     return () => {
       window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('apsara_bill_year_changed', handleYearChange);
     };
   }, []);
 

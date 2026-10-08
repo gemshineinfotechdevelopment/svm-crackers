@@ -2,9 +2,35 @@ import type { Request, Response, NextFunction } from 'express';
 import { Product } from '../models/Product';
 import PriceList from '../models/PriceList';
 
-export const getProducts = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const products = await Product.find().lean().sort({ slNo: 1, createdAt: 1 });
+    const { year, search } = req.query;
+    const filter: any = {};
+
+    if (year && typeof year === 'string' && year.trim() !== '' && year.toLowerCase() !== 'all') {
+      const yearStr = year.trim();
+      const yearNum = parseInt(yearStr, 10);
+      if (!isNaN(yearNum)) {
+        const startOfYear = new Date(Date.UTC(yearNum, 0, 1, 0, 0, 0));
+        const endOfYear = new Date(Date.UTC(yearNum, 11, 31, 23, 59, 59, 999));
+        filter.$or = [
+          { year: yearStr },
+          { createdAt: { $gte: startOfYear, $lte: endOfYear } },
+        ];
+      }
+    }
+
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      const searchFilter = { name: { $regex: search.trim(), $options: 'i' } };
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, searchFilter];
+        delete filter.$or;
+      } else {
+        filter.name = searchFilter.name;
+      }
+    }
+
+    const products = await Product.find(filter).lean().sort({ slNo: 1, createdAt: 1 });
     res.status(200).json({ success: true, count: products.length, data: products });
   } catch (error) {
     next(error);
@@ -26,7 +52,26 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
 
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { shopStock, godownStock, stock, ...rest } = req.body;
+    const currentSystemYear = new Date().getFullYear().toString();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    // Backend Security Restriction: Product creation ONLY allowed in current system year
+    if (selectedViewYear && String(selectedViewYear).trim() !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New products can only be added to the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before adding a new product.`,
+        error: 'Product creation is only allowed in the current system year.',
+      });
+      return;
+    }
+
+    const { shopStock, godownStock, stock, selectedViewYear: _v, viewYear: _vy, ...rest } = req.body;
+    rest.year = currentSystemYear;
+    if (!rest.slNo) {
+      const highestSl = await Product.findOne().sort({ slNo: -1 });
+      rest.slNo = (highestSl?.slNo || 0) + 1;
+    }
+
     const product = await Product.create(rest);
 
     // Sync to PriceList
@@ -35,7 +80,7 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
       if (cleanName) {
         const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const nameRegex = new RegExp(`^${escapedName}$`, 'i');
-        const existingPriceItem = await PriceList.findOne({ itemName: { $regex: nameRegex } });
+        const existingPriceItem = await PriceList.findOne({ itemName: { $regex: nameRegex }, year: currentSystemYear });
         if (!existingPriceItem) {
           await PriceList.create({
             slNo: product.slNo,
@@ -44,6 +89,7 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
             unit: product.unit || 'Box',
             rate: product.rate || 0,
             mrp: product.mrp || 0,
+            year: currentSystemYear,
           });
         }
       }

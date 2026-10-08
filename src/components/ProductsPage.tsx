@@ -37,6 +37,8 @@ import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import { ProductsApi, CategoriesApi, PriceListsApi } from '../services/api';
 import { printProductsListDirectly } from '../utils/printUtils';
+import { getSelectedBillYear } from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 export interface ProductItem {
   _id?: string;
@@ -69,10 +71,11 @@ export const ProductsPage: FC = () => {
   const fetchProductsAndPrices = async () => {
     try {
       setLoading(true);
+      const selectedYear = getSelectedBillYear();
       const [prodsData, catsData, priceData] = await Promise.all([
-        ProductsApi.getAll().catch(() => []),
+        ProductsApi.getAll(undefined, selectedYear).catch(() => []),
         CategoriesApi.getAll().catch(() => []),
-        PriceListsApi.getAll().catch(() => []),
+        PriceListsApi.getAll({ year: selectedYear }).catch(() => []),
       ]);
 
       const priceMap = new Map<string, any>();
@@ -143,6 +146,11 @@ export const ProductsPage: FC = () => {
 
   useEffect(() => {
     fetchProductsAndPrices();
+    const handleYearChange = () => {
+      fetchProductsAndPrices();
+    };
+    window.addEventListener('apsara_bill_year_changed', handleYearChange);
+    return () => window.removeEventListener('apsara_bill_year_changed', handleYearChange);
   }, []);
 
   const filteredProducts = useMemo(() => {
@@ -160,6 +168,12 @@ export const ProductsPage: FC = () => {
   }, [products, selectedCategory, searchTerm]);
 
   const handleOpenAdd = () => {
+    const selectedViewYear = getSelectedBillYear();
+    const currentSystemYear = new Date().getFullYear().toString();
+    if (selectedViewYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+      return;
+    }
     setEditingProduct(null);
     setProductName('');
     setProductCategory(categories[0]?.name || 'General');
@@ -185,15 +199,24 @@ export const ProductsPage: FC = () => {
       return;
     }
 
+    const selectedViewYear = getSelectedBillYear();
+    const currentSystemYear = new Date().getFullYear().toString();
+
+    if (!editingProduct && selectedViewYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+      return;
+    }
+
     try {
       setModalLoading(true);
 
-      const payload = {
+      const payload: any = {
         name: productName.trim(),
         category: productCategory,
         unit: productUnit,
         rate: Number(productRate) || 0,
         mrp: Number(productMrp) || 0,
+        selectedViewYear,
       };
 
       if (editingProduct) {

@@ -55,6 +55,8 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import Tesseract from 'tesseract.js';
 import { PriceListsApi, CategoriesApi, ProductsApi } from '../services/api';
 import { getStoredSettings } from './SettingsPage';
+import { getSelectedBillYear } from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -173,10 +175,11 @@ export const PriceListPage: FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const selectedYear = getSelectedBillYear();
       const [priceData, catData, prodsData] = await Promise.all([
-        PriceListsApi.getAll(),
+        PriceListsApi.getAll({ year: selectedYear }),
         CategoriesApi.getAll().catch(() => []),
-        ProductsApi.getAll().catch(() => []),
+        ProductsApi.getAll(undefined, selectedYear).catch(() => []),
       ]);
 
       const prodMap = new Map<string, any>();
@@ -208,6 +211,13 @@ export const PriceListPage: FC = () => {
 
   useEffect(() => {
     fetchData();
+    const handleYearChange = () => {
+      fetchData();
+    };
+    window.addEventListener('apsara_bill_year_changed', handleYearChange);
+    return () => {
+      window.removeEventListener('apsara_bill_year_changed', handleYearChange);
+    };
   }, []);
 
   // Filtered price items
@@ -1287,6 +1297,13 @@ export const PriceListPage: FC = () => {
 
   // Open Add Modal
   const handleOpenAdd = () => {
+    const currentSystemYear = new Date().getFullYear().toString();
+    const selectedViewYear = getSelectedBillYear();
+    if (selectedViewYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+      return;
+    }
+
     setEditingItem(null);
     setFormSlNo(items.length > 0 ? Math.max(...items.map((i) => i.slNo || 0)) + 1 : 1);
     setFormName('');
@@ -1321,6 +1338,15 @@ export const PriceListPage: FC = () => {
     if (isNaN(rateNum) || rateNum < 0) {
       alert('Please enter a valid rate/price');
       return;
+    }
+
+    if (!editingItem) {
+      const currentSystemYear = new Date().getFullYear().toString();
+      const selectedViewYear = getSelectedBillYear();
+      if (selectedViewYear !== currentSystemYear) {
+        triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+        return;
+      }
     }
 
     try {

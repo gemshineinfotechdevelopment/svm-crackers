@@ -99,19 +99,39 @@ const syncCategoriesAndProducts = async (items: any[]) => {
 
 export const getPriceList = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { category, search } = req.query;
+    const { category, search, year } = req.query;
     const filter: any = {};
+
+    if (year && typeof year === 'string' && year.trim() !== '' && year.toLowerCase() !== 'all') {
+      const yearStr = year.trim();
+      const yearNum = parseInt(yearStr, 10);
+      if (!isNaN(yearNum)) {
+        const startOfYear = new Date(Date.UTC(yearNum, 0, 1, 0, 0, 0));
+        const endOfYear = new Date(Date.UTC(yearNum, 11, 31, 23, 59, 59, 999));
+        filter.$or = [
+          { year: yearStr },
+          { createdAt: { $gte: startOfYear, $lte: endOfYear } },
+          { effectiveDate: { $regex: new RegExp(yearStr) } },
+        ];
+      }
+    }
 
     if (category && category !== 'ALL') {
       filter.category = category;
     }
 
     if (search) {
-      filter.$or = [
+      const searchFilter = [
         { itemName: { $regex: String(search), $options: 'i' } },
         { category: { $regex: String(search), $options: 'i' } },
         { batchName: { $regex: String(search), $options: 'i' } },
       ];
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: searchFilter }];
+        delete filter.$or;
+      } else {
+        filter.$or = searchFilter;
+      }
     }
 
     const items = await PriceList.find(filter).lean().sort({ slNo: 1, createdAt: -1 });
@@ -131,6 +151,18 @@ export const getPriceList = async (req: Request, res: Response): Promise<void> =
 
 export const createPriceListItem = async (req: Request, res: Response): Promise<void> => {
   try {
+    const currentSystemYear = new Date().getFullYear().toString();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    if (selectedViewYear && String(selectedViewYear).trim() !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New products can only be added to the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before adding a new product.`,
+        error: 'Product creation is only allowed in the current system year.',
+      });
+      return;
+    }
+
     const { itemName, category, unit, mrp, discountPercent, rate, effectiveDate, batchName, slNo } = req.body;
 
     if (!itemName || !itemName.trim()) {
@@ -150,6 +182,7 @@ export const createPriceListItem = async (req: Request, res: Response): Promise<
       rate: Number(rate) || 0,
       effectiveDate: effectiveDate || new Date().toISOString().split('T')[0],
       batchName: batchName || 'Manual Entry',
+      year: currentSystemYear,
     });
 
     // Auto-sync category and product
@@ -163,6 +196,18 @@ export const createPriceListItem = async (req: Request, res: Response): Promise<
 
 export const bulkImportPriceList = async (req: Request, res: Response): Promise<void> => {
   try {
+    const currentSystemYear = new Date().getFullYear().toString();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    if (selectedViewYear && String(selectedViewYear).trim() !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New products can only be added to the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before adding a new product.`,
+        error: 'Product creation is only allowed in the current system year.',
+      });
+      return;
+    }
+
     const { items, batchName, replaceExisting } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -189,6 +234,7 @@ export const bulkImportPriceList = async (req: Request, res: Response): Promise<
         rate: Number(item.rate || item.price || item.Rate || item['Net Rate'] || item['Selling Price'] || 0),
         effectiveDate: item.effectiveDate || new Date().toISOString().split('T')[0],
         batchName: batchTitle,
+        year: currentSystemYear,
       };
     }).filter((i: any) => Boolean(i.itemName));
 

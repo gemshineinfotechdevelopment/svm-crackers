@@ -9,6 +9,11 @@ import {
   Snackbar,
   Alert,
   Switch,
+  Chip,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
@@ -20,9 +25,25 @@ import PhoneInTalkRoundedIcon from '@mui/icons-material/PhoneInTalkRounded';
 import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
+import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
+import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import CircularProgress from '@mui/material/CircularProgress';
 import defaultProjectLogo from '../assets/logo.png';
 import { SettingsApi } from '../services/api';
+import {
+  getSelectedBillYear,
+  setSelectedBillYear,
+  getAvailableBillViewYears,
+} from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
+
+const initNow = new Date();
+const initYear = initNow.getFullYear().toString();
+const initDay = String(initNow.getDate()).padStart(2, '0');
+const initMonth = String(initNow.getMonth() + 1).padStart(2, '0');
 
 export interface CompanySettings {
   companyName: string;
@@ -42,6 +63,12 @@ export interface CompanySettings {
   defaultTaxRate?: string;
   gstTurnoverBaseline?: string;
   gstTurnoverCurrent?: string;
+  systemDate?: string;
+  systemYear?: string;
+  billingYear?: string;
+  billingStartDate?: string;
+  billingEndDate?: string;
+  billingStatus?: string;
 }
 
 export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
@@ -62,6 +89,12 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   defaultTaxRate: '18',
   gstTurnoverBaseline: '726900.00',
   gstTurnoverCurrent: '726900.00',
+  systemDate: `${initDay}-${initMonth}-${initYear}`,
+  systemYear: initYear,
+  billingYear: initYear,
+  billingStartDate: `01-01-${initYear}`,
+  billingEndDate: `31-12-${initYear}`,
+  billingStatus: 'Active',
 };
 
 export const removeWhiteBackgroundFromDataUrl = (
@@ -179,6 +212,37 @@ export const SettingsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Bill View Year Selector state & menu anchor
+  const [selectedBillYear, setSelectedBillYearState] = useState<string>(() =>
+    getSelectedBillYear(settings.systemYear)
+  );
+  const [billYearAnchorEl, setBillYearAnchorEl] = useState<null | HTMLElement>(null);
+
+  const handleSelectBillViewYear = (year: string, isFuture: boolean) => {
+    setBillYearAnchorEl(null);
+    if (isFuture) {
+      const sysYear = settings.systemYear || new Date().getFullYear().toString();
+      triggerYearRestrictionDialog({ selectedYear: year, currentSystemYear: sysYear, isFutureYear: true });
+      return;
+    }
+
+    const res = setSelectedBillYear(year, settings.systemYear);
+    if (res.success) {
+      setSelectedBillYearState(res.year);
+      setToast({
+        open: true,
+        message: `📅 Bill View Filter set to ${year}. Showing ${year} bills.`,
+        severity: 'success',
+      });
+    } else {
+      setToast({
+        open: true,
+        message: res.message,
+        severity: 'error',
+      });
+    }
+  };
+
   const [toast, setToast] = useState<{ open: boolean; message: string; severity: 'success' | 'info' | 'error' }>({
     open: false,
     message: '',
@@ -228,6 +292,12 @@ export const SettingsPage: React.FC = () => {
             logoUrl: logo,
             enableTax: Boolean(data.enableTax),
             defaultTaxRate: data.defaultTaxRate || '18',
+            systemDate: data.systemDate || DEFAULT_COMPANY_SETTINGS.systemDate,
+            systemYear: data.systemYear || DEFAULT_COMPANY_SETTINGS.systemYear,
+            billingYear: data.billingYear || DEFAULT_COMPANY_SETTINGS.billingYear,
+            billingStartDate: data.billingStartDate || DEFAULT_COMPANY_SETTINGS.billingStartDate,
+            billingEndDate: data.billingEndDate || DEFAULT_COMPANY_SETTINGS.billingEndDate,
+            billingStatus: data.billingStatus || 'Active',
           };
           setSettings(remoteSettings);
           localStorage.setItem('apsara_app_settings', JSON.stringify(remoteSettings));
@@ -243,6 +313,17 @@ export const SettingsPage: React.FC = () => {
   }, []);
 
   const handleChange = <K extends keyof CompanySettings>(field: K, value: CompanySettings[K]) => {
+    if (field === 'billingYear') {
+      const selectedYear = String(value).trim();
+      const currentSysYear = String(settings.systemYear || new Date().getFullYear());
+      if (selectedYear !== currentSysYear) {
+        setToast({
+          open: true,
+          message: 'Billing year cannot be changed manually. The billing year must remain synchronized with the current system date.',
+          severity: 'error',
+        });
+      }
+    }
     setSettings((prev) => ({
       ...prev,
       [field]: value,
@@ -341,6 +422,19 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleSave = async () => {
+    const currentSysYear = String(settings.systemYear || new Date().getFullYear());
+    const selectedBillingYear = String(settings.billingYear || '').trim();
+
+    // Validate selected year against current system year
+    if (selectedBillingYear && selectedBillingYear !== currentSysYear) {
+      setToast({
+        open: true,
+        message: 'Invalid Billing Year. The selected billing year does not match the current system year. Billing dates are automatically synchronized with the system date.',
+        severity: 'error',
+      });
+      return;
+    }
+
     try {
       setIsSaving(true);
       // 1. Immediately cache in localStorage for instant UI feedback
@@ -369,6 +463,12 @@ export const SettingsPage: React.FC = () => {
           logoUrl: data.logoUrl ?? settings.logoUrl,
           enableTax: Boolean(data.enableTax ?? settings.enableTax),
           defaultTaxRate: data.defaultTaxRate ?? settings.defaultTaxRate ?? '18',
+          systemDate: data.systemDate ?? settings.systemDate,
+          systemYear: data.systemYear ?? settings.systemYear,
+          billingYear: data.billingYear ?? settings.billingYear,
+          billingStartDate: data.billingStartDate ?? settings.billingStartDate,
+          billingEndDate: data.billingEndDate ?? settings.billingEndDate,
+          billingStatus: data.billingStatus ?? settings.billingStatus ?? 'Active',
         };
         setSettings(syncedSettings);
         localStorage.setItem('apsara_app_settings', JSON.stringify(syncedSettings));
@@ -386,8 +486,8 @@ export const SettingsPage: React.FC = () => {
       console.error('Failed to save settings to server:', err);
       setToast({
         open: true,
-        message: '✅ Profile saved locally! (Backend sync will retry automatically)',
-        severity: 'success',
+        message: err?.message || 'Billing year cannot be changed manually. The billing year must remain synchronized with the current system date.',
+        severity: 'error',
       });
     } finally {
       setIsSaving(false);
@@ -489,8 +589,101 @@ export const SettingsPage: React.FC = () => {
             </Box>
           </Box>
 
-          {/* Actions */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          {/* Actions & Top Right Annual Billing Indicator & Bill Year Switcher */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            {/* Interactive Bill Year View Switcher Button */}
+            <Button
+              variant="outlined"
+              onClick={(e) => setBillYearAnchorEl(e.currentTarget)}
+              startIcon={<CalendarMonthRoundedIcon sx={{ fontSize: 18, color: '#FEF08A' }} />}
+              endIcon={<ArrowDropDownRoundedIcon sx={{ fontSize: 20, color: '#FEF08A' }} />}
+              sx={{
+                color: '#FFFFFF',
+                backgroundColor: 'rgba(255, 255, 255, 0.18)',
+                backdropFilter: 'blur(6px)',
+                borderColor: 'rgba(254, 240, 138, 0.6)',
+                borderRadius: '8px',
+                fontSize: '12.5px',
+                fontWeight: 800,
+                textTransform: 'none',
+                px: 1.8,
+                height: '36px',
+                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+                '&:hover': {
+                  borderColor: '#FEF08A',
+                  backgroundColor: 'rgba(255, 255, 255, 0.28)',
+                },
+              }}
+            >
+              📅 Bill Year: <span style={{ color: '#FEF08A', marginLeft: '4px' }}>{selectedBillYear}</span>
+            </Button>
+
+            {/* Dropdown Menu for Bill View Year */}
+            <Menu
+              anchorEl={billYearAnchorEl}
+              open={Boolean(billYearAnchorEl)}
+              onClose={() => setBillYearAnchorEl(null)}
+              slotProps={{
+                paper: {
+                  elevation: 6,
+                  sx: {
+                    borderRadius: '10px',
+                    minWidth: '210px',
+                    mt: 1,
+                    border: '1.5px solid #E2E8F0',
+                  },
+                },
+              }}
+            >
+              <Box sx={{ px: 2, py: 1, borderBottom: '1px solid #F1F5F9', backgroundColor: '#F8FAFC' }}>
+                <Typography sx={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>
+                  Bill View Year
+                </Typography>
+                <Typography sx={{ fontSize: '11px', color: '#94A3B8' }}>
+                  Select year to view/filter bills
+                </Typography>
+              </Box>
+
+              {getAvailableBillViewYears(settings.systemYear).map((opt) => (
+                <MenuItem
+                  key={opt.year}
+                  selected={opt.year === selectedBillYear}
+                  onClick={() => handleSelectBillViewYear(opt.year, opt.isFuture)}
+                  sx={{
+                    py: 1,
+                    px: 2,
+                    opacity: opt.isFuture ? 0.6 : 1,
+                    backgroundColor: opt.year === selectedBillYear ? '#EFF6FF' : 'transparent',
+                    '&:hover': {
+                      backgroundColor: opt.isFuture ? '#FEF2F2' : '#F1F5F9',
+                    },
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: '30px' }}>
+                    {opt.year === selectedBillYear ? (
+                      <CheckRoundedIcon sx={{ fontSize: 18, color: '#2563EB' }} />
+                    ) : opt.isFuture ? (
+                      <LockOutlinedIcon sx={{ fontSize: 16, color: '#EF4444' }} />
+                    ) : (
+                      <HistoryRoundedIcon sx={{ fontSize: 16, color: '#64748B' }} />
+                    )}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={opt.label}
+                    slotProps={{
+                      primary: {
+                        sx: {
+                          fontSize: '13px',
+                          fontWeight: opt.year === selectedBillYear ? 800 : 600,
+                          color: opt.isFuture ? '#94A3B8' : opt.year === selectedBillYear ? '#1E40AF' : '#1E293B',
+                        },
+                      },
+                    }}
+                  />
+                </MenuItem>
+              ))}
+            </Menu>
+
             <Button
               variant="outlined"
               onClick={handleResetToDefault}
@@ -1092,6 +1285,199 @@ export const SettingsPage: React.FC = () => {
                   />
                 </Grid>
               </Grid>
+            </Paper>
+
+            {/* Section 5: Annual Billing Restriction & Billing Period */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2.5,
+                borderRadius: '12px',
+                border: String(settings.billingYear) !== String(settings.systemYear || new Date().getFullYear())
+                  ? '1.5px solid #EF4444'
+                  : '1px solid #E2E8F0',
+                backgroundColor: '#FFFFFF',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CalendarMonthRoundedIcon sx={{ color: '#7C3AED', fontSize: 20 }} />
+                  <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#5B21B6' }}>
+                    Annual Billing & Billing Period
+                  </Typography>
+                </Box>
+
+                <Chip
+                  label={`Billing Status: ${settings.billingStatus || 'Active'}`}
+                  size="small"
+                  sx={{
+                    backgroundColor: '#DCFCE7',
+                    color: '#15803D',
+                    fontWeight: 800,
+                    fontSize: '12px',
+                    border: '1px solid #86EFAC',
+                  }}
+                />
+              </Box>
+
+              <Typography sx={{ fontSize: '12px', color: '#64748B', mb: 2 }}>
+                The billing year and annual billing dates are automatically synchronized with the authoritative system date.
+              </Typography>
+
+              {String(settings.billingYear) !== String(settings.systemYear || new Date().getFullYear()) && (
+                <Alert
+                  severity="error"
+                  sx={{ mb: 2, fontWeight: 700, borderRadius: '8px' }}
+                >
+                  Billing year cannot be changed manually. The billing year must remain synchronized with the current system date ({settings.systemYear || new Date().getFullYear()}).
+                </Alert>
+              )}
+
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="System Date"
+                    value={settings.systemDate || `${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`}
+                    slotProps={{
+                      input: {
+                        readOnly: true,
+                      },
+                    }}
+                    helperText="Authoritative server system date"
+                  />
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Current Billing Year *"
+                    value={settings.billingYear || ''}
+                    onChange={(e) => handleChange('billingYear', e.target.value)}
+                    error={String(settings.billingYear) !== String(settings.systemYear || new Date().getFullYear())}
+                    helperText={
+                      String(settings.billingYear) !== String(settings.systemYear || new Date().getFullYear())
+                        ? "Mismatched year! Must equal system year"
+                        : "Synchronized with system date"
+                    }
+                  />
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Billing Start Date"
+                    value={settings.billingStartDate || `01-01-${new Date().getFullYear()}`}
+                    slotProps={{
+                      input: {
+                        readOnly: true,
+                      },
+                    }}
+                    helperText="January 1 of current billing year"
+                  />
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Billing End Date"
+                    value={settings.billingEndDate || `31-12-${new Date().getFullYear()}`}
+                    slotProps={{
+                      input: {
+                        readOnly: true,
+                      },
+                    }}
+                    helperText="December 31 of current billing year"
+                  />
+                </Grid>
+              </Grid>
+
+              {/* Bill View Year Switcher Subsection */}
+              <Box
+                sx={{
+                  mt: 2.5,
+                  pt: 2,
+                  borderTop: '1px dashed #CBD5E1',
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <HistoryRoundedIcon sx={{ color: '#2563EB', fontSize: 18 }} />
+                    <Typography sx={{ fontSize: '14px', fontWeight: 800, color: '#1E40AF' }}>
+                      Bill View Year Switcher (Filter)
+                    </Typography>
+                  </Box>
+
+                  <Chip
+                    label={`Viewing: ${selectedBillYear} Bills`}
+                    color={selectedBillYear === (settings.systemYear || new Date().getFullYear().toString()) ? 'primary' : 'warning'}
+                    size="small"
+                    sx={{ fontWeight: 800, fontSize: '11.5px' }}
+                  />
+                </Box>
+
+                <Typography sx={{ fontSize: '11.5px', color: '#64748B', mb: 1.5 }}>
+                  Select a year below to view historical bills. Switching view year filters bill records without altering the system date or existing invoices.
+                </Typography>
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                  {getAvailableBillViewYears(settings.systemYear).map((opt) => {
+                    const isSelected = opt.year === selectedBillYear;
+                    return (
+                      <Button
+                        key={opt.year}
+                        variant={isSelected ? 'contained' : 'outlined'}
+                        size="small"
+                        onClick={() => handleSelectBillViewYear(opt.year, opt.isFuture)}
+                        startIcon={
+                          isSelected ? (
+                            <CheckRoundedIcon sx={{ fontSize: 16 }} />
+                          ) : opt.isFuture ? (
+                            <LockOutlinedIcon sx={{ fontSize: 15 }} />
+                          ) : (
+                            <HistoryRoundedIcon sx={{ fontSize: 15 }} />
+                          )
+                        }
+                        sx={{
+                          borderRadius: '8px',
+                          textTransform: 'none',
+                          fontWeight: isSelected ? 800 : 700,
+                          fontSize: '12.5px',
+                          px: 1.8,
+                          height: '34px',
+                          ...(isSelected && {
+                            backgroundColor: '#2563EB',
+                            color: '#FFFFFF',
+                          }),
+                          ...(!isSelected && !opt.isFuture && {
+                            borderColor: '#CBD5E1',
+                            color: '#334155',
+                            '&:hover': { backgroundColor: '#F1F5F9', borderColor: '#94A3B8' },
+                          }),
+                          ...(opt.isFuture && {
+                            borderColor: '#FCA5A5',
+                            color: '#9CA3AF',
+                            backgroundColor: '#FEF2F2',
+                          }),
+                        }}
+                      >
+                        {opt.year} {opt.year === (settings.systemYear || new Date().getFullYear().toString()) ? '(Current)' : ''}
+                      </Button>
+                    );
+                  })}
+                </Box>
+
+                {selectedBillYear !== (settings.systemYear || new Date().getFullYear().toString()) && (
+                  <Alert severity="info" sx={{ mt: 1.5, fontSize: '12px', fontWeight: 600, py: 0.5, borderRadius: '8px' }}>
+                    ℹ️ You are currently viewing historical bills generated in <strong>{selectedBillYear}</strong>. Authoritative system year remains <strong>{settings.systemYear || new Date().getFullYear()}</strong>.
+                  </Alert>
+                )}
+              </Box>
             </Paper>
           </Box>
         </Box>

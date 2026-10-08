@@ -37,6 +37,8 @@ import { getStoredSettings } from './SettingsPage';
 import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
 import { printBillDirectly } from '../utils/printUtils';
+import { getSelectedBillYear } from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 interface ProductRowItem {
   id: string;
@@ -443,6 +445,15 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({ initialCustomerName,
 
   // Save Bill to DB
   const handleSaveBill = async (actionType: 'save' | 'print' | 'share' = 'save') => {
+    if (!isEditMode) {
+      const currentSystemYear = new Date().getFullYear().toString();
+      const selectedViewYear = getSelectedBillYear();
+      if (selectedViewYear !== currentSystemYear) {
+        triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+        return;
+      }
+    }
+
     if (!customerName.trim()) {
       alert('Please select or enter Customer Name');
       return;

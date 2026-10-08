@@ -17,21 +17,64 @@ const adjustStock = async (_products: any[], _multiplier: number): Promise<void>
 
 export const getParticulars = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { customerName, billType } = req.query;
+    const { customerName, billType, year } = req.query;
     const filter: any = {};
-    if (customerName && typeof customerName === 'string' && customerName.trim() !== '' && customerName.toLowerCase() !== 'all') {
-      filter.customerName = { $regex: new RegExp(`^${escapeRegex(customerName.trim())}$`, 'i') };
+    const andConditions: any[] = [];
+
+    const currentSystemYear = new Date().getFullYear();
+
+    // 1. Backend Security Validation: Future Year Restriction
+    if (year && typeof year === 'string' && year.trim() !== '' && year.toLowerCase() !== 'all') {
+      const requestedYear = parseInt(year.trim(), 10);
+      if (!isNaN(requestedYear)) {
+        if (requestedYear > currentSystemYear) {
+          res.status(400).json({
+            success: false,
+            message: `${requestedYear} billing year is not available yet. The system is currently in ${currentSystemYear}.`,
+            error: 'Future billing years cannot be viewed before the system year changes.',
+          });
+          return;
+        }
+
+        const yearStr = requestedYear.toString();
+        const startOfYear = new Date(Date.UTC(requestedYear, 0, 1, 0, 0, 0));
+        const endOfYear = new Date(Date.UTC(requestedYear, 11, 31, 23, 59, 59, 999));
+
+        andConditions.push({
+          $or: [
+            { date: { $regex: new RegExp(yearStr) } },
+            { createdAt: { $gte: startOfYear, $lte: endOfYear } },
+          ],
+        });
+      }
     }
+
+    // 2. Customer Name Filter
+    if (customerName && typeof customerName === 'string' && customerName.trim() !== '' && customerName.toLowerCase() !== 'all') {
+      andConditions.push({
+        customerName: { $regex: new RegExp(`^${escapeRegex(customerName.trim())}$`, 'i') },
+      });
+    }
+
+    // 3. Bill Type Filter (GST / REGULAR)
     if (billType && typeof billType === 'string' && billType.trim() !== '' && billType.toLowerCase() !== 'all') {
       const bType = billType.trim().toUpperCase();
       if (bType === 'GST') {
-        filter.$or = [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }];
+        andConditions.push({
+          $or: [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }],
+        });
       } else if (bType === 'REGULAR') {
-        filter.billType = { $ne: 'GST' };
-        filter.billNo = { $not: { $regex: /^GST/i } };
+        andConditions.push({
+          billType: { $ne: 'GST' },
+          billNo: { $not: { $regex: /^GST/i } },
+        });
       } else {
-        filter.billType = bType;
+        andConditions.push({ billType: bType });
       }
+    }
+
+    if (andConditions.length > 0) {
+      filter.$and = andConditions;
     }
 
     const particulars = await Particular.find(filter).sort({ createdAt: -1, _id: -1 });
@@ -101,6 +144,18 @@ export const getNextBillNo = async (req: Request, res: Response, next: NextFunct
 
 export const createParticular = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const currentSystemYear = new Date().getFullYear().toString();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    // Backend Security Restriction: Bill creation ONLY allowed in current system year
+    if (selectedViewYear && String(selectedViewYear).trim() !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New bills can only be created in the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before creating a new bill.`,
+        error: 'Bill creation is only allowed in the current system year.',
+      });
+      return;
+    }
     const {
       customerName,
       customerPhone,
@@ -278,6 +333,7 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       sgstTotal: sgstTotal || '0.00',
       igstTotal: igstTotal || '0.00',
       roundOff: roundOff || '0.00',
+      year: currentSystemYear,
     });
 
     // 1. Automatically log Bill DEBIT to Account Ledger (Regular Bills ONLY, never for GST)

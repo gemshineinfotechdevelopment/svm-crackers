@@ -48,6 +48,8 @@ import { GstBillPrintModal } from './GstBillPrintModal';
 import type { GstBillPrintData, GstProductItem } from './GstBillPrintTemplate';
 import { numberToIndianWords } from '../utils/numberToWords';
 import { printGstBillDirectly } from '../utils/printUtils';
+import { getSelectedBillYear } from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 export const INDIAN_STATES = [
   { code: '33', name: 'Tamil Nadu' },
@@ -299,7 +301,8 @@ export const GstBillPage: FC = () => {
 
       let remoteBills: any[] = [];
       try {
-        const res = await ParticularsApi.getAll(undefined, 'GST');
+        const selectedYear = getSelectedBillYear();
+        const res = await ParticularsApi.getAll(undefined, 'GST', selectedYear);
         if (Array.isArray(res)) {
           remoteBills = res.filter((b: any) => b.billType === 'GST' || (b.billNo && String(b.billNo).toUpperCase().startsWith('GST')));
         }
@@ -340,7 +343,7 @@ export const GstBillPage: FC = () => {
     fetchGstHistory();
   }, []);
 
-  // Listen for settings update
+  // Listen for settings update & bill year changes
   useEffect(() => {
     const handleSettingsUpdate = () => {
       const s = getStoredSettings();
@@ -350,8 +353,16 @@ export const GstBillPage: FC = () => {
         setTopTurnoverInput(s.gstTurnoverCurrent);
       }
     };
+    const handleYearChange = () => {
+      fetchGstHistory();
+    };
+
     window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
-    return () => window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
+    window.addEventListener('apsara_bill_year_changed', handleYearChange);
+    return () => {
+      window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('apsara_bill_year_changed', handleYearChange);
+    };
   }, []);
 
   // Auto-sync customer details on selection
@@ -562,6 +573,13 @@ export const GstBillPage: FC = () => {
 
   // Save GST Bill
   const handleSaveGstBill = async (actionType: 'save' | 'print' | 'share' = 'save') => {
+    const currentSystemYear = new Date().getFullYear().toString();
+    const selectedViewYear = getSelectedBillYear();
+    if (selectedViewYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+      return;
+    }
+
     if (!customerName.trim()) {
       alert('Please specify a customer name');
       return;

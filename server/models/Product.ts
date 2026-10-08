@@ -8,6 +8,7 @@ export interface IProduct extends Document {
   rate?: number;
   mrp?: number;
   unit?: string;
+  year?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +22,7 @@ const ProductSchema: Schema = new Schema(
     rate: { type: Number, default: 0 },
     mrp: { type: Number, default: 0 },
     unit: { type: String, default: 'Box' },
+    year: { type: String, default: () => new Date().getFullYear().toString(), trim: true },
   },
   { timestamps: true, strict: false }
 );

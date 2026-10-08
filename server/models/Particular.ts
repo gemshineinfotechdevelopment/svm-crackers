@@ -49,6 +49,7 @@ export interface IParticular extends Document {
   sgstTotal?: string;
   igstTotal?: string;
   roundOff?: string;
+  year?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -103,6 +104,7 @@ const ParticularSchema: Schema = new Schema(
     sgstTotal: { type: String, default: '0.00' },
     igstTotal: { type: String, default: '0.00' },
     roundOff: { type: String, default: '0.00' },
+    year: { type: String, default: () => new Date().getFullYear().toString(), trim: true },
   },
   { timestamps: true }
 );
