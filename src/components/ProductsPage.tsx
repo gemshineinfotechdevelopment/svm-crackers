@@ -9,32 +9,21 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   IconButton,
-  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   CircularProgress,
-  InputBase,
-  Chip,
-  MenuItem,
-  Select,
-  FormControl,
-  Grid,
   Checkbox,
 } from '@mui/material';
-import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import ModeEditOutlineRoundedIcon from '@mui/icons-material/ModeEditOutlineRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import DeleteSweepRoundedIcon from '@mui/icons-material/DeleteSweepRounded';
-import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
+import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { ProductsApi, CategoriesApi, PriceListsApi } from '../services/api';
 import { printProductsListDirectly } from '../utils/printUtils';
 import { getSelectedBillYear } from '../utils/billYearUtils';
@@ -68,6 +57,11 @@ export const ProductsPage: FC = () => {
   const [productMrp, setProductMrp] = useState<string>('0');
   const [modalLoading, setModalLoading] = useState(false);
 
+  // Bulk delete state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   const fetchProductsAndPrices = async () => {
     try {
       setLoading(true);
@@ -87,7 +81,6 @@ export const ProductsPage: FC = () => {
         });
       }
 
-      // Merge product list with price list data so latest amounts and stocks are always reflected
       let mergedProducts: ProductItem[] = [];
       const seenNames = new Set<string>();
 
@@ -110,7 +103,6 @@ export const ProductsPage: FC = () => {
         });
       }
 
-      // If price list has items that aren't yet in products, include them too
       if (Array.isArray(priceData)) {
         let maxSlNo = mergedProducts.length > 0 ? Math.max(...mergedProducts.map((p) => p.slNo || 0)) : 0;
         priceData.forEach((pItem: any) => {
@@ -239,20 +231,9 @@ export const ProductsPage: FC = () => {
     }
   };
 
-  // Selection & Bulk Delete State
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
-
   const isAllSelected = useMemo(() => {
     if (filteredProducts.length === 0) return false;
     return filteredProducts.every((p) => selectedIds.includes(p._id || p.id || ''));
-  }, [filteredProducts, selectedIds]);
-
-  const isSomeSelected = useMemo(() => {
-    if (filteredProducts.length === 0) return false;
-    const count = filteredProducts.filter((p) => selectedIds.includes(p._id || p.id || '')).length;
-    return count > 0 && count < filteredProducts.length;
   }, [filteredProducts, selectedIds]);
 
   const handleToggleSelectAll = () => {
@@ -303,883 +284,539 @@ export const ProductsPage: FC = () => {
     }
   };
 
+  const handlePrint = () => {
+    printProductsListDirectly(filteredProducts, selectedCategory);
+  };
+
   return (
-    <Box
-      sx={{
-        width: '100%',
-        px: { xs: 1, sm: 1.5, md: 2 },
-        py: 1,
-        boxSizing: 'border-box',
-      }}
-    >
-      <Paper
-        elevation={0}
+    <Box sx={{ width: '100%', p: { xs: 1, sm: 1.5 }, bgcolor: '#D9E4F2', minHeight: 'calc(100vh - 70px)' }}>
+      {/* Outer Window Card */}
+      <Box
         sx={{
-          width: '100%',
-          backgroundColor: '#FFFFFF',
-          borderRadius: '14px',
-          border: '1.5px solid #E2E8F0',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+          bgcolor: '#FFFFFF',
+          border: '1px solid #9BB3CC',
+          borderRadius: '4px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
           overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        {/* Festive Crimson & Gold Header Banner */}
+        {/* Window Title Header Bar */}
         <Box
           sx={{
-            background: 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)',
-            borderBottom: '2px solid #F59E0B',
-            px: { xs: 2, sm: 3 },
-            py: 1.5,
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            px: 1.5,
+            py: 0.8,
             display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            alignItems: { xs: 'stretch', sm: 'center' },
+            alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 1.5,
-            minHeight: '60px',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Box
-              sx={{
-                width: 38,
-                height: 38,
-                borderRadius: '8px',
-                backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Inventory2RoundedIcon sx={{ color: '#FEF08A', fontSize: 22 }} />
-            </Box>
-            <Box>
-              <Typography
-                sx={{
-                  color: '#FFFFFF',
-                  fontSize: '18px',
-                  fontWeight: 800,
-                  letterSpacing: '-0.01em',
-                  lineHeight: 1.2,
-                }}
-              >
-                Products & Price Catalog
-              </Typography>
-              <Typography sx={{ color: '#FEF08A', fontSize: '11.5px', fontWeight: 600 }}>
-                Synced directly with Price List & Categories
-              </Typography>
-            </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Inventory2RoundedIcon sx={{ fontSize: 18, color: '#0284C7' }} />
             <Typography
               sx={{
-                color: '#FEF08A',
-                fontSize: '12px',
+                fontSize: '13px',
                 fontWeight: 700,
-                backgroundColor: 'rgba(254, 240, 138, 0.2)',
-                border: '1px solid rgba(254, 240, 138, 0.35)',
-                px: 1.2,
-                py: 0.3,
-                borderRadius: '12px',
-                ml: 1,
+                color: '#0F172A',
+                letterSpacing: '0.01em',
               }}
             >
-              {filteredProducts.length} items
+              Product Master & Price Catalog
             </Typography>
           </Box>
 
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.5,
-              flexWrap: { xs: 'wrap', sm: 'nowrap' },
-            }}
-          >
-            {/* Search Box */}
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                backgroundColor: '#FFFFFF',
-                borderRadius: '8px',
-                px: 1.2,
-                height: '38px',
-                width: { xs: '100%', sm: '220px' },
-                boxSizing: 'border-box',
-                border: '1.5px solid #E2E8F0',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-              }}
-            >
-              <SearchRoundedIcon sx={{ color: '#D97706', fontSize: 19, mr: 0.8, flexShrink: 0 }} />
-              <InputBase
-                placeholder="Search products..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                sx={{
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: '#1F1714',
-                  width: '100%',
-                  '& input': {
-                    p: 0,
-                    '&::placeholder': { color: '#A8998A', opacity: 1 },
-                  },
-                }}
-              />
-              {searchTerm && (
-                <IconButton
-                  size="small"
-                  onClick={() => setSearchTerm('')}
-                  sx={{ p: 0.4, color: '#D97706', '&:hover': { color: '#B45309' } }}
-                >
-                  <ClearRoundedIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              )}
-            </Box>
-
-            {/* Print Products List Button */}
-            <Button
-              variant="contained"
-              disableElevation
-              onClick={() => printProductsListDirectly(filteredProducts)}
-              startIcon={<PrintOutlinedIcon sx={{ fontSize: 18 }} />}
-              sx={{
-                backgroundColor: 'rgba(255, 255, 255, 0.18)',
-                color: '#FFFFFF',
-                border: '1px solid rgba(254, 240, 138, 0.4)',
-                fontSize: '13px',
-                fontWeight: 700,
-                textTransform: 'none',
-                px: 1.8,
-                height: '38px',
-                borderRadius: '8px',
-                whiteSpace: 'nowrap',
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                },
-              }}
-            >
-              Print List
-            </Button>
-
-            {/* Add Product Button */}
-            <Button
-              variant="contained"
-              disableElevation
-              onClick={handleOpenAdd}
-              startIcon={<AddRoundedIcon sx={{ fontSize: 18 }} />}
-              sx={{
-                backgroundColor: '#FFFFFF',
-                color: '#B91C1C',
-                border: '1.5px solid #E2E8F0',
-                fontSize: '13px',
-                fontWeight: 800,
-                textTransform: 'none',
-                px: 2,
-                height: '38px',
-                borderRadius: '8px',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
-                whiteSpace: 'nowrap',
-                '&:hover': {
-                  backgroundColor: '#F8FAFC',
-                },
-              }}
-            >
-              Add Product
-            </Button>
-          </Box>
-        </Box>
-
-        {/* Category Pills Filter */}
-        <Box
-          sx={{
-            p: 1.2,
-            px: { xs: 2, sm: 3 },
-            backgroundColor: '#FFFFFF',
-            borderBottom: '1px solid #E2E8F0',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            overflowX: 'auto',
-            scrollbarWidth: 'none',
-            '&::-webkit-scrollbar': { display: 'none' },
-          }}
-        >
-          <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#334155', mr: 0.5, flexShrink: 0 }}>
-            Category:
+          <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#1E3A8A' }}>
+            Total Products: {products.length} ({filteredProducts.length} shown)
           </Typography>
-
-          <Chip
-            label={`All (${products.length})`}
-            onClick={() => setSelectedCategory('ALL')}
-            size="small"
-            sx={{
-              fontWeight: 700,
-              fontSize: '12px',
-              cursor: 'pointer',
-              backgroundColor: selectedCategory === 'ALL' ? '#B91C1C' : '#FFFFFF',
-              color: selectedCategory === 'ALL' ? '#FFFFFF' : '#475569',
-              border: selectedCategory === 'ALL' ? '1px solid #991B1B' : '1px solid #E2E8F0',
-              '&:hover': {
-                backgroundColor: selectedCategory === 'ALL' ? '#991B1B' : '#F1F5F9',
-              },
-            }}
-          />
-
-          {categories.map((cat) => {
-            const isSelected = selectedCategory === cat.name;
-            const count = products.filter((p) => p.category === cat.name).length;
-            return (
-              <Chip
-                key={cat.name}
-                label={`${cat.name} (${count})`}
-                onClick={() => setSelectedCategory(cat.name)}
-                size="small"
-                sx={{
-                  fontWeight: 700,
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  backgroundColor: isSelected ? '#B91C1C' : '#FFFFFF',
-                  color: isSelected ? '#FFFFFF' : '#57463A',
-                  border: isSelected ? '1px solid #991B1B' : '1px solid #E5E7EB',
-                  '&:hover': {
-                    backgroundColor: isSelected ? '#991B1B' : '#F3F4F6',
-                  },
-                }}
-              />
-            );
-          })}
         </Box>
 
-        {/* Bulk Selection Action Bar */}
-        {selectedIds.length > 0 && (
+        {/* Inner Content Area */}
+        <Box sx={{ p: { xs: 1, sm: 1.5 }, bgcolor: '#F0F5FA' }}>
+          {/* Top Control Bar */}
           <Box
             sx={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: '#FEF2F2',
-              borderBottom: '2px solid #FECACA',
-              px: { xs: 2, sm: 3 },
-              py: 1.2,
-              animation: 'fadeIn 0.2s ease-in-out',
+              gap: 1,
+              mb: 1,
+              bgcolor: '#FFFFFF',
+              border: '1px solid #B0C4DE',
+              borderRadius: '3px',
+              p: 0.8,
+              flexWrap: 'wrap',
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-              <Typography sx={{ fontSize: '13.5px', fontWeight: 800, color: '#991B1B' }}>
-                {selectedIds.length} {selectedIds.length === 1 ? 'product' : 'products'} selected
+            {/* Left: Category Selector + Search */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>
+                Category:
               </Typography>
-              <Button
-                size="small"
-                onClick={() => setSelectedIds([])}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  color: '#7F1D1D',
-                  p: 0,
-                  minWidth: 'auto',
-                  textDecoration: 'underline',
-                  '&:hover': { backgroundColor: 'transparent', color: '#991B1B' },
-                }}
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="erp-input"
+                style={{ fontSize: '12px', minWidth: '150px' }}
               >
-                Deselect All
-              </Button>
+                <option value="ALL">All Categories</option>
+                {categories.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+
+              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 1 }}>
+                Search:
+              </Typography>
+              <input
+                type="text"
+                placeholder="Filter by name, rate, code..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="erp-input"
+                style={{ width: '200px' }}
+              />
+              {searchTerm && (
+                <IconButton size="small" onClick={() => setSearchTerm('')} sx={{ p: 0.2 }}>
+                  <ClearRoundedIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+              )}
             </Box>
 
+            {/* Right: Actions */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {selectedIds.length > 0 && (
+                <Button
+                  onClick={() => setBulkDeleteDialogOpen(true)}
+                  startIcon={<DeleteSweepRoundedIcon sx={{ fontSize: 14 }} />}
+                  size="small"
+                  sx={{
+                    height: '26px',
+                    bgcolor: '#FEF2F2',
+                    border: '1px solid #FECACA',
+                    color: '#DC2626',
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    px: 1.5,
+                    borderRadius: '3px',
+                    textTransform: 'none',
+                    '&:hover': { bgcolor: '#FEE2E2' },
+                  }}
+                >
+                  Delete Selected ({selectedIds.length})
+                </Button>
+              )}
+
               <Button
-                variant="contained"
+                onClick={handlePrint}
+                startIcon={<PrintOutlinedIcon sx={{ fontSize: 14 }} />}
                 size="small"
-                onClick={() => setBulkDeleteDialogOpen(true)}
-                startIcon={<DeleteSweepRoundedIcon sx={{ fontSize: 18 }} />}
                 sx={{
-                  backgroundColor: '#DC2626',
-                  color: '#FFFFFF',
-                  fontSize: '12.5px',
-                  fontWeight: 800,
+                  height: '26px',
+                  bgcolor: '#EDF4FB',
+                  border: '1px solid #94A3B8',
+                  color: '#0F172A',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  px: 1.5,
+                  borderRadius: '3px',
                   textTransform: 'none',
-                  px: 2,
-                  py: 0.6,
-                  borderRadius: '7px',
-                  boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)',
-                  '&:hover': {
-                    backgroundColor: '#B91C1C',
-                  },
+                  '&:hover': { bgcolor: '#D9E4F2' },
                 }}
               >
-                Delete Selected ({selectedIds.length})
+                Print Catalog
+              </Button>
+
+              <Button
+                onClick={fetchProductsAndPrices}
+                startIcon={<RefreshRoundedIcon sx={{ fontSize: 14 }} />}
+                size="small"
+                sx={{
+                  height: '26px',
+                  bgcolor: '#EDF4FB',
+                  border: '1px solid #94A3B8',
+                  color: '#0F172A',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  px: 1.5,
+                  borderRadius: '3px',
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: '#D9E4F2' },
+                }}
+              >
+                Refresh
+              </Button>
+
+              <Button
+                onClick={handleOpenAdd}
+                startIcon={<AddRoundedIcon sx={{ fontSize: 15 }} />}
+                size="small"
+                sx={{
+                  height: '26px',
+                  bgcolor: '#741748',
+                  color: '#FFFFFF',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  px: 1.5,
+                  borderRadius: '3px',
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: '#580e34' },
+                }}
+              >
+                Add Product
               </Button>
             </Box>
           </Box>
-        )}
 
-        {/* Table Container */}
-        <TableContainer sx={{ height: { xs: 'auto', md: 'calc(100vh - 185px)' }, maxHeight: { xs: '550px', md: 'calc(100vh - 185px)' }, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <Table stickyHeader sx={{ minWidth: { xs: '700px', sm: '100%' } }} aria-label="product table">
-            <TableHead>
-              <TableRow sx={{ backgroundColor: '#F8FAFC' }}>
-                {/* Select All Checkbox Column */}
-                <TableCell
-                  align="center"
-                  sx={{
-                    py: 1.5,
-                    px: 1.5,
-                    backgroundColor: '#F8FAFC',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '48px',
-                  }}
-                >
-                  <Checkbox
-                    size="small"
-                    checked={isAllSelected}
-                    indeterminate={isSomeSelected}
-                    onChange={handleToggleSelectAll}
-                    disabled={filteredProducts.length === 0}
-                    sx={{
-                      p: 0,
-                      color: '#D97706',
-                      '&.Mui-checked': { color: '#DC2626' },
-                      '&.MuiCheckbox-indeterminate': { color: '#DC2626' },
-                    }}
-                  />
-                </TableCell>
-                <TableCell
-                  sx={{
-                    py: 1.5,
-                    px: { xs: 1.5, sm: 2.5 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    backgroundColor: '#F8FAFC',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '70px',
-                  }}
-                >
-                  SL.NO
-                </TableCell>
-                <TableCell
-                  sx={{
-                    py: 1.5,
-                    px: { xs: 2, sm: 3 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    backgroundColor: '#F8FAFC',
-                    borderBottom: '2px solid #E2E8F0',
-                  }}
-                >
-                  PRODUCT NAME
-                </TableCell>
-                <TableCell
-                  sx={{
-                    py: 1.5,
-                    px: { xs: 1.5, sm: 2.5 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    backgroundColor: '#F8FAFC',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '200px',
-                  }}
-                >
-                  CATEGORY
-                </TableCell>
-                <TableCell
-                  align="center"
-                  sx={{
-                    py: 1.5,
-                    px: { xs: 1, sm: 2 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    backgroundColor: '#F8FAFC',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '90px',
-                  }}
-                >
-                  UNIT
-                </TableCell>
-                <TableCell
-                  align="right"
-                  sx={{
-                    py: 1.5,
-                    px: { xs: 1.5, sm: 2.5 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    backgroundColor: '#F8FAFC',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '110px',
-                  }}
-                >
-                  MRP (₹)
-                </TableCell>
-                <TableCell
-                  align="right"
-                  sx={{
-                    py: 1.5,
-                    px: { xs: 2, sm: 2.5 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    backgroundColor: '#F8FAFC',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '130px',
-                  }}
-                >
-                  RATE / PRICE (₹)
-                </TableCell>
-
-                <TableCell
-                  align="center"
-                  sx={{
-                    py: 1.5,
-                    px: { xs: 1, sm: 2 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    backgroundColor: '#F8FAFC',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '65px',
-                  }}
-                >
-                  EDIT
-                </TableCell>
-                <TableCell
-                  align="center"
-                  sx={{
-                    py: 1.5,
-                    px: { xs: 1, sm: 2 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    backgroundColor: '#F8FAFC',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '65px',
-                  }}
-                >
-                  DELETE
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={12} align="center" sx={{ py: 6 }}>
-                    <CircularProgress size={32} sx={{ color: '#DC2626' }} />
-                  </TableCell>
-                </TableRow>
-              ) : filteredProducts.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={12} align="center" sx={{ py: 6, color: '#786C58' }}>
-                    {searchTerm ? (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                        <Typography sx={{ fontSize: '14px', color: '#786C58', fontWeight: 500 }}>
-                          No products matching "{searchTerm}" found.
-                        </Typography>
-                        <Button
-                          size="small"
-                          onClick={() => setSearchTerm('')}
-                          sx={{ textTransform: 'none', color: '#B91C1C', fontWeight: 700 }}
-                        >
-                          Clear Search
-                        </Button>
-                      </Box>
-                    ) : (
-                      'No products found. Upload a price list or click "Add Product" to add one.'
-                    )}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredProducts.map((product, index) => {
-                  const prodId = product._id || product.id || String(index);
-                  const isSelected = selectedIds.includes(prodId);
-                  const isLast = index === filteredProducts.length - 1;
-
-                  return (
-                    <TableRow
-                      key={prodId}
-                      selected={isSelected}
-                      sx={{
-                        backgroundColor: isSelected ? '#FEF2F2 !important' : 'inherit',
-                        '&:hover': {
-                          backgroundColor: isSelected ? '#FEE2E2 !important' : '#FEFDF5',
-                        },
-                      }}
-                    >
-                      {/* Checkbox Cell */}
-                      <TableCell
-                        align="center"
-                        sx={{
-                          py: 1.4,
-                          px: 1.5,
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        <Checkbox
-                          size="small"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(prodId)}
-                          sx={{
-                            p: 0,
-                            color: '#D1D5DB',
-                            '&.Mui-checked': { color: '#DC2626' },
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          py: 1.4,
-                          px: { xs: 1.5, sm: 2.5 },
-                          fontSize: '13.5px',
-                          fontWeight: 700,
-                          color: '#786C58',
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        {product.slNo || index + 1}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          py: 1.4,
-                          px: { xs: 2, sm: 3 },
-                          fontSize: '14px',
-                          fontWeight: 700,
-                          color: '#1F1714',
-                          letterSpacing: '0.01em',
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        {product.name}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          py: 1.4,
-                          px: { xs: 1.5, sm: 2.5 },
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        <Chip
-                          label={product.category || 'General'}
-                          size="small"
-                          sx={{
-                            fontSize: '11.5px',
-                            fontWeight: 700,
-                            backgroundColor: '#F8FAFC',
-                            color: '#334155',
-                            border: '1px solid #E2E8F0',
-                            borderRadius: '6px',
-                            height: '24px',
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell
-                        align="center"
-                        sx={{
-                          py: 1.4,
-                          px: { xs: 1, sm: 2 },
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          color: '#57463A',
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        {product.unit || 'Box'}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          py: 1.4,
-                          px: { xs: 1.5, sm: 2.5 },
-                          fontSize: '13.5px',
-                          fontWeight: 600,
-                          color: '#6B7280',
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        {product.mrp ? `₹${Number(product.mrp).toLocaleString('en-IN')}` : '—'}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          py: 1.4,
-                          px: { xs: 2, sm: 2.5 },
-                          fontSize: '14.5px',
-                          fontWeight: 800,
-                          color: '#B91C1C',
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        ₹{Number(product.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </TableCell>
-
-
-
-                      {/* Edit Button */}
-                      <TableCell
-                        align="center"
-                        sx={{
-                          py: 1.4,
-                          px: { xs: 1, sm: 2 },
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        <Tooltip title="Edit Product" arrow>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenEdit(product)}
-                            sx={{
-                              color: '#D97706',
-                              backgroundColor: '#F8FAFC',
-                              border: '1px solid #E2E8F0',
-                              borderRadius: '6px',
-                              p: 0.6,
-                              transition: 'all 0.15s ease',
-                              '&:hover': {
-                                color: '#FFFFFF',
-                                backgroundColor: '#D97706',
-                                borderColor: '#D97706',
-                              },
-                            }}
-                          >
-                            <ModeEditOutlineRoundedIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-
-                      {/* Delete Button */}
-                      <TableCell
-                        align="center"
-                        sx={{
-                          py: 1.4,
-                          px: { xs: 1, sm: 2 },
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        <Tooltip title="Delete Product" arrow>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDeleteProduct(product)}
-                            sx={{
-                              color: '#DC2626',
-                              backgroundColor: '#FEF2F2',
-                              border: '1px solid #FECACA',
-                              borderRadius: '6px',
-                              p: 0.6,
-                              transition: 'all 0.15s ease',
-                              '&:hover': {
-                                color: '#FFFFFF',
-                                backgroundColor: '#DC2626',
-                                borderColor: '#DC2626',
-                              },
-                            }}
-                          >
-                            <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-
-      {/* Bulk Delete Confirmation Dialog */}
-      <Dialog
-        open={bulkDeleteDialogOpen}
-        onClose={() => !bulkDeleting && setBulkDeleteDialogOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: {
-              borderRadius: '14px',
-              p: 1,
-              border: '1.5px solid #FECACA',
-            },
-          },
-        }}
-      >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.2, color: '#DC2626', fontWeight: 800, fontSize: '17px' }}>
-          <WarningAmberRoundedIcon sx={{ color: '#DC2626', fontSize: 24 }} />
-          Bulk Delete Confirmation
-        </DialogTitle>
-        <DialogContent sx={{ pt: '10px !important' }}>
-          <Typography sx={{ fontSize: '13.5px', color: '#1F2937', fontWeight: 600, mb: 1.5 }}>
-            Are you sure you want to permanently delete <strong>{selectedIds.length}</strong> selected products?
-          </Typography>
-          <Typography sx={{ fontSize: '12px', color: '#6B7280', lineHeight: 1.5, backgroundColor: '#FEF2F2', p: 1.5, borderRadius: '8px', border: '1px solid #FECACA' }}>
-            ⚠️ This will remove these products from both the Products catalog and the synced Price List. This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 1 }}>
-          <Button
-            onClick={() => setBulkDeleteDialogOpen(false)}
-            disabled={bulkDeleting}
-            sx={{ color: '#6B7280', fontWeight: 700, textTransform: 'none' }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleConfirmBulkDelete}
-            disabled={bulkDeleting}
-            startIcon={bulkDeleting ? <CircularProgress size={16} color="inherit" /> : <DeleteSweepRoundedIcon />}
+          {/* Products Table */}
+          <Box
             sx={{
-              backgroundColor: '#DC2626',
-              fontWeight: 800,
-              textTransform: 'none',
-              px: 2.5,
-              borderRadius: '8px',
-              boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
-              '&:hover': { backgroundColor: '#B91C1C' },
+              bgcolor: '#FFFFFF',
+              border: '1px solid #B0C4DE',
+              borderRadius: '3px',
+              overflow: 'hidden',
             }}
           >
-            {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.length} Products`}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <TableContainer sx={{ maxHeight: 'calc(100vh - 210px)', minHeight: '380px' }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: '#DCE7F5' }}>
+                    <TableCell sx={{ width: '38px', bgcolor: '#DCE7F5', p: 0.5, textAlign: 'center' }}>
+                      <Checkbox
+                        size="small"
+                        checked={isAllSelected}
+                        onChange={handleToggleSelectAll}
+                        sx={{ p: 0.2 }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ width: '55px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      S.No
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Product Name
+                    </TableCell>
+                    <TableCell sx={{ width: '160px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Category
+                    </TableCell>
+                    <TableCell sx={{ width: '80px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Unit
+                    </TableCell>
+                    <TableCell sx={{ width: '100px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      MRP (₹)
+                    </TableCell>
+                    <TableCell sx={{ width: '110px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Rate (₹)
+                    </TableCell>
+                    <TableCell align="center" sx={{ width: '130px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Actions
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                        <CircularProgress size={24} sx={{ color: '#1E40AF' }} />
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredProducts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
+                        {searchTerm ? 'No products match your search.' : 'No products found.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredProducts.map((p, idx) => {
+                      const pId = p._id || p.id || '';
+                      const isChecked = selectedIds.includes(pId);
 
+                      return (
+                        <TableRow
+                          key={pId || idx}
+                          sx={{
+                            '&:hover': { bgcolor: '#F1F7FD' },
+                            '& td': { borderBottom: '1px solid #E2E8F0', py: 0.4 },
+                          }}
+                        >
+                          <TableCell sx={{ textAlign: 'center', p: 0.5 }}>
+                            <Checkbox
+                              size="small"
+                              checked={isChecked}
+                              onChange={() => handleToggleSelect(pId)}
+                              sx={{ p: 0.2 }}
+                            />
+                          </TableCell>
+
+                          <TableCell sx={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748B' }}>
+                            {p.slNo || idx + 1}
+                          </TableCell>
+
+                          <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                            {p.name}
+                          </TableCell>
+
+                          <TableCell sx={{ fontSize: '12px', color: '#1E40AF', fontWeight: 600 }}>
+                            {p.category || 'General'}
+                          </TableCell>
+
+                          <TableCell sx={{ fontSize: '12px', color: '#334155' }}>
+                            {p.unit || 'Box'}
+                          </TableCell>
+
+                          <TableCell sx={{ textAlign: 'right', fontSize: '12px', color: '#64748B' }}>
+                            {p.mrp ? `₹${p.mrp}` : '-'}
+                          </TableCell>
+
+                          <TableCell sx={{ textAlign: 'right', fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                            ₹{p.rate || 0}
+                          </TableCell>
+
+                          <TableCell align="center">
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                              <Button
+                                size="small"
+                                onClick={() => handleOpenEdit(p)}
+                                sx={{
+                                  height: '24px',
+                                  px: 1,
+                                  py: 0,
+                                  bgcolor: '#EDF4FB',
+                                  border: '1px solid #94A3B8',
+                                  color: '#0F172A',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  textTransform: 'none',
+                                  borderRadius: '2px',
+                                  '&:hover': { bgcolor: '#D9E4F2' },
+                                }}
+                              >
+                                Edit
+                              </Button>
+
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDeleteProduct(p)}
+                                sx={{
+                                  color: '#DC2626',
+                                  bgcolor: '#FEF2F2',
+                                  border: '1px solid #FECACA',
+                                  borderRadius: '2px',
+                                  p: 0.3,
+                                  '&:hover': { bgcolor: '#DC2626', color: '#FFFFFF' },
+                                }}
+                              >
+                                <DeleteOutlineRoundedIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </Box>
+      </Box>
 
       {/* Add / Edit Product Modal */}
       <Dialog
         open={openModal}
         onClose={() => setOpenModal(false)}
-        maxWidth="sm"
+        maxWidth="xs"
         fullWidth
         slotProps={{
           paper: {
             sx: {
-              borderRadius: '14px',
-              p: 1,
-              border: '1.5px solid #E2E8F0',
+              borderRadius: '4px',
+              border: '1px solid #9BB3CC',
+              overflow: 'hidden',
             },
           },
         }}
       >
-        <DialogTitle sx={{ fontSize: '18px', fontWeight: 800, color: '#B91C1C' }}>
+        <DialogTitle
+          sx={{
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            fontWeight: 700,
+            fontSize: '13.5px',
+            color: '#0F172A',
+            py: 1,
+            px: 2,
+          }}
+        >
           {editingProduct ? 'Edit Product' : 'Add New Product'}
         </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '10px !important' }}>
+
+        <DialogContent sx={{ bgcolor: '#F0F5FA', display: 'flex', flexDirection: 'column', gap: 1.2, p: 2 }}>
           <Box>
-            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.3 }}>
               Product Name *
             </Typography>
-            <TextField
-              autoFocus
-              fullWidth
-              size="small"
-              placeholder="e.g. 2 1/2 KURUVI"
+            <input
+              type="text"
+              placeholder="e.g. 2 3/4 Kuruvi Crackers"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
-              slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 600 } } }}
+              className="erp-input"
+              style={{ width: '100%' }}
             />
           </Box>
 
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
-                Category
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={productCategory}
-                  onChange={(e) => setProductCategory(e.target.value)}
-                  sx={{ fontSize: '13.5px', fontWeight: 600 }}
-                >
-                  {categories.map((c) => (
-                    <MenuItem key={c.name} value={c.name}>
-                      {c.name}
-                    </MenuItem>
-                  ))}
-                  {categories.every((c) => c.name !== productCategory) && (
-                    <MenuItem value={productCategory}>{productCategory}</MenuItem>
-                  )}
-                </Select>
-              </FormControl>
-            </Grid>
+          <Box>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.3 }}>
+              Category
+            </Typography>
+            <select
+              value={productCategory}
+              onChange={(e) => setProductCategory(e.target.value)}
+              className="erp-input"
+              style={{ width: '100%' }}
+            >
+              {categories.map((c) => (
+                <option key={c.name} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+              {categories.length === 0 && <option value="General">General</option>}
+            </select>
+          </Box>
 
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+            <Box>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.3 }}>
                 Unit
               </Typography>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="Box, Pcs, Pkt"
+              <input
+                type="text"
+                placeholder="e.g. Box / Pkt"
                 value={productUnit}
                 onChange={(e) => setProductUnit(e.target.value)}
-                slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 600 } } }}
+                className="erp-input"
+                style={{ width: '100%' }}
               />
-            </Grid>
-          </Grid>
+            </Box>
 
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
-                MRP (₹)
+            <Box>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.3 }}>
+                Rate / Price (₹) *
               </Typography>
-              <TextField
-                fullWidth
-                size="small"
-                type="number"
-                value={productMrp}
-                onChange={(e) => setProductMrp(e.target.value)}
-                slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 600 } } }}
-              />
-            </Grid>
-
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#B91C1C', mb: 0.6 }}>
-                Selling Rate / Price (₹) *
-              </Typography>
-              <TextField
-                fullWidth
-                size="small"
+              <input
                 type="number"
                 value={productRate}
                 onChange={(e) => setProductRate(e.target.value)}
-                slotProps={{ input: { sx: { fontSize: '14px', fontWeight: 800, color: '#B91C1C' } } }}
+                className="erp-input"
+                style={{ width: '100%', textAlign: 'right', fontWeight: 700 }}
               />
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
 
-
+          <Box>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.3 }}>
+              M.R.P (₹)
+            </Typography>
+            <input
+              type="number"
+              value={productMrp}
+              onChange={(e) => setProductMrp(e.target.value)}
+              className="erp-input"
+              style={{ width: '100%', textAlign: 'right' }}
+            />
+          </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 1 }}>
+
+        <DialogActions sx={{ bgcolor: '#EDF4FB', borderTop: '1px solid #B0C4DE', p: 1 }}>
           <Button
             onClick={() => setOpenModal(false)}
-            sx={{ color: '#786C58', fontWeight: 600, textTransform: 'none' }}
+            sx={{ textTransform: 'none', color: '#0F172A', fontWeight: 700, fontSize: '12px' }}
           >
             Cancel
           </Button>
           <Button
-            variant="contained"
-            disableElevation
             onClick={handleSaveProduct}
             disabled={modalLoading}
+            variant="contained"
+            size="small"
             sx={{
-              background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
+              bgcolor: '#741748',
               color: '#FFFFFF',
               fontWeight: 700,
+              fontSize: '12px',
               textTransform: 'none',
-              px: 3,
-              borderRadius: '8px',
-              '&:hover': { background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)' },
+              px: 2.5,
+              borderRadius: '3px',
+              '&:hover': { bgcolor: '#580e34' },
             }}
           >
-            {modalLoading ? 'Saving...' : 'Save Product'}
+            {modalLoading ? <CircularProgress size={16} color="inherit" /> : 'Save Product'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bulk Delete Confirm Dialog */}
+      <Dialog
+        open={bulkDeleteDialogOpen}
+        onClose={() => setBulkDeleteDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '4px',
+              border: '1px solid #9BB3CC',
+              overflow: 'hidden',
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            fontWeight: 700,
+            fontSize: '13.5px',
+            color: '#0F172A',
+            py: 1,
+            px: 2,
+          }}
+        >
+          Confirm Bulk Deletion
+        </DialogTitle>
+        <DialogContent sx={{ bgcolor: '#F0F5FA', p: 2 }}>
+          <Typography sx={{ fontSize: '12.5px', color: '#0F172A' }}>
+            Are you sure you want to permanently delete {selectedIds.length} selected products?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ bgcolor: '#EDF4FB', borderTop: '1px solid #B0C4DE', p: 1 }}>
+          <Button
+            onClick={() => setBulkDeleteDialogOpen(false)}
+            sx={{ textTransform: 'none', color: '#0F172A', fontWeight: 700, fontSize: '12px' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmBulkDelete}
+            disabled={bulkDeleting}
+            variant="contained"
+            size="small"
+            sx={{
+              bgcolor: '#DC2626',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '12px',
+              textTransform: 'none',
+              px: 2,
+              borderRadius: '3px',
+              '&:hover': { bgcolor: '#B91C1C' },
+            }}
+          >
+            {bulkDeleting ? <CircularProgress size={16} color="inherit" /> : 'Delete Selected'}
           </Button>
         </DialogActions>
       </Dialog>

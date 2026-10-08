@@ -3,40 +3,27 @@ import {
   Box,
   Typography,
   Button,
-  InputBase,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   IconButton,
-  Tooltip,
   CircularProgress,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  Chip,
-  Autocomplete,
-  Divider,
 } from '@mui/material';
-import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import ModeEditOutlineRoundedIcon from '@mui/icons-material/ModeEditOutlineRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
-import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded';
 import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
-import PhoneOutlinedIcon from '@mui/icons-material/PhoneOutlined';
-import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
-import AddCircleOutlineRoundedIcon from '@mui/icons-material/AddCircleOutlineRounded';
-import { CustomersApi, ParticularsApi, ProductsApi, PriceListsApi } from '../services/api';
+import { CustomersApi, ParticularsApi } from '../services/api';
 import { printCustomerListDirectly } from '../utils/printUtils';
 import { DateRangePrintModal } from './DateRangePrintModal';
 import { BillPrintModal } from './BillPrintModal';
@@ -100,7 +87,6 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
   // Edit Bill State & Catalog
   const [openEditBillModal, setOpenEditBillModal] = useState(false);
   const [editingBill, setEditingBill] = useState<any | null>(null);
-  const [productCatalog, setProductCatalog] = useState<{ id: string; name: string; rate?: number; unit?: string }[]>([]);
   const [editBillFormData, setEditBillFormData] = useState<{
     billNo: string;
     date: string;
@@ -173,42 +159,9 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
     }
   };
 
-  const fetchProductCatalog = async () => {
-    try {
-      const [prods, priceList] = await Promise.all([
-        ProductsApi.getAll().catch(() => []),
-        PriceListsApi.getAll().catch(() => []),
-      ]);
-      const map = new Map<string, { id: string; name: string; rate?: number; unit?: string }>();
-      if (Array.isArray(prods)) {
-        prods.forEach((p: any) => {
-          if (p.name) map.set(p.name.trim().toLowerCase(), { id: p._id || p.id, name: p.name.trim(), rate: p.rate || 0, unit: p.unit || 'Box' });
-        });
-      }
-      if (Array.isArray(priceList)) {
-        priceList.forEach((item: any) => {
-          if (item.itemName) {
-            const key = item.itemName.trim().toLowerCase();
-            const existing = map.get(key);
-            map.set(key, {
-              id: item._id || item.id || existing?.id,
-              name: item.itemName.trim(),
-              rate: item.rate || existing?.rate || 0,
-              unit: item.unit || existing?.unit || 'Box',
-            });
-          }
-        });
-      }
-      setProductCatalog(Array.from(map.values()));
-    } catch (e) {
-      console.warn('Failed to load product catalog for edit bill:', e);
-    }
-  };
-
   useEffect(() => {
     fetchCustomers();
     fetchRecentBills();
-    fetchProductCatalog();
 
     const handleSettingsUpdate = () => {
       setStoreSettings(getStoredSettings());
@@ -304,7 +257,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
       companyName:
         bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
           ? bill.companyName
-          : storeSettings.companyName || 'General',
+          : storeSettings.companyName || 'SVM Crackers',
       transport: String(bill.transport || '0'),
       caseCount: String(bill.caseCount || '0'),
       discount: String(bill.discount || '0'),
@@ -346,7 +299,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
       customerPhone: bill.customerPhone || '',
       customerAddress: bill.customerAddress || '',
       customerGst: bill.customerGst || '',
-      companyName: bill.companyName || storeSettings.companyName || 'Apsara Crackers',
+      companyName: bill.companyName || storeSettings.companyName || 'SVM Crackers',
       caseCount: String(bill.caseCount || '0'),
       discount: String(bill.discount ?? '0'),
       transport: String(bill.transport ?? '0'),
@@ -448,7 +401,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
         customerPhone: editBillFormData.customerPhone.trim(),
         customerAddress: editBillFormData.customerAddress.trim(),
         customerGst: editBillFormData.customerGst.trim(),
-        companyName: editBillFormData.companyName.trim() || storeSettings.companyName || 'Apsara Crackers',
+        companyName: editBillFormData.companyName.trim() || storeSettings.companyName || 'SVM Crackers',
         caseCount: editBillFormData.caseCount || '0',
         discount: editBillFormData.discount || '0',
         transport: editBillFormData.transport || '0',
@@ -509,968 +462,556 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
   }, [recentBills, billSearchTerm]);
 
   return (
-    <Box
-      sx={{
-        width: '100%',
-        px: { xs: 2, sm: 3, md: 4 },
-        py: { xs: 2.5, md: 3.5 },
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* Top View Toggle Switcher (Customers vs Bills) */}
+    <Box sx={{ width: '100%', p: { xs: 1, sm: 1.5 }, bgcolor: '#D9E4F2', minHeight: 'calc(100vh - 70px)' }}>
+      {/* Outer Window Card */}
       <Box
         sx={{
+          bgcolor: '#FFFFFF',
+          border: '1px solid #9BB3CC',
+          borderRadius: '4px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+          overflow: 'hidden',
           display: 'flex',
-          alignItems: 'center',
-          gap: 1,
-          mb: 3,
-          backgroundColor: '#F8FAFC',
-          p: '5px',
-          borderRadius: '12px',
-          width: 'fit-content',
-          border: '1.5px solid #E2E8F0',
-          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
+          flexDirection: 'column',
         }}
       >
-        <Button
-          onClick={() => setActiveView('customers')}
-          startIcon={<PeopleAltRoundedIcon sx={{ fontSize: 19 }} />}
+        {/* Window Title Header Bar */}
+        <Box
           sx={{
-            px: 2.5,
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            px: 1.5,
             py: 0.8,
-            borderRadius: '8px',
-            fontSize: '13.5px',
-            fontWeight: 800,
-            textTransform: 'none',
-            letterSpacing: '-0.01em',
-            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            backgroundColor: activeView === 'customers' ? '#B91C1C' : 'transparent',
-            color: activeView === 'customers' ? '#FFFFFF' : '#475569',
-            boxShadow: activeView === 'customers' ? '0 2px 8px rgba(185, 28, 28, 0.3)' : 'none',
-            '&:hover': {
-              backgroundColor: activeView === 'customers' ? '#991B1B' : '#F1F5F9',
-            },
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 1,
           }}
         >
-          Customers
-          <Chip
-            label={customers.length}
-            size="small"
-            sx={{
-              ml: 1,
-              height: '20px',
-              fontSize: '11px',
-              fontWeight: 800,
-              backgroundColor: activeView === 'customers' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
-              color: activeView === 'customers' ? '#FFFFFF' : '#334155',
-              pointerEvents: 'none',
-            }}
-          />
-        </Button>
+          {/* Left: Window Icon + Title */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PeopleAltRoundedIcon sx={{ fontSize: 18, color: '#0284C7' }} />
+            <Typography
+              sx={{
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#0F172A',
+                letterSpacing: '0.01em',
+              }}
+            >
+              Customer Directory & Invoices Register
+            </Typography>
+          </Box>
 
-        <Button
-          onClick={() => setActiveView('bills')}
-          startIcon={<ReceiptLongRoundedIcon sx={{ fontSize: 19 }} />}
-          sx={{
-            px: 2.5,
-            py: 0.8,
-            borderRadius: '8px',
-            fontSize: '13.5px',
-            fontWeight: 800,
-            textTransform: 'none',
-            letterSpacing: '-0.01em',
-            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            backgroundColor: activeView === 'bills' ? '#B91C1C' : 'transparent',
-            color: activeView === 'bills' ? '#FFFFFF' : '#475569',
-            boxShadow: activeView === 'bills' ? '0 2px 8px rgba(185, 28, 28, 0.3)' : 'none',
-            '&:hover': {
-              backgroundColor: activeView === 'bills' ? '#991B1B' : '#F1F5F9',
-            },
-          }}
-        >
-          Bills
-          <Chip
-            label={recentBills.length}
-            size="small"
-            sx={{
-              ml: 1,
-              height: '20px',
-              fontSize: '11px',
-              fontWeight: 800,
-              backgroundColor: activeView === 'bills' ? 'rgba(255, 255, 255, 0.25)' : '#E2E8F0',
-              color: activeView === 'bills' ? '#FFFFFF' : '#334155',
-              pointerEvents: 'none',
-            }}
-          />
-        </Button>
-      </Box>
-
-      {/* ======================= CUSTOMERS VIEW ======================= */}
-      {activeView === 'customers' && (
-        <>
-          {/* Page Header */}
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: { xs: 'column', md: 'row' },
-              justifyContent: 'space-between',
-              alignItems: { xs: 'flex-start', md: 'center' },
-              gap: 2,
-              mb: 3,
-            }}
-          >
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Typography
-                  variant="h1"
-                  sx={{
-                    fontSize: { xs: '24px', sm: '28px', md: '30px' },
-                    fontWeight: 800,
-                    color: '#B91C1C',
-                    letterSpacing: '-0.025em',
-                    lineHeight: 1.2,
-                  }}
-                >
-                  All Customers Directory
-                </Typography>
-                <Chip
-                  label={`${customers.length} Customers`}
-                  size="small"
-                  sx={{
-                    backgroundColor: '#F8FAFC',
-                    color: '#334155',
-                    fontWeight: 800,
-                    border: '1px solid #E2E8F0',
-                  }}
-                />
-              </Box>
-              <Typography sx={{ fontSize: '13.5px', color: '#786C58', mt: 0.5, fontWeight: 600 }}>
-                Directory of all registered customers, contact numbers, and billing history.
-              </Typography>
+          {/* Right: Subtabs Switcher (Customers vs Bills) */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box
+              onClick={() => setActiveView('customers')}
+              sx={{
+                cursor: 'pointer',
+                py: 0.3,
+                px: 1,
+                borderRadius: '3px',
+                backgroundColor: activeView === 'customers' ? '#D2E3F5' : '#EDF4FB',
+                border: activeView === 'customers' ? '1px solid #99BBE8' : '1px solid #B0C4DE',
+                color: activeView === 'customers' ? '#1E3A8A' : '#0F172A',
+                fontWeight: 700,
+                fontSize: '11.5px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                '&:hover': { bgcolor: '#DCEBFA' },
+              }}
+            >
+              <PeopleAltRoundedIcon sx={{ fontSize: 14 }} />
+              Customers ({customers.length})
             </Box>
 
             <Box
+              onClick={() => setActiveView('bills')}
               sx={{
+                cursor: 'pointer',
+                py: 0.3,
+                px: 1,
+                borderRadius: '3px',
+                backgroundColor: activeView === 'bills' ? '#D2E3F5' : '#EDF4FB',
+                border: activeView === 'bills' ? '1px solid #99BBE8' : '1px solid #B0C4DE',
+                color: activeView === 'bills' ? '#1E3A8A' : '#0F172A',
+                fontWeight: 700,
+                fontSize: '11.5px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 1.5,
-                width: { xs: '100%', md: 'auto' },
-                flexWrap: 'wrap',
+                gap: 0.5,
+                '&:hover': { bgcolor: '#DCEBFA' },
               }}
             >
-              {/* Search Box */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: '8px',
-                  border: '1.5px solid #E2E8F0',
-                  px: 1.5,
-                  height: '40px',
-                  width: { xs: '100%', sm: '280px' },
-                  boxSizing: 'border-box',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    borderColor: '#F59E0B',
-                  },
-                  '&:focus-within': {
-                    borderColor: '#DC2626',
-                    boxShadow: '0 0 0 3px rgba(220, 38, 38, 0.12)',
-                  },
-                }}
-              >
-                <SearchRoundedIcon
-                  sx={{
-                    color: '#D97706',
-                    fontSize: 20,
-                    mr: 1,
-                  }}
-                />
-                <InputBase
-                  placeholder="Search customers..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  sx={{
-                    fontSize: '13.5px',
-                    fontWeight: 600,
-                    color: '#1F1714',
-                    width: '100%',
-                    '& input': {
-                      p: 0,
-                      '&::placeholder': {
-                        color: '#A8998A',
-                        opacity: 1,
-                      },
-                    },
-                  }}
-                />
-                {searchTerm && (
-                  <IconButton size="small" onClick={() => setSearchTerm('')} sx={{ p: 0.3 }}>
-                    <ClearRoundedIcon sx={{ fontSize: 15 }} />
-                  </IconButton>
-                )}
-              </Box>
-
-              {/* Print Customers Report Button */}
-              <Button
-                variant="outlined"
-                onClick={() => setOpenDatePrintModal(true)}
-                startIcon={<PrintOutlinedIcon sx={{ fontSize: 19 }} />}
-                sx={{
-                  backgroundColor: '#FFFFFF',
-                  color: '#1E293B',
-                  borderColor: '#FCD34D',
-                  borderWidth: '1.5px',
-                  height: '40px',
-                  px: 2,
-                  borderRadius: '8px',
-                  fontSize: '13.5px',
-                  fontWeight: 700,
-                  textTransform: 'none',
-                  letterSpacing: '-0.01em',
-                  whiteSpace: 'nowrap',
-                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
-                  '&:hover': {
-                    backgroundColor: '#F8FAFC',
-                    borderColor: '#F59E0B',
-                  },
-                }}
-              >
-                Print Report ({filteredCustomers.length})
-              </Button>
-
-              {/* Add New Customer Button */}
-              {onAddNewCustomer && (
-                <Button
-                  variant="contained"
-                  disableElevation
-                  onClick={onAddNewCustomer}
-                  startIcon={<AddRoundedIcon sx={{ fontSize: 20 }} />}
-                  sx={{
-                    background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
-                    color: '#FFFFFF',
-                    border: '1px solid #F59E0B',
-                    height: '40px',
-                    px: 2.4,
-                    borderRadius: '8px',
-                    fontSize: '13.5px',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    letterSpacing: '-0.01em',
-                    whiteSpace: 'nowrap',
-                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.25)',
-                    '&:hover': {
-                      background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)',
-                    },
-                  }}
-                >
-                  Add Customer
-                </Button>
-              )}
+              <ReceiptLongRoundedIcon sx={{ fontSize: 14 }} />
+              Bills ({recentBills.length})
             </Box>
           </Box>
+        </Box>
 
-          {/* Overview Metric Banner */}
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2,
-              mb: 3,
-              borderRadius: '12px',
-              border: '1.5px solid #E2E8F0',
-              backgroundColor: '#F8FAFC',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 2,
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        {/* Inner Content Area */}
+        <Box sx={{ p: { xs: 1, sm: 1.5 }, bgcolor: '#F0F5FA' }}>
+          {/* ======================= CUSTOMERS VIEW ======================= */}
+          {activeView === 'customers' && (
+            <>
+              {/* Top Control Bar */}
               <Box
                 sx={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: '10px',
-                  backgroundColor: '#F1F5F9',
-                  color: '#B91C1C',
-                  border: '1px solid #E2E8F0',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
+                  justifyContent: 'space-between',
+                  gap: 1,
+                  mb: 1,
+                  bgcolor: '#FFFFFF',
+                  border: '1px solid #B0C4DE',
+                  borderRadius: '3px',
+                  p: 0.8,
+                  flexWrap: 'wrap',
                 }}
               >
-                <PeopleAltRoundedIcon sx={{ fontSize: 24 }} />
+                {/* Search Box */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flex: 1, minWidth: '220px' }}>
+                  <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap' }}>
+                    Search Customer:
+                  </Typography>
+                  <input
+                    type="text"
+                    placeholder="Search by name, phone, address, GST..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="erp-input"
+                    style={{ flex: 1, maxWidth: '320px' }}
+                  />
+                  {searchTerm && (
+                    <IconButton size="small" onClick={() => setSearchTerm('')} sx={{ p: 0.2 }}>
+                      <ClearRoundedIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  )}
+                </Box>
+
+                {/* Right Buttons */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {/* Print Report */}
+                  <Button
+                    onClick={() => setOpenDatePrintModal(true)}
+                    startIcon={<PrintOutlinedIcon sx={{ fontSize: 14 }} />}
+                    size="small"
+                    sx={{
+                      height: '26px',
+                      bgcolor: '#EDF4FB',
+                      border: '1px solid #94A3B8',
+                      color: '#0F172A',
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      px: 1.5,
+                      borderRadius: '3px',
+                      textTransform: 'none',
+                      '&:hover': { bgcolor: '#D9E4F2' },
+                    }}
+                  >
+                    Print Report ({filteredCustomers.length})
+                  </Button>
+
+                  {/* Add Customer Button */}
+                  {onAddNewCustomer && (
+                    <Button
+                      onClick={onAddNewCustomer}
+                      startIcon={<AddRoundedIcon sx={{ fontSize: 15 }} />}
+                      size="small"
+                      sx={{
+                        height: '26px',
+                        bgcolor: '#741748',
+                        color: '#FFFFFF',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        px: 1.5,
+                        borderRadius: '3px',
+                        textTransform: 'none',
+                        '&:hover': { bgcolor: '#580e34' },
+                      }}
+                    >
+                      Add Customer
+                    </Button>
+                  )}
+                </Box>
               </Box>
-              <Box>
-                <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58' }}>
-                  Total Registered Customers
-                </Typography>
-                <Typography sx={{ fontSize: '22px', fontWeight: 900, color: '#B91C1C', lineHeight: 1.2, mt: 0.2 }}>
-                  {customers.length}
-                </Typography>
-              </Box>
-            </Box>
 
-            <Typography sx={{ fontSize: '12.5px', color: '#786C58', fontWeight: 600 }}>
-              Showing {filteredCustomers.length} of {customers.length} customer records
-            </Typography>
-          </Paper>
-
-          {/* Main Customers Table Card */}
-          <Paper
-            elevation={0}
-            sx={{
-              width: '100%',
-              backgroundColor: '#FFFFFF',
-              borderRadius: '12px',
-              border: '1.5px solid #E2E8F0',
-              boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
-              overflow: 'hidden',
-            }}
-          >
-            <TableContainer>
-              <Table sx={{ minWidth: 750 }} aria-label="all customers table">
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: '#F8FAFC' }}>
-                    <TableCell
-                      sx={{
-                        py: 1.8,
-                        px: 2.5,
-                        fontSize: '12px',
-                        fontWeight: 800,
-                        color: '#1E293B',
-                        letterSpacing: '0.04em',
-                        borderBottom: '2px solid #E2E8F0',
-                        width: '90px',
-                      }}
-                    >
-                      ID
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        py: 1.8,
-                        px: 2.5,
-                        fontSize: '12px',
-                        fontWeight: 800,
-                        color: '#1E293B',
-                        letterSpacing: '0.04em',
-                        borderBottom: '2px solid #E2E8F0',
-                      }}
-                    >
-                      CUSTOMER NAME & CONTACT
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        py: 1.8,
-                        px: 2.5,
-                        fontSize: '12px',
-                        fontWeight: 800,
-                        color: '#1E293B',
-                        letterSpacing: '0.04em',
-                        borderBottom: '2px solid #E2E8F0',
-                      }}
-                    >
-                      ADDRESS & GSTIN
-                    </TableCell>
-                    <TableCell
-                      align="center"
-                      sx={{
-                        py: 1.8,
-                        px: 2.5,
-                        fontSize: '12px',
-                        fontWeight: 800,
-                        color: '#1E293B',
-                        letterSpacing: '0.04em',
-                        borderBottom: '2px solid #E2E8F0',
-                        width: '240px',
-                      }}
-                    >
-                      ACTIONS
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 6 }}>
-                        <CircularProgress size={32} sx={{ color: '#DC2626' }} />
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredCustomers.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 6, color: '#786C58' }}>
-                        {searchTerm ? 'No customers match your search criteria.' : 'No customers found.'}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredCustomers.map((customer, index) => {
-                      const isLast = index === filteredCustomers.length - 1;
-                      const recordId = customer._id || customer.id || '';
-                      const idDisplay = customer.idCode || `#${(index + 1).toString().padStart(4, '0')}`;
-                      const avatarInitial = customer.avatarLetter || customer.name.charAt(0).toUpperCase();
-
-                      return (
-                        <TableRow
-                          key={recordId || index}
-                          sx={{
-                            transition: 'background-color 0.15s ease',
-                            '&:hover': {
-                              backgroundColor: '#FEFDF5',
-                            },
-                          }}
-                        >
-                          {/* ID */}
-                          <TableCell
-                            sx={{
-                              py: 1.8,
-                              px: 2.5,
-                              fontSize: '13px',
-                              color: '#B91C1C',
-                              fontWeight: 800,
-                              borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                            }}
-                          >
-                            {idDisplay}
+              {/* Customers Table */}
+              <Box
+                sx={{
+                  bgcolor: '#FFFFFF',
+                  border: '1px solid #B0C4DE',
+                  borderRadius: '3px',
+                  overflow: 'hidden',
+                }}
+              >
+                <TableContainer sx={{ maxHeight: 'calc(100vh - 210px)', minHeight: '380px' }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: '#DCE7F5' }}>
+                        <TableCell sx={{ width: '70px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          ID
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          Customer Name
+                        </TableCell>
+                        <TableCell sx={{ width: '130px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          Mobile No
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          Address
+                        </TableCell>
+                        <TableCell sx={{ width: '140px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          GSTIN
+                        </TableCell>
+                        <TableCell align="center" sx={{ width: '190px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          Actions
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+                            <CircularProgress size={24} sx={{ color: '#1E40AF' }} />
                           </TableCell>
+                        </TableRow>
+                      ) : filteredCustomers.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
+                            {searchTerm ? 'No customers match your search criteria.' : 'No customers found.'}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredCustomers.map((customer, index) => {
+                          const recordId = customer._id || customer.id || '';
+                          const idDisplay = customer.idCode || `C${450 + index}`;
 
-                          {/* Customer Name & Mobile */}
-                          <TableCell
-                            sx={{
-                              py: 1.8,
-                              px: 2.5,
-                              borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                            }}
-                          >
-                            <Box
-                              onClick={() => onSelectCustomerForParticular?.(customer.name, 'Account Details')}
+                          return (
+                            <TableRow
+                              key={recordId || index}
                               sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 1.5,
-                                cursor: 'pointer',
+                                '&:hover': { bgcolor: '#F1F7FD' },
+                                '& td': { borderBottom: '1px solid #E2E8F0', py: 0.4 },
                               }}
                             >
-                              <Box
-                                sx={{
-                                  width: 38,
-                                  height: 38,
-                                  borderRadius: '50%',
-                                  backgroundColor: customer.avatarBg || '#F1F5F9',
-                                  color: customer.avatarColor || '#B91C1C',
-                                  border: '1px solid #E2E8F0',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '14px',
-                                  fontWeight: 800,
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {avatarInitial}
-                              </Box>
-                              <Box>
-                                <Typography
+                              {/* ID */}
+                              <TableCell sx={{ fontSize: '12px', fontWeight: 700, color: '#1E40AF' }}>
+                                {idDisplay}
+                              </TableCell>
+
+                              {/* Customer Name */}
+                              <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                                <Box
+                                  onClick={() => onSelectCustomerForParticular?.(customer.name, 'Account Details')}
                                   sx={{
-                                    fontSize: '14.5px',
-                                    fontWeight: 700,
-                                    color: '#1F1714',
-                                    letterSpacing: '-0.01em',
-                                    '&:hover': {
-                                      color: '#DC2626',
-                                      textDecoration: 'underline',
-                                    },
+                                    cursor: 'pointer',
+                                    '&:hover': { color: '#1E40AF', textDecoration: 'underline' },
                                   }}
                                 >
                                   {customer.name}
-                                </Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.2 }}>
-                                  <PhoneOutlinedIcon sx={{ fontSize: 13, color: '#D97706' }} />
-                                  <Typography sx={{ fontSize: '12px', color: '#786C58', fontWeight: 600 }}>
-                                    {customer.mobile || 'N/A'}
-                                  </Typography>
                                 </Box>
-                              </Box>
-                            </Box>
-                          </TableCell>
+                              </TableCell>
 
-                          {/* Address & GST */}
-                          <TableCell
-                            sx={{
-                              py: 1.8,
-                              px: 2.5,
-                              fontSize: '13px',
-                              color: '#334155',
-                              fontWeight: 500,
-                              borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                            }}
-                          >
-                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.6 }}>
-                              <LocationOnOutlinedIcon sx={{ fontSize: 15, color: '#64748B', mt: 0.2, flexShrink: 0 }} />
-                              <Typography sx={{ fontSize: '13px', color: '#334155', fontWeight: 500, maxWidth: '320px' }}>
-                                {customer.address || 'N/A'}
-                              </Typography>
-                            </Box>
-                            {customer.gst && customer.gst !== 'N/A' && (
-                              <Typography sx={{ fontSize: '11.5px', color: '#D97706', fontWeight: 700, mt: 0.4, pl: 2.6 }}>
-                                GSTIN: {customer.gst}
-                              </Typography>
-                            )}
-                          </TableCell>
+                              {/* Mobile No */}
+                              <TableCell sx={{ fontSize: '12px', color: '#334155', fontWeight: 600 }}>
+                                {customer.mobile || '-'}
+                              </TableCell>
 
-                          {/* Actions */}
-                          <TableCell
-                            align="center"
-                            sx={{
-                              py: 1.8,
-                              px: 2,
-                              borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                            }}
-                          >
-                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
-                              {/* View Statement / Account Details Button */}
-                              <Tooltip title="View Account Statement & Billing History" arrow>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  onClick={() => onSelectCustomerForParticular?.(customer.name, 'Account Details')}
-                                  startIcon={<AccountBalanceWalletRoundedIcon sx={{ fontSize: '15px !important' }} />}
-                                  sx={{
-                                    height: '32px',
-                                    px: 1.4,
-                                    fontSize: '12px',
-                                    fontWeight: 700,
-                                    textTransform: 'none',
-                                    color: '#334155',
-                                    borderColor: '#E2E8F0',
-                                    backgroundColor: '#F8FAFC',
-                                    borderRadius: '6px',
-                                    '&:hover': {
-                                      backgroundColor: '#E2E8F0',
-                                      borderColor: '#F59E0B',
-                                      color: '#475569',
-                                    },
-                                  }}
-                                >
-                                  Statement
-                                </Button>
-                              </Tooltip>
+                              {/* Address */}
+                              <TableCell sx={{ fontSize: '12px', color: '#334155' }}>
+                                {customer.address || '-'}
+                              </TableCell>
 
-                              {/* Edit Customer Button */}
-                              <Tooltip title="Edit Customer Details" arrow>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  onClick={() => handleOpenEdit(customer)}
-                                  startIcon={<ModeEditOutlineRoundedIcon sx={{ fontSize: '15px !important' }} />}
-                                  sx={{
-                                    height: '32px',
-                                    px: 1.4,
-                                    fontSize: '12px',
-                                    fontWeight: 700,
-                                    textTransform: 'none',
-                                    color: '#D97706',
-                                    borderColor: '#E2E8F0',
-                                    backgroundColor: '#F8FAFC',
-                                    borderRadius: '6px',
-                                    '&:hover': {
-                                      backgroundColor: '#D97706',
-                                      borderColor: '#D97706',
-                                      color: '#FFFFFF',
-                                    },
-                                  }}
-                                >
-                                  Edit
-                                </Button>
-                              </Tooltip>
+                              {/* GSTIN */}
+                              <TableCell sx={{ fontSize: '11.5px', color: '#64748B', fontWeight: 600 }}>
+                                {customer.gst && customer.gst !== 'N/A' ? customer.gst : '-'}
+                              </TableCell>
 
-                              {/* Delete Customer Button */}
-                              <Tooltip title="Delete Customer" arrow>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleDelete(recordId, customer.name)}
-                                  sx={{
-                                    color: '#DC2626',
-                                    backgroundColor: '#FEF2F2',
-                                    border: '1px solid #FECACA',
-                                    borderRadius: '6px',
-                                    p: 0.7,
-                                    transition: 'all 0.15s ease',
-                                    '&:hover': {
-                                      color: '#FFFFFF',
-                                      backgroundColor: '#DC2626',
-                                      borderColor: '#DC2626',
-                                    },
-                                  }}
-                                >
-                                  <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </>
-      )}
+                              {/* Actions */}
+                              <TableCell align="center">
+                                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                                  {/* Statement / Bill */}
+                                  <Button
+                                    size="small"
+                                    onClick={() => onSelectCustomerForParticular?.(customer.name, 'Create Particular')}
+                                    sx={{
+                                      height: '24px',
+                                      px: 1,
+                                      py: 0,
+                                      bgcolor: '#EDF4FB',
+                                      border: '1px solid #94A3B8',
+                                      color: '#1E40AF',
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      textTransform: 'none',
+                                      borderRadius: '2px',
+                                      '&:hover': { bgcolor: '#D9E4F2' },
+                                    }}
+                                  >
+                                    Quotation
+                                  </Button>
 
-      {/* ======================= BILLS VIEW ======================= */}
-      {activeView === 'bills' && (
-        <>
-          {/* Bills Header */}
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: { xs: 'flex-start', sm: 'center' },
-              justifyContent: 'space-between',
-              flexDirection: { xs: 'column', sm: 'row' },
-              gap: 2,
-              mb: 3,
-            }}
-          >
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Box
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '10px',
-                    backgroundColor: '#F1F5F9',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#B91C1C',
-                    border: '1px solid #E2E8F0',
-                  }}
-                >
-                  <ReceiptLongRoundedIcon sx={{ fontSize: 22 }} />
-                </Box>
-                <Box>
-                  <Typography sx={{ fontSize: '22px', fontWeight: 900, color: '#1F1714', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-                    Recent Bills & Invoices
-                  </Typography>
-                  <Typography sx={{ fontSize: '13px', color: '#786C58', fontWeight: 600, mt: 0.3 }}>
-                    Master register of all customer invoices, line items, and payment tallies.
-                  </Typography>
-                </Box>
+                                  {/* Edit */}
+                                  <Button
+                                    size="small"
+                                    onClick={() => handleOpenEdit(customer)}
+                                    sx={{
+                                      height: '24px',
+                                      px: 1,
+                                      py: 0,
+                                      bgcolor: '#EDF4FB',
+                                      border: '1px solid #94A3B8',
+                                      color: '#0F172A',
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      textTransform: 'none',
+                                      borderRadius: '2px',
+                                      '&:hover': { bgcolor: '#D9E4F2' },
+                                    }}
+                                  >
+                                    Edit
+                                  </Button>
+
+                                  {/* Delete */}
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDelete(recordId, customer.name)}
+                                    sx={{
+                                      color: '#DC2626',
+                                      bgcolor: '#FEF2F2',
+                                      border: '1px solid #FECACA',
+                                      borderRadius: '2px',
+                                      p: 0.3,
+                                      '&:hover': { bgcolor: '#DC2626', color: '#FFFFFF' },
+                                    }}
+                                  >
+                                    <DeleteOutlineRoundedIcon sx={{ fontSize: 14 }} />
+                                  </IconButton>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Box>
-            </Box>
+            </>
+          )}
 
-            {/* Bills Search & Refresh */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: { xs: '100%', sm: 'auto' } }}>
+          {/* ======================= BILLS VIEW ======================= */}
+          {activeView === 'bills' && (
+            <>
+              {/* Bills Control Bar */}
               <Box
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
-                  backgroundColor: '#FFFFFF',
-                  border: '1.5px solid #E2E8F0',
-                  borderRadius: '8px',
-                  px: 1.5,
-                  py: 0.5,
-                  width: { xs: '100%', sm: '260px' },
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
-                  '&:focus-within': {
-                    borderColor: '#D97706',
-                    boxShadow: '0 0 0 3px rgba(0, 0, 0, 0.06)',
-                  },
+                  justifyContent: 'space-between',
+                  gap: 1,
+                  mb: 1,
+                  bgcolor: '#FFFFFF',
+                  border: '1px solid #B0C4DE',
+                  borderRadius: '3px',
+                  p: 0.8,
+                  flexWrap: 'wrap',
                 }}
               >
-                <SearchRoundedIcon sx={{ color: '#B45309', fontSize: 19, mr: 1 }} />
-                <InputBase
-                  placeholder="Search bill, customer..."
-                  value={billSearchTerm}
-                  onChange={(e) => setBillSearchTerm(e.target.value)}
-                  sx={{
-                    fontSize: '13.5px',
-                    color: '#1F1714',
-                    fontWeight: 600,
-                    width: '100%',
-                    '& input': {
-                      p: 0,
-                      '&::placeholder': {
-                        color: '#A8998A',
-                        opacity: 1,
-                      },
-                    },
-                  }}
-                />
-                {billSearchTerm && (
-                  <IconButton size="small" onClick={() => setBillSearchTerm('')} sx={{ p: 0.3 }}>
-                    <ClearRoundedIcon sx={{ fontSize: 15 }} />
-                  </IconButton>
-                )}
+                {/* Search Box */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flex: 1, minWidth: '220px' }}>
+                  <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap' }}>
+                    Search Bills:
+                  </Typography>
+                  <input
+                    type="text"
+                    placeholder="Search by Bill No, Customer Name, Date..."
+                    value={billSearchTerm}
+                    onChange={(e) => setBillSearchTerm(e.target.value)}
+                    className="erp-input"
+                    style={{ flex: 1, maxWidth: '320px' }}
+                  />
+                  {billSearchTerm && (
+                    <IconButton size="small" onClick={() => setBillSearchTerm('')} sx={{ p: 0.2 }}>
+                      <ClearRoundedIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  )}
+                </Box>
+
+                {/* Right: Total & Refresh */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
+                    Total Invoiced: <strong style={{ color: '#741748' }}>₹{totalBillsAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                  </Typography>
+
+                  <Button
+                    onClick={fetchRecentBills}
+                    startIcon={<RefreshRoundedIcon sx={{ fontSize: 14 }} />}
+                    size="small"
+                    sx={{
+                      height: '26px',
+                      bgcolor: '#EDF4FB',
+                      border: '1px solid #94A3B8',
+                      color: '#0F172A',
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      px: 1.5,
+                      borderRadius: '3px',
+                      textTransform: 'none',
+                      '&:hover': { bgcolor: '#D9E4F2' },
+                    }}
+                  >
+                    Refresh
+                  </Button>
+                </Box>
               </Box>
 
-              {/* Refresh Bills Button */}
-              <Button
-                variant="outlined"
-                onClick={fetchRecentBills}
-                startIcon={<RefreshRoundedIcon sx={{ fontSize: 19 }} />}
+              {/* Recent Bills Table */}
+              <Box
                 sx={{
-                  backgroundColor: '#FFFFFF',
-                  color: '#1E293B',
-                  borderColor: '#FCD34D',
-                  borderWidth: '1.5px',
-                  height: '40px',
-                  px: 2,
-                  borderRadius: '8px',
-                  fontSize: '13.5px',
-                  fontWeight: 700,
-                  textTransform: 'none',
-                  letterSpacing: '-0.01em',
-                  whiteSpace: 'nowrap',
-                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
-                  '&:hover': {
-                    backgroundColor: '#F8FAFC',
-                    borderColor: '#F59E0B',
-                  },
+                  bgcolor: '#FFFFFF',
+                  border: '1px solid #B0C4DE',
+                  borderRadius: '3px',
+                  overflow: 'hidden',
                 }}
               >
-                Refresh
-              </Button>
-            </Box>
-          </Box>
-
-          {/* Bills Overview Metric Banner */}
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2,
-              mb: 3,
-              borderRadius: '12px',
-              border: '1.5px solid #E2E8F0',
-              backgroundColor: '#F8FAFC',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 2,
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: '10px',
-                    backgroundColor: '#F1F5F9',
-                    color: '#B91C1C',
-                    border: '1px solid #E2E8F0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <ReceiptLongRoundedIcon sx={{ fontSize: 24 }} />
-                </Box>
-                <Box>
-                  <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58' }}>
-                    Total Generated Bills
-                  </Typography>
-                  <Typography sx={{ fontSize: '22px', fontWeight: 900, color: '#B91C1C', lineHeight: 1.2, mt: 0.2 }}>
-                    {recentBills.length}
-                  </Typography>
-                </Box>
-              </Box>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: '10px',
-                    backgroundColor: '#F1F5F9',
-                    color: '#B91C1C',
-                    border: '1px solid #E2E8F0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <AccountBalanceWalletRoundedIcon sx={{ fontSize: 24 }} />
-                </Box>
-                <Box>
-                  <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58' }}>
-                    Total Invoiced Amount
-                  </Typography>
-                  <Typography sx={{ fontSize: '22px', fontWeight: 900, color: '#B91C1C', lineHeight: 1.2, mt: 0.2 }}>
-                    ₹{totalBillsAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-
-            <Typography sx={{ fontSize: '12.5px', color: '#786C58', fontWeight: 600 }}>
-              Showing {filteredRecentBills.length} of {recentBills.length} bills
-            </Typography>
-          </Paper>
-
-          {/* Recent Bills Table */}
-          <Paper
-            elevation={0}
-            sx={{
-              borderRadius: '12px',
-              border: '1.5px solid #E2E8F0',
-              backgroundColor: '#FFFFFF',
-              boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
-              overflow: 'hidden',
-            }}
-          >
-            <TableContainer sx={{ maxHeight: '650px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-              <Table stickyHeader sx={{ minWidth: { xs: '650px', sm: '100%' } }} aria-label="recent bills table">
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: '#F8FAFC' }}>
-                    <TableCell sx={{ fontWeight: 800, fontSize: '12px', color: '#1E293B', backgroundColor: '#F8FAFC', width: '110px' }}>
-                      BILL NO
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 800, fontSize: '12px', color: '#1E293B', backgroundColor: '#F8FAFC', width: '120px' }}>
-                      DATE
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 800, fontSize: '12px', color: '#1E293B', backgroundColor: '#F8FAFC' }}>
-                      CUSTOMER NAME
-                    </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 800, fontSize: '12px', color: '#1E293B', backgroundColor: '#F8FAFC', width: '100px' }}>
-                      ITEMS
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 800, fontSize: '12px', color: '#1E293B', backgroundColor: '#F8FAFC', width: '150px' }}>
-                      TOTAL AMOUNT (₹)
-                    </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 800, fontSize: '12px', color: '#1E293B', backgroundColor: '#F8FAFC', width: '180px' }}>
-                      ACTIONS
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loadingRecentBills ? (
-                    <TableRow>
-                      <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
-                        <CircularProgress size={32} sx={{ color: '#DC2626' }} />
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredRecentBills.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} align="center" sx={{ py: 6, color: '#786C58' }}>
-                        {billSearchTerm ? `No bills matching "${billSearchTerm}" found.` : 'No bills created yet.'}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredRecentBills.map((bill, index) => {
-                      const isLast = index === filteredRecentBills.length - 1;
-                      const totalAmt = parseFloat(String(bill.total || bill.amount || '0').replace(/,/g, '')) || 0;
-                      const prodCount = (bill.products || []).length;
-
-                      return (
-                        <TableRow key={bill._id || bill.id || index} sx={{ '&:hover': { backgroundColor: '#FEFDF5' } }}>
-                          <TableCell sx={{ fontSize: '13.5px', fontWeight: 800, color: '#B91C1C', borderBottom: isLast ? 'none' : '1px solid #F1F5F9' }}>
-                            #{bill.billNo}
-                          </TableCell>
-                          <TableCell sx={{ fontSize: '13px', fontWeight: 600, color: '#57463A', borderBottom: isLast ? 'none' : '1px solid #F1F5F9' }}>
-                            {bill.date}
-                          </TableCell>
-                          <TableCell sx={{ fontSize: '13.5px', fontWeight: 700, color: '#1F1714', borderBottom: isLast ? 'none' : '1px solid #F1F5F9' }}>
-                            {bill.customerName}
-                          </TableCell>
-                          <TableCell align="center" sx={{ borderBottom: isLast ? 'none' : '1px solid #F1F5F9' }}>
-                            <Chip
-                              label={`${prodCount} ${prodCount === 1 ? 'item' : 'items'}`}
-                              size="small"
-                              sx={{ fontSize: '11.5px', fontWeight: 700, backgroundColor: '#F8FAFC', color: '#334155', border: '1px solid #E2E8F0' }}
-                            />
-                          </TableCell>
-                          <TableCell align="right" sx={{ fontSize: '14.5px', fontWeight: 800, color: '#B91C1C', borderBottom: isLast ? 'none' : '1px solid #F1F5F9' }}>
-                            ₹{totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </TableCell>
-                          <TableCell align="center" sx={{ borderBottom: isLast ? 'none' : '1px solid #F1F5F9' }}>
-                            <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                              {/* Edit Bill Button — navigates to Billing page */}
-                              <Tooltip title="Edit Bill & Items" arrow>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  onClick={() => onEditBill ? onEditBill(bill) : handleOpenEditBill(bill)}
-                                  startIcon={<ModeEditOutlineRoundedIcon sx={{ fontSize: '15px !important' }} />}
-                                  sx={{
-                                    height: '30px',
-                                    px: 1.3,
-                                    fontSize: '12px',
-                                    fontWeight: 700,
-                                    textTransform: 'none',
-                                    color: '#B45309',
-                                    borderColor: '#E2E8F0',
-                                    backgroundColor: '#F8FAFC',
-                                    borderRadius: '6px',
-                                    '&:hover': {
-                                      backgroundColor: '#D97706',
-                                      borderColor: '#D97706',
-                                      color: '#FFFFFF',
-                                    },
-                                  }}
-                                >
-                                  Edit
-                                </Button>
-                              </Tooltip>
-
-                              {/* Print Invoice */}
-                              <Tooltip title="Print / View Invoice" arrow>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handlePrintRecentBill(bill)}
-                                  sx={{
-                                    color: '#D97706',
-                                    backgroundColor: '#F8FAFC',
-                                    border: '1px solid #E2E8F0',
-                                    borderRadius: '6px',
-                                    p: 0.6,
-                                    '&:hover': { color: '#FFFFFF', backgroundColor: '#D97706' },
-                                  }}
-                                >
-                                  <PrintOutlinedIcon sx={{ fontSize: 16 }} />
-                                </IconButton>
-                              </Tooltip>
-
-                              {/* Delete Bill */}
-                              <Tooltip title="Delete Bill" arrow>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleDeleteRecentBill(bill)}
-                                  sx={{
-                                    color: '#DC2626',
-                                    backgroundColor: '#FEF2F2',
-                                    border: '1px solid #FECACA',
-                                    borderRadius: '6px',
-                                    p: 0.6,
-                                    '&:hover': { color: '#FFFFFF', backgroundColor: '#DC2626' },
-                                  }}
-                                >
-                                  <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
+                <TableContainer sx={{ maxHeight: 'calc(100vh - 210px)', minHeight: '380px' }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: '#DCE7F5' }}>
+                        <TableCell sx={{ width: '90px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          Bill No
+                        </TableCell>
+                        <TableCell sx={{ width: '100px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          Date
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          Customer Name
+                        </TableCell>
+                        <TableCell align="center" sx={{ width: '80px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          Items
+                        </TableCell>
+                        <TableCell align="right" sx={{ width: '130px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          Total ( ₹ )
+                        </TableCell>
+                        <TableCell align="center" sx={{ width: '140px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          Actions
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {loadingRecentBills ? (
+                        <TableRow>
+                          <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+                            <CircularProgress size={24} sx={{ color: '#1E40AF' }} />
                           </TableCell>
                         </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </>
-      )}
+                      ) : filteredRecentBills.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
+                            {billSearchTerm ? `No bills matching "${billSearchTerm}" found.` : 'No bills created yet.'}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredRecentBills.map((bill, index) => {
+                          const totalAmt = parseFloat(String(bill.total || bill.amount || '0').replace(/,/g, '')) || 0;
+                          const prodCount = (bill.products || []).length;
+
+                          return (
+                            <TableRow
+                              key={bill._id || bill.id || index}
+                              sx={{
+                                '&:hover': { bgcolor: '#F1F7FD' },
+                                '& td': { borderBottom: '1px solid #E2E8F0', py: 0.4 },
+                              }}
+                            >
+                              <TableCell sx={{ fontSize: '12.5px', fontWeight: 800, color: '#1E40AF' }}>
+                                #{bill.billNo}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
+                                {bill.date}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                                {bill.customerName}
+                              </TableCell>
+                              <TableCell align="center" sx={{ fontSize: '12px', color: '#64748B' }}>
+                                {prodCount}
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>
+                                ₹{totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell align="center">
+                                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                                  {/* Edit Bill */}
+                                  <Button
+                                    size="small"
+                                    onClick={() => onEditBill ? onEditBill(bill) : handleOpenEditBill(bill)}
+                                    sx={{
+                                      height: '24px',
+                                      px: 1,
+                                      py: 0,
+                                      bgcolor: '#EDF4FB',
+                                      border: '1px solid #94A3B8',
+                                      color: '#0F172A',
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      textTransform: 'none',
+                                      borderRadius: '2px',
+                                      '&:hover': { bgcolor: '#D9E4F2' },
+                                    }}
+                                  >
+                                    Edit
+                                  </Button>
+
+                                  {/* Print Bill */}
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handlePrintRecentBill(bill)}
+                                    sx={{
+                                      color: '#0F172A',
+                                      bgcolor: '#EDF4FB',
+                                      border: '1px solid #94A3B8',
+                                      borderRadius: '2px',
+                                      p: 0.3,
+                                      '&:hover': { bgcolor: '#D9E4F2' },
+                                    }}
+                                  >
+                                    <PrintOutlinedIcon sx={{ fontSize: 14 }} />
+                                  </IconButton>
+
+                                  {/* Delete Bill */}
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDeleteRecentBill(bill)}
+                                    sx={{
+                                      color: '#DC2626',
+                                      bgcolor: '#FEF2F2',
+                                      border: '1px solid #FECACA',
+                                      borderRadius: '2px',
+                                      p: 0.3,
+                                      '&:hover': { bgcolor: '#DC2626', color: '#FFFFFF' },
+                                    }}
+                                  >
+                                    <DeleteOutlineRoundedIcon sx={{ fontSize: 14 }} />
+                                  </IconButton>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            </>
+          )}
+        </Box>
+      </Box>
 
       {/* Edit Customer Dialog */}
       <Dialog
@@ -1481,83 +1022,100 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
         slotProps={{
           paper: {
             sx: {
-              borderRadius: '14px',
-              border: '1.5px solid #E2E8F0',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+              borderRadius: '4px',
+              border: '1px solid #9BB3CC',
+              overflow: 'hidden',
             },
           },
         }}
       >
-        <DialogTitle sx={{ fontWeight: 800, fontSize: '18px', color: '#B91C1C', pb: 1 }}>
+        <DialogTitle
+          sx={{
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            fontWeight: 700,
+            fontSize: '13.5px',
+            color: '#0F172A',
+            py: 1,
+            px: 2,
+          }}
+        >
           Edit Customer Details
         </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
+        <DialogContent sx={{ bgcolor: '#F0F5FA', display: 'flex', flexDirection: 'column', gap: 1.5, p: 2 }}>
           <Box>
-            <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
               Customer Full Name *
             </Typography>
-            <TextField
-              fullWidth
-              size="small"
+            <input
+              type="text"
               value={editFormData.name}
               onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+              className="erp-input"
+              style={{ width: '100%' }}
             />
           </Box>
           <Box>
-            <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
               Mobile / Contact Number
             </Typography>
-            <TextField
-              fullWidth
-              size="small"
+            <input
+              type="text"
               value={editFormData.mobile}
               onChange={(e) => setEditFormData({ ...editFormData, mobile: e.target.value })}
+              className="erp-input"
+              style={{ width: '100%' }}
             />
           </Box>
           <Box>
-            <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
               Address / Town *
             </Typography>
-            <TextField
-              fullWidth
-              size="small"
+            <textarea
+              rows={2}
               value={editFormData.address}
               onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+              className="erp-input"
+              style={{ width: '100%', resize: 'vertical' }}
             />
           </Box>
           <Box>
-            <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
               GSTIN
             </Typography>
-            <TextField
-              fullWidth
-              size="small"
+            <input
+              type="text"
               value={editFormData.gst}
               onChange={(e) => setEditFormData({ ...editFormData, gst: e.target.value })}
+              className="erp-input"
+              style={{ width: '100%', textTransform: 'uppercase' }}
             />
           </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 1 }}>
+        <DialogActions sx={{ bgcolor: '#EDF4FB', borderTop: '1px solid #B0C4DE', p: 1 }}>
           <Button
             onClick={() => setOpenEditModal(false)}
-            sx={{ textTransform: 'none', color: '#786C58', fontWeight: 600 }}
+            sx={{ textTransform: 'none', color: '#0F172A', fontWeight: 700, fontSize: '12px' }}
           >
             Cancel
           </Button>
           <Button
-            variant="contained"
-            disableElevation
             onClick={handleSaveEdit}
             disabled={editLoading}
+            variant="contained"
+            size="small"
             sx={{
-              background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
+              bgcolor: '#741748',
+              color: '#FFFFFF',
               fontWeight: 700,
+              fontSize: '12px',
               textTransform: 'none',
-              px: 2.5,
-              borderRadius: '6px',
+              px: 2,
+              borderRadius: '3px',
+              '&:hover': { bgcolor: '#580e34' },
             }}
           >
-            {editLoading ? <CircularProgress size={20} color="inherit" /> : 'Save Changes'}
+            {editLoading ? <CircularProgress size={16} color="inherit" /> : 'Save Changes'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1597,9 +1155,8 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
         slotProps={{
           paper: {
             sx: {
-              borderRadius: '16px',
-              border: '1.5px solid #E2E8F0',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.12)',
+              borderRadius: '4px',
+              border: '1px solid #9BB3CC',
               overflow: 'hidden',
             },
           },
@@ -1607,317 +1164,162 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
       >
         <DialogTitle
           sx={{
-            fontWeight: 800,
-            fontSize: '18px',
-            color: '#1E293B',
-            backgroundColor: '#F8FAFC',
-            borderBottom: '1px solid #E2E8F0',
-            py: 2,
-            px: 3,
+            fontWeight: 700,
+            fontSize: '13.5px',
+            color: '#0F172A',
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            py: 1,
+            px: 2,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <ReceiptLongRoundedIcon sx={{ color: '#B91C1C', fontSize: 24 }} />
-            <Box>
-              <Typography sx={{ fontWeight: 800, fontSize: '17px', color: '#1F1714', lineHeight: 1.2 }}>
-                Edit Bill #{editBillFormData.billNo}
-              </Typography>
-              <Typography sx={{ fontSize: '12px', color: '#786C58', fontWeight: 600, mt: 0.2 }}>
-                Modify invoice details, customer information, line items, and taxes
-              </Typography>
-            </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ReceiptLongRoundedIcon sx={{ color: '#0284C7', fontSize: 18 }} />
+            <Typography sx={{ fontWeight: 700, fontSize: '13px', color: '#0F172A' }}>
+              Edit Bill #{editBillFormData.billNo}
+            </Typography>
           </Box>
-          <Chip
-            label={editBillFormData.date || 'Today'}
-            size="small"
-            sx={{ fontWeight: 700, backgroundColor: '#F1F5F9', color: '#B91C1C', border: '1px solid #E2E8F0' }}
-          />
         </DialogTitle>
 
-        <DialogContent sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5, backgroundColor: '#FFFFFF' }}>
-          {/* Bill Metadata Grid */}
-          <Box sx={{ mt: 1 }}>
-            <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#B91C1C', textTransform: 'uppercase', letterSpacing: '0.05em', mb: 1.5 }}>
-              1. Bill & Customer Details
-            </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
+        <DialogContent sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5, bgcolor: '#F0F5FA' }}>
+          {/* Bill Metadata */}
+          <fieldset className="erp-fieldset">
+            <legend className="erp-legend">Bill & Customer Details</legend>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1.2 }}>
               <Box>
-                <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', mb: 0.3 }}>
                   Bill Number *
                 </Typography>
-                <TextField
-                  fullWidth
-                  size="small"
+                <input
+                  type="text"
                   value={editBillFormData.billNo}
                   onChange={(e) => setEditBillFormData({ ...editBillFormData, billNo: e.target.value })}
-                  slotProps={{
-                    input: { sx: { fontSize: '13.5px', fontWeight: 700, color: '#B91C1C', borderRadius: '8px' } },
-                  }}
+                  className="erp-input"
+                  style={{ width: '100%', fontWeight: 700 }}
                 />
               </Box>
 
               <Box>
-                <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
-                  Bill Date (DD-MM-YYYY) *
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', mb: 0.3 }}>
+                  Bill Date *
                 </Typography>
-                <TextField
-                  fullWidth
-                  size="small"
+                <input
+                  type="text"
                   value={editBillFormData.date}
                   onChange={(e) => setEditBillFormData({ ...editBillFormData, date: e.target.value })}
-                  slotProps={{
-                    input: { sx: { fontSize: '13.5px', fontWeight: 600, borderRadius: '8px' } },
-                  }}
+                  className="erp-input"
+                  style={{ width: '100%' }}
                 />
               </Box>
 
               <Box>
-                <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
-                  Company Name
-                </Typography>
-                <TextField
-                  fullWidth
-                  size="small"
-                  value={editBillFormData.companyName}
-                  onChange={(e) => setEditBillFormData({ ...editBillFormData, companyName: e.target.value })}
-                  slotProps={{
-                    input: { sx: { fontSize: '13.5px', fontWeight: 600, borderRadius: '8px' } },
-                  }}
-                />
-              </Box>
-            </Box>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mt: 2 }}>
-              <Box>
-                <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', mb: 0.3 }}>
                   Customer Name *
                 </Typography>
-                <Autocomplete
-                  freeSolo
-                  options={customers.map((c) => c.name)}
+                <input
+                  type="text"
                   value={editBillFormData.customerName}
-                  onInputChange={(_e, newInputValue) => {
-                    const match = customers.find((c) => c.name.toLowerCase() === newInputValue.toLowerCase());
-                    setEditBillFormData((prev) => ({
-                      ...prev,
-                      customerName: newInputValue,
-                      ...(match ? {
-                        customerPhone: match.mobile && match.mobile !== 'N/A' ? match.mobile : prev.customerPhone,
-                        customerAddress: match.address && match.address !== 'N/A' ? match.address : prev.customerAddress,
-                        customerGst: match.gst && match.gst !== 'N/A' ? match.gst : prev.customerGst,
-                      } : {}),
-                    }));
-                  }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      size="small"
-                      placeholder="Select or enter customer name"
-                      sx={{ '& .MuiOutlinedInput-root': { fontSize: '13.5px', fontWeight: 700, borderRadius: '8px' } }}
-                    />
-                  )}
-                />
-              </Box>
-
-              <Box>
-                <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
-                  Customer Mobile Number
-                </Typography>
-                <TextField
-                  fullWidth
-                  size="small"
-                  value={editBillFormData.customerPhone}
-                  onChange={(e) => setEditBillFormData({ ...editBillFormData, customerPhone: e.target.value })}
-                  slotProps={{
-                    input: { sx: { fontSize: '13.5px', fontWeight: 500, borderRadius: '8px' } },
-                  }}
+                  onChange={(e) => setEditBillFormData({ ...editBillFormData, customerName: e.target.value })}
+                  className="erp-input"
+                  style={{ width: '100%' }}
                 />
               </Box>
             </Box>
+          </fieldset>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2, mt: 2 }}>
-              <Box>
-                <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
-                  Customer Address / Location
-                </Typography>
-                <TextField
-                  fullWidth
-                  size="small"
-                  value={editBillFormData.customerAddress}
-                  onChange={(e) => setEditBillFormData({ ...editBillFormData, customerAddress: e.target.value })}
-                  slotProps={{
-                    input: { sx: { fontSize: '13.5px', fontWeight: 500, borderRadius: '8px' } },
-                  }}
-                />
-              </Box>
-
-              <Box>
-                <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
-                  GSTIN
-                </Typography>
-                <TextField
-                  fullWidth
-                  size="small"
-                  value={editBillFormData.customerGst}
-                  onChange={(e) => setEditBillFormData({ ...editBillFormData, customerGst: e.target.value })}
-                  slotProps={{
-                    input: { sx: { fontSize: '13.5px', fontWeight: 500, borderRadius: '8px' } },
-                  }}
-                />
-              </Box>
-            </Box>
-          </Box>
-
-          <Divider sx={{ borderColor: '#E2E8F0' }} />
-
-          {/* Bill Items Section */}
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#B91C1C', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                2. Invoice Items & Quantities
-              </Typography>
+          {/* Product Items Table */}
+          <fieldset className="erp-fieldset">
+            <legend className="erp-legend">Invoice Line Items</legend>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
               <Button
-                size="small"
-                variant="outlined"
                 onClick={handleEditBillAddProductRow}
-                startIcon={<AddCircleOutlineRoundedIcon sx={{ fontSize: 16 }} />}
+                startIcon={<AddRoundedIcon sx={{ fontSize: 14 }} />}
+                size="small"
                 sx={{
-                  color: '#334155',
-                  borderColor: '#E2E8F0',
-                  backgroundColor: '#F8FAFC',
-                  fontSize: '12px',
+                  height: '24px',
+                  bgcolor: '#EDF4FB',
+                  border: '1px solid #94A3B8',
+                  color: '#1E40AF',
+                  fontSize: '11px',
                   fontWeight: 700,
                   textTransform: 'none',
-                  borderRadius: '6px',
-                  '&:hover': {
-                    backgroundColor: '#F1F5F9',
-                    borderColor: '#F59E0B',
-                  },
+                  borderRadius: '2px',
+                  '&:hover': { bgcolor: '#D9E4F2' },
                 }}
               >
-                Add Item Row
+                Add Item
               </Button>
             </Box>
 
-            <TableContainer
-              component={Paper}
-              elevation={0}
-              sx={{
-                border: '1.5px solid #E2E8F0',
-                borderRadius: '10px',
-                maxHeight: '300px',
-                overflowY: 'auto',
-              }}
-            >
-              <Table size="small" stickyHeader>
+            <Box sx={{ border: '1px solid #B0C4DE', borderRadius: '3px', overflow: 'hidden', bgcolor: '#FFFFFF' }}>
+              <Table size="small">
                 <TableHead>
-                  <TableRow sx={{ backgroundColor: '#F8FAFC' }}>
-                    <TableCell sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', backgroundColor: '#F8FAFC', width: '40px' }}>
-                      #
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', backgroundColor: '#F8FAFC' }}>
-                      PARTICULAR / PRODUCT
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', backgroundColor: '#F8FAFC', width: '90px' }}>
-                      UNIT
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', backgroundColor: '#F8FAFC', width: '90px' }}>
-                      QTY
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', backgroundColor: '#F8FAFC', width: '100px' }}>
-                      RATE (₹)
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', backgroundColor: '#F8FAFC', width: '110px' }}>
-                      AMOUNT (₹)
-                    </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 800, fontSize: '11.5px', color: '#1E293B', backgroundColor: '#F8FAFC', width: '50px' }}>
-                      
-                    </TableCell>
+                  <TableRow sx={{ bgcolor: '#DCE7F5' }}>
+                    <TableCell sx={{ width: '40px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '11.5px' }}>#</TableCell>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '11.5px' }}>Product Particular</TableCell>
+                    <TableCell sx={{ width: '75px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '11.5px' }}>Unit</TableCell>
+                    <TableCell sx={{ width: '75px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '11.5px' }}>Qty</TableCell>
+                    <TableCell sx={{ width: '90px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '11.5px' }}>Rate (₹)</TableCell>
+                    <TableCell sx={{ width: '100px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '11.5px' }}>Total (₹)</TableCell>
+                    <TableCell sx={{ width: '35px', textAlign: 'center', bgcolor: '#DCE7F5' }} />
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {editBillFormData.products.map((row, index) => {
-                    const rowAmt = (parseFloat(row.quantity) || 0) * (parseFloat(row.rate) || 0);
-
+                  {editBillFormData.products.map((p, index) => {
+                    const rowAmt = (parseFloat(p.quantity) || 0) * (parseFloat(p.rate) || 0);
                     return (
-                      <TableRow key={index} sx={{ '&:hover': { backgroundColor: '#FEFDF5' } }}>
-                        <TableCell sx={{ fontSize: '12px', fontWeight: 700, color: '#786C58' }}>
-                          {index + 1}
-                        </TableCell>
-                        <TableCell>
-                          <Autocomplete
-                            freeSolo
-                            options={productCatalog.map((p) => p.name)}
-                            value={row.particular}
-                            onInputChange={(_e, val) => {
-                              const match = productCatalog.find((p) => p.name.toLowerCase() === val.toLowerCase());
-                              handleEditBillProductChange(index, 'particular', val);
-                              if (match) {
-                                if (match.rate && match.rate > 0) {
-                                  handleEditBillProductChange(index, 'rate', String(match.rate));
-                                }
-                                if (match.unit) {
-                                  handleEditBillProductChange(index, 'pktUnit', match.unit);
-                                }
-                              }
-                            }}
-                            renderInput={(params) => (
-                              <TextField
-                                {...params}
-                                size="small"
-                                placeholder="Item name..."
-                                sx={{ '& .MuiOutlinedInput-root': { fontSize: '13px', fontWeight: 600, py: '2px !important', borderRadius: '6px' } }}
-                              />
-                            )}
+                      <TableRow key={index} sx={{ '& td': { borderBottom: '1px solid #E2E8F0', py: 0.3 } }}>
+                        <TableCell sx={{ fontSize: '11.5px', color: '#64748B' }}>{index + 1}</TableCell>
+                        <TableCell sx={{ p: 0.3 }}>
+                          <input
+                            type="text"
+                            value={p.particular}
+                            onChange={(e) => handleEditBillProductChange(index, 'particular', e.target.value)}
+                            className="erp-input"
+                            style={{ width: '100%', fontSize: '12px' }}
                           />
                         </TableCell>
-                        <TableCell>
-                          <TextField
-                            size="small"
-                            value={row.pktUnit}
+                        <TableCell sx={{ p: 0.3 }}>
+                          <input
+                            type="text"
+                            value={p.pktUnit}
                             onChange={(e) => handleEditBillProductChange(index, 'pktUnit', e.target.value)}
-                            placeholder="Box/Pcs"
-                            slotProps={{
-                              input: { sx: { fontSize: '12.5px', py: '2px', borderRadius: '6px' } },
-                            }}
+                            className="erp-input"
+                            style={{ width: '100%', fontSize: '11.5px' }}
                           />
                         </TableCell>
-                        <TableCell align="right">
-                          <TextField
+                        <TableCell sx={{ p: 0.3 }}>
+                          <input
                             type="number"
-                            size="small"
-                            value={row.quantity}
+                            value={p.quantity}
                             onChange={(e) => handleEditBillProductChange(index, 'quantity', e.target.value)}
-                            slotProps={{
-                              input: { sx: { fontSize: '13px', fontWeight: 700, textAlign: 'right', py: '2px', borderRadius: '6px' } },
-                            }}
+                            className="erp-input"
+                            style={{ width: '100%', textAlign: 'center', fontSize: '12px' }}
                           />
                         </TableCell>
-                        <TableCell align="right">
-                          <TextField
+                        <TableCell sx={{ p: 0.3 }}>
+                          <input
                             type="number"
-                            size="small"
-                            value={row.rate}
+                            value={p.rate}
                             onChange={(e) => handleEditBillProductChange(index, 'rate', e.target.value)}
-                            slotProps={{
-                              input: { sx: { fontSize: '13px', fontWeight: 700, textAlign: 'right', py: '2px', borderRadius: '6px' } },
-                            }}
+                            className="erp-input"
+                            style={{ width: '100%', textAlign: 'right', fontSize: '12px' }}
                           />
                         </TableCell>
-                        <TableCell align="right" sx={{ fontSize: '13.5px', fontWeight: 800, color: '#B91C1C' }}>
-                          ₹{rowAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <TableCell sx={{ textAlign: 'right', fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
+                          ₹{rowAmt.toFixed(2)}
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell sx={{ textAlign: 'center', p: 0.2 }}>
                           <IconButton
                             size="small"
                             onClick={() => handleEditBillRemoveProductRow(index)}
                             disabled={editBillFormData.products.length <= 1}
-                            sx={{ color: '#DC2626', p: 0.5 }}
+                            sx={{ color: '#DC2626', p: 0.2 }}
                           >
-                            <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
+                            <DeleteOutlineRoundedIcon sx={{ fontSize: 14 }} />
                           </IconButton>
                         </TableCell>
                       </TableRow>
@@ -1925,142 +1327,88 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                   })}
                 </TableBody>
               </Table>
-            </TableContainer>
-          </Box>
-
-          <Divider sx={{ borderColor: '#E2E8F0' }} />
+            </Box>
+          </fieldset>
 
           {/* Bill Summary & Calculations */}
-          <Box sx={{ backgroundColor: '#F8FAFC', p: 2, borderRadius: '12px', border: '1.5px solid #E2E8F0' }}>
-            <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#B91C1C', textTransform: 'uppercase', letterSpacing: '0.05em', mb: 1.5 }}>
-              3. Summary & Financial Adjustments
-            </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(5, 1fr)' }, gap: 2, alignItems: 'center' }}>
+          <fieldset className="erp-fieldset">
+            <legend className="erp-legend">Summary & Calculations</legend>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(5, 1fr)' }, gap: 1, alignItems: 'center' }}>
               <Box>
-                <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
-                  Subtotal
-                </Typography>
-                <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#1F1714' }}>
-                  ₹{editBillCalculations.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', mb: 0.2 }}>Subtotal</Typography>
+                <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
+                  ₹{editBillCalculations.subtotal.toFixed(2)}
                 </Typography>
               </Box>
 
               <Box>
-                <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
-                  Discount (₹)
-                </Typography>
-                <TextField
-                  size="small"
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', mb: 0.2 }}>Discount (₹)</Typography>
+                <input
                   type="number"
                   value={editBillFormData.discount}
                   onChange={(e) => setEditBillFormData({ ...editBillFormData, discount: e.target.value })}
-                  slotProps={{
-                    input: { sx: { fontSize: '13px', fontWeight: 700, borderRadius: '6px', backgroundColor: '#FFFFFF' } },
-                  }}
+                  className="erp-input"
+                  style={{ width: '100%', textAlign: 'right' }}
                 />
               </Box>
 
               <Box>
-                <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
-                  Transport (₹)
-                </Typography>
-                <TextField
-                  size="small"
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', mb: 0.2 }}>Transport (₹)</Typography>
+                <input
                   type="number"
                   value={editBillFormData.transport}
                   onChange={(e) => setEditBillFormData({ ...editBillFormData, transport: e.target.value })}
-                  slotProps={{
-                    input: { sx: { fontSize: '13px', fontWeight: 700, borderRadius: '6px', backgroundColor: '#FFFFFF' } },
-                  }}
+                  className="erp-input"
+                  style={{ width: '100%', textAlign: 'right' }}
                 />
               </Box>
 
               <Box>
-                <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
-                  Packing (₹)
-                </Typography>
-                <TextField
-                  size="small"
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', mb: 0.2 }}>Packing (₹)</Typography>
+                <input
                   type="number"
                   value={editBillFormData.packing}
                   onChange={(e) => setEditBillFormData({ ...editBillFormData, packing: e.target.value })}
-                  slotProps={{
-                    input: { sx: { fontSize: '13px', fontWeight: 700, borderRadius: '6px', backgroundColor: '#FFFFFF' } },
-                  }}
+                  className="erp-input"
+                  style={{ width: '100%', textAlign: 'right' }}
                 />
               </Box>
 
               <Box>
-                <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#786C58', mb: 0.5 }}>
-                  Tax Rate (%)
-                </Typography>
-                <TextField
-                  size="small"
-                  type="number"
-                  value={editBillFormData.tax}
-                  onChange={(e) => setEditBillFormData({ ...editBillFormData, tax: e.target.value })}
-                  slotProps={{
-                    input: { sx: { fontSize: '13px', fontWeight: 700, borderRadius: '6px', backgroundColor: '#FFFFFF' } },
-                  }}
-                />
-              </Box>
-            </Box>
-
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                pt: 1.5,
-                borderTop: '1px dashed #FCD34D',
-                mt: 2,
-              }}
-            >
-              <Box>
-                <Typography sx={{ fontSize: '12px', color: '#786C58', fontWeight: 600 }}>
-                  Tax Amount: ₹{editBillCalculations.taxAmount.toFixed(2)}
-                </Typography>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                <Typography sx={{ fontSize: '14px', fontWeight: 800, color: '#786C58' }}>
-                  Grand Total:
-                </Typography>
-                <Typography sx={{ fontSize: '24px', fontWeight: 900, color: '#B91C1C' }}>
-                  ₹{editBillCalculations.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 800, color: '#0F172A', mb: 0.2 }}>Grand Total</Typography>
+                <Typography sx={{ fontSize: '14px', fontWeight: 900, color: '#741748' }}>
+                  ₹{editBillCalculations.grandTotal.toFixed(2)}
                 </Typography>
               </Box>
             </Box>
-          </Box>
+          </fieldset>
         </DialogContent>
 
-        <DialogActions sx={{ p: 2.5, backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'flex-end', gap: 1.5 }}>
+        <DialogActions sx={{ p: 1, bgcolor: '#EDF4FB', borderTop: '1px solid #B0C4DE', display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
           <Button
             onClick={() => setOpenEditBillModal(false)}
             disabled={editBillLoading}
-            sx={{ textTransform: 'none', color: '#786C58', fontWeight: 700, fontSize: '13.5px', px: 2 }}
+            sx={{ textTransform: 'none', color: '#0F172A', fontWeight: 700, fontSize: '12px' }}
           >
             Cancel
           </Button>
           <Button
-            variant="contained"
-            disableElevation
             onClick={handleSaveEditBill}
             disabled={editBillLoading}
+            variant="contained"
+            size="small"
             sx={{
-              background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
-              fontWeight: 800,
-              fontSize: '13.5px',
+              bgcolor: '#741748',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '12px',
               textTransform: 'none',
-              px: 3,
-              py: 0.9,
-              borderRadius: '8px',
-              boxShadow: '0 2px 8px rgba(220, 38, 38, 0.25)',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)',
-              },
+              px: 2.5,
+              borderRadius: '3px',
+              '&:hover': { bgcolor: '#580e34' },
             }}
           >
-            {editBillLoading ? <CircularProgress size={20} color="inherit" /> : 'Save Bill Changes'}
+            {editBillLoading ? <CircularProgress size={16} color="inherit" /> : 'Save Bill Changes'}
           </Button>
         </DialogActions>
       </Dialog>

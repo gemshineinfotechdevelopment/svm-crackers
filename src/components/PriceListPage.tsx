@@ -25,7 +25,6 @@ import {
   Select,
   FormControl,
   Grid,
-  Divider,
   Checkbox,
   FormControlLabel,
   Snackbar,
@@ -46,14 +45,13 @@ import ImageRoundedIcon from '@mui/icons-material/ImageRounded';
 import TableChartRoundedIcon from '@mui/icons-material/TableChartRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import DeleteSweepRoundedIcon from '@mui/icons-material/DeleteSweepRounded';
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ContentPasteRoundedIcon from '@mui/icons-material/ContentPasteRounded';
 import AutoFixHighRoundedIcon from '@mui/icons-material/AutoFixHighRounded';
 import * as XLSX from 'xlsx';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import Tesseract from 'tesseract.js';
-import { PriceListsApi, CategoriesApi, ProductsApi } from '../services/api';
+import { PriceListsApi, CategoriesApi } from '../services/api';
 import { getStoredSettings } from './SettingsPage';
 import { getSelectedBillYear } from '../utils/billYearUtils';
 import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
@@ -176,20 +174,10 @@ export const PriceListPage: FC = () => {
     try {
       setLoading(true);
       const selectedYear = getSelectedBillYear();
-      const [priceData, catData, prodsData] = await Promise.all([
+      const [priceData, catData] = await Promise.all([
         PriceListsApi.getAll({ year: selectedYear }),
         CategoriesApi.getAll().catch(() => []),
-        ProductsApi.getAll(undefined, selectedYear).catch(() => []),
       ]);
-
-      const prodMap = new Map<string, any>();
-      if (Array.isArray(prodsData)) {
-        prodsData.forEach((p: any) => {
-          if (p.name) {
-            prodMap.set(p.name.toLowerCase().trim(), p);
-          }
-        });
-      }
 
       let mergedItems: PriceItem[] = [];
       if (Array.isArray(priceData)) {
@@ -273,24 +261,19 @@ export const PriceListPage: FC = () => {
     'பட்டாசுகள்': 'Crackers',
   };
 
-  // Converts / cleans text to 100% pure English (strips Tamil characters and translates common terms)
   const ensureEnglishText = (text: string): string => {
     if (!text) return '';
     let str = String(text).trim();
 
-    // 1. If string contains English letters (e.g., "2 3/4" Kuruvi Crackers / 2 3/4" குருவி"), strip out the Tamil characters
     if (/[a-zA-Z]/.test(str)) {
       str = str.replace(/[\u0B80-\u0BFF]+/g, ' ');
     } else if (/[\u0B80-\u0BFF]/.test(str)) {
-      // 2. Pure Tamil text with no English letters: replace known words
       for (const [tam, eng] of Object.entries(TAMIL_CRACKER_WORDS)) {
         str = str.replace(new RegExp(tam, 'g'), eng);
       }
-      // If any unmapped Tamil characters still remain, clean them up
       str = str.replace(/[\u0B80-\u0BFF]+/g, ' ');
     }
 
-    // 3. Clean up dangling parentheses, slashes, dashes, extra spaces
     str = str
       .replace(/\(\s*\)/g, ' ')
       .replace(/\[\s*\]/g, ' ')
@@ -302,7 +285,6 @@ export const PriceListPage: FC = () => {
     return str;
   };
 
-  // Universal Text-to-Items Parser (Supports OCR text, PDF text, and pasted WhatsApp price lists)
   const parseTextLinesToItems = (rawText: string): Partial<PriceItem>[] => {
     const lines = rawText
       .split('\n')
@@ -324,12 +306,10 @@ export const PriceListPage: FC = () => {
     const unitRegex = /\b(\d+\s*(?:pcs|box|pkt|tin|jar|bag|roll|cases|pkt\.)|pcs|box|pkt|tin|jar|bag|roll|cases|pkt\.)\b/i;
 
     for (const rawLine of lines) {
-      // Clean up common OCR artifacts
       const line = rawLine.replace(/[|│]/g, ' ').replace(/\s+/g, ' ').trim();
       if (!line || line.length < 2) continue;
 
       const lower = line.toLowerCase();
-      // Skip header noise
       if (
         lower.includes('rate list') ||
         lower.includes('price list') ||
@@ -342,8 +322,8 @@ export const PriceListPage: FC = () => {
         lower.includes('phone') ||
         lower.includes('gstin') ||
         lower.includes('terms &') ||
-        lower.includes('varun') ||
-        lower.includes('dheeksha')
+        lower.includes('svm') ||
+        lower.includes('apsara')
       ) {
         for (const cat of knownCats) {
           if (line.toUpperCase().includes(cat)) {
@@ -354,7 +334,6 @@ export const PriceListPage: FC = () => {
         continue;
       }
 
-      // Check if line is purely a category title
       const hasDigits = /\d/.test(line);
       if (!hasDigits && line.length >= 3 && line.length <= 50) {
         const catCandidate = ensureEnglishText(line.replace(/[:\-_~*|]/g, '').trim());
@@ -446,7 +425,6 @@ export const PriceListPage: FC = () => {
     return parsed;
   };
 
-  // OCR Recognition using Tesseract
   const recognizeImageWithOcr = async (
     imageSource: string | File | Blob | HTMLCanvasElement,
     onProgress?: (p: number, status: string) => void
@@ -463,20 +441,17 @@ export const PriceListPage: FC = () => {
     return result.data.text || '';
   };
 
-  // Helper to intelligently process PDF (Fast Text Layer + Automatic AI OCR Fallback)
   const processPdfDocument = async (
     arrayBuffer: ArrayBuffer,
     onProgress?: (p: number, status: string) => void
   ): Promise<Partial<PriceItem>[]> => {
     try {
-      // Pass safe copy of bytes to prevent detached ArrayBuffer errors
       const uint8Copy = new Uint8Array(arrayBuffer.slice(0));
       const loadingTask = pdfjsLib.getDocument({ data: uint8Copy });
       const pdfDoc = await loadingTask.promise;
       let allLines = '';
       let hasText = false;
 
-      // 1. Try digital text extraction first across all pages
       for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
         const page = await pdfDoc.getPage(pageNum);
         const textContent = await page.getTextContent();
@@ -524,7 +499,6 @@ export const PriceListPage: FC = () => {
         }
       }
 
-      // 2. If no digital text was found (scanned image PDF), perform canvas OCR rendering page by page on the SAME pdfDoc
       const totalPages = Math.min(pdfDoc.numPages, 5);
       let ocrFullText = '';
 
@@ -553,12 +527,10 @@ export const PriceListPage: FC = () => {
     }
   };
 
-  // Intelligent Spreadsheet Parser (Extracts Columnar Tables AND Hierarchical Section Heading Rate Cards)
   const parseSpreadsheetWorkbook = (workbook: XLSX.WorkBook): Partial<PriceItem>[] => {
     const allParsedItems: Partial<PriceItem>[] = [];
     let globalSlNo = 1;
 
-    // Helper to check title / contact noise lines
     const isTitleNoise = (text: string) => {
       const l = text.toLowerCase();
       return (
@@ -574,12 +546,11 @@ export const PriceListPage: FC = () => {
         l.includes('discount list') ||
         l.includes('total') ||
         l.includes('grand total') ||
-        l.includes('varun') ||
-        l.includes('dheeksha')
+        l.includes('svm') ||
+        l.includes('apsara')
       );
     };
 
-    // Helper to identify if a row is a Category Section Heading (e.g. "ONE SOUND CRACKERS", "FLOWER POTS", "=== CHAKKARS ===")
     const detectCategoryHeading = (row: any[]): string | null => {
       const nonEmptyCells = row
         .map((c, i) => ({ val: String(c).trim(), idx: i }))
@@ -589,7 +560,6 @@ export const PriceListPage: FC = () => {
 
       const rowText = nonEmptyCells.map((c) => c.val.toLowerCase()).join(' ');
 
-      // If it looks like table header definitions, it's not a category
       if (
         (rowText.includes('item name') || rowText.includes('product') || rowText.includes('particular')) &&
         (rowText.includes('rate') || rowText.includes('mrp') || rowText.includes('price') || rowText.includes('amount'))
@@ -597,19 +567,17 @@ export const PriceListPage: FC = () => {
         return null;
       }
 
-      // Count positive numeric cells in this row (prices)
       const numericCells = nonEmptyCells.filter((c) => {
         const clean = c.val.replace(/[₹,Rs\.\/\s]/gi, '');
         const num = parseFloat(clean);
         return !isNaN(num) && num > 0 && /^\d+(\.\d+)?$/.test(clean);
       });
 
-      // A category header has no price cells (or at most a section number like "1. ONE SOUND CRACKERS")
       if (numericCells.length === 0 || (numericCells.length === 1 && nonEmptyCells.length <= 2)) {
         let textCandidate = nonEmptyCells
           .map((c) => c.val)
           .join(' ')
-          .replace(/^[\d\.\-\)\:]+/, '') // strip leading "1. " or "I. "
+          .replace(/^[\d\.\-\)\:]+/, '')
           .replace(/[:\-_~*|=#]+/g, ' ')
           .trim();
 
@@ -652,7 +620,6 @@ export const PriceListPage: FC = () => {
           lowerCells.some((c) => c.includes('rate') || c.includes('price') || c.includes('mrp') || c.includes('amount'));
 
         if (isTableHeaderRow) {
-          // Re-map column indices for this section/table, prioritizing English name column
           lowerCells.forEach((c, idx) => {
             if (c.includes('sl') || c.includes('s.no') || c === 'no' || c === '#') slCol = idx;
             else if (c.includes('eng') || c.includes('english')) engNameCol = idx;
@@ -668,14 +635,12 @@ export const PriceListPage: FC = () => {
           continue;
         }
 
-        // Check if this row is a Category Section Heading (e.g. "ONE SOUND CRACKERS")
         const detectedHeading = detectCategoryHeading(row);
         if (detectedHeading) {
           currentCategory = detectedHeading;
           continue;
         }
 
-        // Extract product data
         let itemName = '';
         let itemCat = currentCategory;
         let itemUnit = 'Box';
@@ -684,13 +649,11 @@ export const PriceListPage: FC = () => {
         let itemDisc = 0;
         let itemSlNo = globalSlNo;
 
-        // Choose best column: prefer explicit English column, or column with English characters
         const activeNameCol = engNameCol !== -1 ? engNameCol : nameCol;
 
         if (activeNameCol !== -1 && row[activeNameCol] !== undefined && String(row[activeNameCol]).trim() !== '') {
           itemName = ensureEnglishText(String(row[activeNameCol]));
 
-          // If activeNameCol had Tamil or was empty after cleaning, check if another column has English letters
           if (!itemName || !/[a-zA-Z]/.test(itemName)) {
             for (let cIdx = 0; cIdx < row.length; cIdx++) {
               if (cIdx === slCol || cIdx === rateCol || cIdx === mrpCol || cIdx === unitCol) continue;
@@ -715,7 +678,6 @@ export const PriceListPage: FC = () => {
           if (rateCol !== -1 && row[rateCol]) itemRate = Number(String(row[rateCol]).replace(/[^\d.]/g, '')) || 0;
           if (discCol !== -1 && row[discCol]) itemDisc = Number(String(row[discCol]).replace(/[^\d.]/g, '')) || 0;
         } else {
-          // Freeform cells analysis: inspect text cells and prefer English characters
           const nonEmpty = row.map((c, i) => ({ val: String(c).trim(), idx: i })).filter((x) => x.val.length > 0);
           const textTokens: string[] = [];
           const numTokens: number[] = [];
@@ -731,7 +693,6 @@ export const PriceListPage: FC = () => {
           }
 
           if (textTokens.length > 0 && numTokens.length > 0) {
-            // Find English text among tokens
             const engText = textTokens.filter((t) => /[a-zA-Z]/.test(t)).join(' ');
             const rawCand = engText || textTokens.join(' ');
             itemName = ensureEnglishText(rawCand);
@@ -746,12 +707,10 @@ export const PriceListPage: FC = () => {
           }
         }
 
-        // Calculate rate if MRP & discount provided
         if (!itemRate && itemMrp > 0) {
           itemRate = itemDisc > 0 ? itemMrp - (itemMrp * itemDisc) / 100 : itemMrp;
         }
 
-        // Validate product
         if (itemName && itemName.length >= 2 && !isTitleNoise(itemName) && (itemRate > 0 || itemMrp > 0)) {
           allParsedItems.push({
             slNo: itemSlNo || globalSlNo,
@@ -770,7 +729,6 @@ export const PriceListPage: FC = () => {
     return allParsedItems;
   };
 
-  // Unified File Processor (Supports Excel, CSV, PDF, and Images with OCR)
   const processUploadedFile = async (file: File) => {
     const fileName = file.name;
     const fileExt = fileName.split('.').pop()?.toLowerCase() || '';
@@ -779,7 +737,6 @@ export const PriceListPage: FC = () => {
         ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
         : `${Math.round(file.size / 1024)} KB`;
 
-    // 1. Spreadsheet (.xlsx, .xls, .csv)
     if (['xlsx', 'xls', 'csv'].includes(fileExt)) {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -802,7 +759,7 @@ export const PriceListPage: FC = () => {
           setUploadModalOpen(true);
           setToast({
             open: true,
-            message: `📊 Excel analyzed: Found ${parsed.length} products across ${uniqueCategories.length} categories (${uniqueCategories.slice(0, 3).join(', ')}${uniqueCategories.length > 3 ? '...' : ''})!`,
+            message: `Excel analyzed: Found ${parsed.length} products across ${uniqueCategories.length} categories!`,
             severity: 'success',
           });
         } catch (err) {
@@ -814,7 +771,6 @@ export const PriceListPage: FC = () => {
       return;
     }
 
-    // 2. PDF Document (.pdf) - Uses unified text extraction + OCR fallback on safe buffer copy
     if (fileExt === 'pdf' || file.type === 'application/pdf') {
       try {
         setOcrLoading(true);
@@ -823,7 +779,6 @@ export const PriceListPage: FC = () => {
 
         const arrayBuffer = await file.arrayBuffer();
 
-        // Also create dataUrl for visual document viewing in gallery
         const dataUrl = await new Promise<string>((resolve) => {
           const r = new FileReader();
           r.onload = (ev) => resolve(ev.target?.result as string);
@@ -831,7 +786,6 @@ export const PriceListPage: FC = () => {
         });
         setPendingPdfDataUrl(dataUrl);
 
-        // Process PDF with fast text + OCR
         const extracted = await processPdfDocument(arrayBuffer, (p, status) => {
           setOcrProgress(p);
           setOcrStatusText(status);
@@ -846,11 +800,10 @@ export const PriceListPage: FC = () => {
           setUploadModalOpen(true);
           setToast({
             open: true,
-            message: `✅ Successfully extracted ${extracted.length} products from PDF "${file.name}"! Review and confirm below to sync to Products & Categories.`,
+            message: `Successfully extracted ${extracted.length} products from PDF "${file.name}"!`,
             severity: 'success',
           });
         } else {
-          // If no items found, fallback to doc upload modal
           const newDoc: UploadedPriceDoc = {
             id: `doc-${Date.now()}`,
             name: fileName,
@@ -871,7 +824,6 @@ export const PriceListPage: FC = () => {
       return;
     }
 
-    // 3. Image Rate Card (.png, .jpg, .jpeg, .webp) - Uses OCR
     if (file.type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(fileExt)) {
       try {
         setOcrLoading(true);
@@ -885,7 +837,6 @@ export const PriceListPage: FC = () => {
         });
         setPendingPdfDataUrl(dataUrl);
 
-        // Run OCR on image
         const ocrText = await recognizeImageWithOcr(dataUrl, (p, status) => {
           setOcrProgress(p);
           setOcrStatusText(status);
@@ -901,11 +852,10 @@ export const PriceListPage: FC = () => {
           setUploadModalOpen(true);
           setToast({
             open: true,
-            message: `✨ AI OCR detected ${extracted.length} cracker items from photo "${file.name}"! Review and sync to Products & Categories.`,
+            message: `AI OCR detected ${extracted.length} cracker items from photo "${file.name}"!`,
             severity: 'success',
           });
         } else {
-          // If OCR didn't catch rows, open manual entry with image preview
           const newDoc: UploadedPriceDoc = {
             id: `doc-${Date.now()}`,
             name: fileName,
@@ -929,7 +879,6 @@ export const PriceListPage: FC = () => {
     alert('Unsupported file format. Please upload an Excel (.xlsx/.xls), CSV (.csv), PDF (.pdf), or Image (.jpg/.png).');
   };
 
-  // Extract from pasted text (e.g. copied from WhatsApp / Excel / Notes)
   const handleExtractFromPasteText = () => {
     if (!pasteTextContent.trim()) {
       alert('Please paste some price list text first');
@@ -948,12 +897,11 @@ export const PriceListPage: FC = () => {
     setUploadModalOpen(true);
     setToast({
       open: true,
-      message: `✅ Extracted ${extracted.length} products from pasted text! Review and sync to Products & Categories.`,
+      message: `Extracted ${extracted.length} products from pasted text!`,
       severity: 'success',
     });
   };
 
-  // Editable Preview Table item modifier handlers
   const handleUpdatePreviewItem = (index: number, field: keyof PriceItem, value: any) => {
     setPreviewItems((prev) => {
       const copy = [...prev];
@@ -977,7 +925,6 @@ export const PriceListPage: FC = () => {
         unit: 'Box',
         mrp: 0,
         rate: 0,
-        stock: 100,
       },
     ]);
   };
@@ -1008,7 +955,6 @@ export const PriceListPage: FC = () => {
     }
   };
 
-  // Commit spreadsheet or PDF upload to Backend API (Auto-syncs Products and Categories)
   const handleConfirmSpreadsheetUpload = async () => {
     if (previewItems.length === 0) return;
 
@@ -1020,7 +966,6 @@ export const PriceListPage: FC = () => {
         replaceExisting,
       });
 
-      // Also record as a document entry
       const newDoc: UploadedPriceDoc = {
         id: `doc-${Date.now()}`,
         name: uploadFileName,
@@ -1037,7 +982,7 @@ export const PriceListPage: FC = () => {
       fetchData();
       setToast({
         open: true,
-        message: `🎉 Successfully imported ${previewItems.length} items! Automatically synced to Product & Categories pages.`,
+        message: `Successfully imported ${previewItems.length} items! Automatically synced to Product & Categories pages.`,
         severity: 'success',
       });
     } catch (err: any) {
@@ -1048,7 +993,6 @@ export const PriceListPage: FC = () => {
     }
   };
 
-  // Confirm PDF / Image Upload & Save to Catalog
   const handleConfirmDocUpload = () => {
     if (!pendingDocUpload) return;
     const finalDoc: UploadedPriceDoc = {
@@ -1062,12 +1006,11 @@ export const PriceListPage: FC = () => {
     setActiveViewMode('documents');
     setToast({
       open: true,
-      message: `✅ Rate Card "${finalDoc.name}" uploaded and saved to your catalog!`,
+      message: `Rate Card "${finalDoc.name}" uploaded and saved to your catalog!`,
       severity: 'success',
     });
   };
 
-  // Quick Add Product Item from Image to Price List Database
   const handleQuickAddProductFromDoc = async () => {
     if (!quickItemName.trim()) {
       alert('Please enter product name');
@@ -1108,7 +1051,6 @@ export const PriceListPage: FC = () => {
     }
   };
 
-  // Delete uploaded document & associated items
   const handleDeleteDoc = async (id: string) => {
     const target = uploadedDocs.find((d) => d.id === id);
     if (!target) return;
@@ -1130,7 +1072,6 @@ export const PriceListPage: FC = () => {
     }
   };
 
-  // Download Sample Template
   const handleDownloadTemplate = () => {
     const templateData = [
       {
@@ -1141,7 +1082,6 @@ export const PriceListPage: FC = () => {
         MRP: 120,
         'Discount %': 15,
         Rate: 102,
-        Stock: 500,
       },
       {
         'SL.NO': 2,
@@ -1151,7 +1091,6 @@ export const PriceListPage: FC = () => {
         MRP: 250,
         'Discount %': 20,
         Rate: 200,
-        Stock: 350,
       },
       {
         'SL.NO': 3,
@@ -1161,7 +1100,6 @@ export const PriceListPage: FC = () => {
         MRP: 320,
         'Discount %': 20,
         Rate: 256,
-        Stock: 280,
       },
       {
         'SL.NO': 4,
@@ -1171,12 +1109,11 @@ export const PriceListPage: FC = () => {
         MRP: 750,
         'Discount %': 10,
         Rate: 675,
-        Stock: 120,
       },
     ];
 
     const storeSettings = getStoredSettings();
-    const compName = storeSettings.companyName || 'Apsara Crackers';
+    const compName = storeSettings.companyName || 'SVM Crackers';
     const cleanPrefix = compName.replace(/[^a-zA-Z0-9_-]/g, '_');
 
     const worksheet = XLSX.utils.json_to_sheet(templateData);
@@ -1185,14 +1122,13 @@ export const PriceListPage: FC = () => {
     XLSX.writeFile(workbook, `${cleanPrefix}_Price_List_Template.xlsx`);
   };
 
-  // Export current list to Excel
   const handleExportExcel = () => {
     if (items.length === 0) {
       alert('No price list items to export.');
       return;
     }
     const storeSettings = getStoredSettings();
-    const compName = storeSettings.companyName || 'Apsara Crackers';
+    const compName = storeSettings.companyName || 'SVM Crackers';
     const cleanPrefix = compName.replace(/[^a-zA-Z0-9_-]/g, '_');
 
     const exportData = filteredItems.map((item, idx) => ({
@@ -1212,13 +1148,12 @@ export const PriceListPage: FC = () => {
     XLSX.writeFile(workbook, `${cleanPrefix}_Price_List_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  // Print Price List Direct
   const handlePrintPriceList = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
     const storeSettings = getStoredSettings();
-    const compName = storeSettings.companyName || 'Apsara Crackers';
+    const compName = storeSettings.companyName || 'SVM Crackers';
     const compUpper = compName.toUpperCase();
     const compTagline = storeSettings.tagline || `Official Wholesale & Retail Price List • ${storeSettings.city || 'Sivakasi'}`;
 
@@ -1226,13 +1161,13 @@ export const PriceListPage: FC = () => {
       .map(
         (item, idx) => `
       <tr>
-        <td style="text-align: center; border: 1px solid #ddd; padding: 6px 8px;">${item.slNo || idx + 1}</td>
-        <td style="border: 1px solid #ddd; padding: 6px 10px; font-weight: 600;">${item.itemName}</td>
-        <td style="border: 1px solid #ddd; padding: 6px 8px; color: #666;">${item.category || 'General'}</td>
-        <td style="text-align: center; border: 1px solid #ddd; padding: 6px 8px;">${item.unit || 'Box'}</td>
-        <td style="text-align: right; border: 1px solid #ddd; padding: 6px 8px; color: #888;">₹${Number(item.mrp || 0).toFixed(2)}</td>
-        <td style="text-align: center; border: 1px solid #ddd; padding: 6px 8px;">${item.discountPercent ? `${item.discountPercent}%` : '—'}</td>
-        <td style="text-align: right; border: 1px solid #ddd; padding: 6px 10px; font-weight: 700; color: #b91c1c;">₹${Number(item.rate || 0).toFixed(2)}</td>
+        <td style="text-align: center; border: 1px solid #B0C4DE; padding: 4px 6px;">${item.slNo || idx + 1}</td>
+        <td style="border: 1px solid #B0C4DE; padding: 4px 8px; font-weight: 600;">${item.itemName}</td>
+        <td style="border: 1px solid #B0C4DE; padding: 4px 6px; color: #475569;">${item.category || 'General'}</td>
+        <td style="text-align: center; border: 1px solid #B0C4DE; padding: 4px 6px;">${item.unit || 'Box'}</td>
+        <td style="text-align: right; border: 1px solid #B0C4DE; padding: 4px 6px; color: #64748B;">₹${Number(item.mrp || 0).toFixed(2)}</td>
+        <td style="text-align: center; border: 1px solid #B0C4DE; padding: 4px 6px;">${item.discountPercent ? `${item.discountPercent}%` : '—'}</td>
+        <td style="text-align: right; border: 1px solid #B0C4DE; padding: 4px 8px; font-weight: 700; color: #741748;">₹${Number(item.rate || 0).toFixed(2)}</td>
       </tr>
     `
       )
@@ -1244,18 +1179,18 @@ export const PriceListPage: FC = () => {
       <head>
         <title>${compName} - Price List</title>
         <style>
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; color: #1f2937; }
-          .header { text-align: center; border-bottom: 2px solid #dc2626; padding-bottom: 12px; margin-bottom: 16px; }
-          .title { font-size: 24px; font-weight: bold; color: #b91c1c; margin: 0; }
-          .subtitle { font-size: 13px; color: #d97706; font-weight: bold; text-transform: uppercase; margin-top: 4px; }
-          .meta { display: flex; justify-content: space-between; font-size: 12px; color: #6b7280; margin-bottom: 12px; }
-          table { width: 100%; border-collapse: collapse; font-size: 13px; }
-          th { background-color: #F1F5F9; color: #475569; font-weight: bold; border: 1px solid #E2E8F0; padding: 8px; text-align: left; }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 15px; color: #0F172A; font-size: 12px; }
+          .header { text-align: center; border-bottom: 2px solid #741748; padding-bottom: 8px; margin-bottom: 12px; }
+          .title { font-size: 20px; font-weight: bold; color: #741748; margin: 0; }
+          .subtitle { font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase; margin-top: 3px; }
+          .meta { display: flex; justify-content: space-between; font-size: 11px; color: #475569; margin-bottom: 10px; }
+          table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+          th { background-color: #DCE7F5; color: #0F172A; font-weight: bold; border: 1px solid #B0C4DE; padding: 6px 8px; text-align: left; }
           th.center, td.center { text-align: center; }
           th.right, td.right { text-align: right; }
-          tr:nth-child(even) { background-color: #fafaf9; }
+          tr:nth-child(even) { background-color: #F8FAFC; }
           @media print {
-            body { margin: 10mm; }
+            body { margin: 8mm; }
             button { display: none; }
           }
         </style>
@@ -1273,13 +1208,13 @@ export const PriceListPage: FC = () => {
         <table>
           <thead>
             <tr>
-              <th class="center" style="width: 50px;">SL.NO</th>
+              <th class="center" style="width: 45px;">SL.NO</th>
               <th>ITEM NAME</th>
               <th>CATEGORY</th>
-              <th class="center" style="width: 70px;">UNIT</th>
-              <th class="right" style="width: 90px;">M.R.P</th>
-              <th class="center" style="width: 80px;">DISC %</th>
-              <th class="right" style="width: 100px;">NET RATE</th>
+              <th class="center" style="width: 60px;">UNIT</th>
+              <th class="right" style="width: 80px;">M.R.P</th>
+              <th class="center" style="width: 70px;">DISC %</th>
+              <th class="right" style="width: 90px;">NET RATE</th>
             </tr>
           </thead>
           <tbody>
@@ -1295,7 +1230,6 @@ export const PriceListPage: FC = () => {
     printWindow.document.close();
   };
 
-  // Open Add Modal
   const handleOpenAdd = () => {
     const currentSystemYear = new Date().getFullYear().toString();
     const selectedViewYear = getSelectedBillYear();
@@ -1315,7 +1249,6 @@ export const PriceListPage: FC = () => {
     setItemModalOpen(true);
   };
 
-  // Open Edit Modal
   const handleOpenEdit = (item: PriceItem) => {
     setEditingItem(item);
     setFormSlNo(item.slNo || 1);
@@ -1328,7 +1261,6 @@ export const PriceListPage: FC = () => {
     setItemModalOpen(true);
   };
 
-  // Save manual item
   const handleSaveItem = async () => {
     if (!formName.trim()) {
       alert('Please enter product/item name');
@@ -1382,18 +1314,17 @@ export const PriceListPage: FC = () => {
     }
   };
 
-  // Delete item (also auto-removes matching product from Products catalog)
   const handleDeleteItem = async (item: PriceItem) => {
     const id = item._id || item.id || '';
     if (!id) return;
-    if (!window.confirm(`Delete "${item.itemName}" from Price List & Products catalog?`)) return;
+    if (!window.confirm(`Delete "${item.itemName}" from Price List?`)) return;
 
     try {
       await PriceListsApi.delete(id);
       setItems((prev) => prev.filter((i) => (i._id || i.id) !== id));
       setToast({
         open: true,
-        message: `✅ Item "${item.itemName}" deleted from Price List and Products catalog.`,
+        message: `Item "${item.itemName}" deleted from Price List.`,
         severity: 'info',
       });
     } catch (err: any) {
@@ -1402,9 +1333,8 @@ export const PriceListPage: FC = () => {
     }
   };
 
-  // Clear all items (also clears all products)
   const handleClearAll = async () => {
-    if (!window.confirm('WARNING: Are you sure you want to delete ALL price list items? This will also remove them from the Products catalog.')) {
+    if (!window.confirm('WARNING: Are you sure you want to delete ALL price list items?')) {
       return;
     }
     try {
@@ -1412,7 +1342,7 @@ export const PriceListPage: FC = () => {
       setItems([]);
       setToast({
         open: true,
-        message: 'All price list items and products catalog cleared successfully.',
+        message: 'All price list items cleared successfully.',
         severity: 'info',
       });
     } catch (err: any) {
@@ -1421,7 +1351,6 @@ export const PriceListPage: FC = () => {
     }
   };
 
-  // Auto calculate Net Rate from MRP & Discount % in modal
   const handleMrpChange = (val: string) => {
     setFormMrp(val);
     const mrpNum = Number(val) || 0;
@@ -1446,615 +1375,507 @@ export const PriceListPage: FC = () => {
     <Box
       sx={{
         width: '100%',
-        px: { xs: 2, sm: 3, md: 4 },
-        py: { xs: 2, md: 3 },
+        minHeight: 'calc(100vh - 48px)',
+        bgcolor: '#D9E4F2',
+        p: { xs: 1, sm: 1.5 },
         boxSizing: 'border-box',
       }}
     >
-      {/* Collapsible Multi-Format Upload Zone Card (Excel, CSV, PDF, Images) */}
-      <Collapse in={showUploadZone} sx={{ mb: showUploadZone ? 2.5 : 0 }}>
-        <Paper
-          elevation={0}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx, .xls, .csv, .pdf, image/*, .png, .jpg, .jpeg, .webp"
+        style={{ display: 'none' }}
+        onChange={handleFileInputChange}
+      />
+
+      {/* Main ERP Window Card */}
+      <Paper
+        elevation={0}
+        sx={{
+          bgcolor: '#FFFFFF',
+          border: '1px solid #9BB3CC',
+          borderRadius: '4px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {/* Window Title Header Bar */}
+        <Box
           sx={{
-            p: { xs: 2, sm: 3 },
-            borderRadius: '14px',
-            border: isDragging ? '2px dashed #DC2626' : '1.5px dashed #F59E0B',
-            backgroundColor: isDragging ? '#FEF2F2' : '#FFFDF5',
-            boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
-            transition: 'all 0.2s ease',
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            px: 1.5,
+            py: 0.8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 1,
           }}
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx, .xls, .csv, .pdf, image/*, .png, .jpg, .jpeg, .webp"
-            style={{ display: 'none' }}
-            onChange={handleFileInputChange}
-          />
-
-          <Grid container spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-            <Grid size={{ xs: 12, md: 7 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box
-                  sx={{
-                    width: 54,
-                    height: 54,
-                    borderRadius: '12px',
-                    backgroundColor: '#DC2626',
-                    color: '#FEF08A',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)',
-                    flexShrink: 0,
-                  }}
-                >
-                  <CloudUploadRoundedIcon sx={{ fontSize: 32 }} />
-                </Box>
-                <Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <Typography sx={{ fontSize: '17px', fontWeight: 800, color: '#991B1B' }}>
-                      Upload Price List
-                    </Typography>
-                    <Chip
-                      label="Excel • CSV • PDF • Images"
-                      size="small"
-                      sx={{ backgroundColor: '#F1F5F9', color: '#334155', fontWeight: 700, fontSize: '11px' }}
-                    />
-                  </Box>
-                  <Typography sx={{ fontSize: '13px', color: '#786C58', fontWeight: 500, mt: 0.4 }}>
-                    Upload Excel (<strong>.xlsx</strong>, <strong>.xls</strong>), <strong>.csv</strong>, <strong>PDF document</strong>, or <strong>Rate Card Image</strong> (.png, .jpg).
-                  </Typography>
-                </Box>
-              </Box>
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 5 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: { xs: 'flex-start', md: 'flex-end' },
-                  gap: 1.5,
-                  flexWrap: 'wrap',
-                }}
-              >
-                {/* Download Sample Template */}
-                <Button
-                  variant="outlined"
-                  onClick={handleDownloadTemplate}
-                  startIcon={<DownloadRoundedIcon sx={{ fontSize: 18 }} />}
-                  sx={{
-                    borderColor: '#E2E8F0',
-                    backgroundColor: '#FFFFFF',
-                    color: '#334155',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    px: 2,
-                    py: 1,
-                    borderRadius: '8px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                    '&:hover': {
-                      borderColor: '#F59E0B',
-                      backgroundColor: '#F8FAFC',
-                    },
-                  }}
-                >
-                  Excel Template
-                </Button>
-
-                {/* Paste Text / WhatsApp Rate List Button */}
-                <Button
-                  variant="outlined"
-                  onClick={() => setPasteModalOpen(true)}
-                  startIcon={<ContentPasteRoundedIcon sx={{ fontSize: 18 }} />}
-                  sx={{
-                    borderColor: '#E2E8F0',
-                    backgroundColor: '#FFFFFF',
-                    color: '#334155',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    px: 2,
-                    py: 1,
-                    borderRadius: '8px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                    '&:hover': {
-                      borderColor: '#F59E0B',
-                      backgroundColor: '#F8FAFC',
-                    },
-                  }}
-                >
-                  Paste Text / WhatsApp List
-                </Button>
-
-                {/* Upload File Button */}
-                <Button
-                  variant="contained"
-                  disableElevation
-                  onClick={() => fileInputRef.current?.click()}
-                  startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 18 }} />}
-                  sx={{
-                    background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
-                    color: '#FFFFFF',
-                    fontSize: '13px',
-                    fontWeight: 800,
-                    textTransform: 'none',
-                    px: 2.5,
-                    py: 1,
-                    borderRadius: '8px',
-                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
-                    '&:hover': {
-                      background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)',
-                    },
-                  }}
-                >
-                  Upload File / PDF / Image
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
-        </Paper>
-      </Collapse>
-
-      {/* View Mode & Upload Toggle Bar */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1.5 }}>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant={activeViewMode === 'table' ? 'contained' : 'outlined'}
-            disableElevation
-            onClick={() => setActiveViewMode('table')}
-            startIcon={<TableChartRoundedIcon sx={{ fontSize: 18 }} />}
-            sx={{
-              backgroundColor: activeViewMode === 'table' ? '#B91C1C' : '#FFFFFF',
-              color: activeViewMode === 'table' ? '#FFFFFF' : '#475569',
-              borderColor: '#E2E8F0',
-              fontWeight: 700,
-              fontSize: '13px',
-              textTransform: 'none',
-              borderRadius: '8px',
-              '&:hover': { backgroundColor: activeViewMode === 'table' ? '#991B1B' : '#F8FAFC' },
-            }}
-          >
-            Price List Table ({items.length})
-          </Button>
-
-          <Button
-            variant={activeViewMode === 'documents' ? 'contained' : 'outlined'}
-            disableElevation
-            onClick={() => setActiveViewMode('documents')}
-            startIcon={<PictureAsPdfRoundedIcon sx={{ fontSize: 18 }} />}
-            sx={{
-              backgroundColor: activeViewMode === 'documents' ? '#B91C1C' : '#FFFFFF',
-              color: activeViewMode === 'documents' ? '#FFFFFF' : '#475569',
-              borderColor: '#E2E8F0',
-              fontWeight: 700,
-              fontSize: '13px',
-              textTransform: 'none',
-              borderRadius: '8px',
-              '&:hover': { backgroundColor: activeViewMode === 'documents' ? '#991B1B' : '#F8FAFC' },
-            }}
-          >
-            Uploaded PDFs & Images ({uploadedDocs.length})
-          </Button>
-        </Box>
-
-        {/* Toggle Collapsible Upload Section */}
-        <Button
-          variant={showUploadZone ? 'contained' : 'outlined'}
-          disableElevation
-          onClick={() => setShowUploadZone((prev) => !prev)}
-          startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 18 }} />}
-          sx={{
-            backgroundColor: showUploadZone ? '#DC2626' : '#FFFFFF',
-            color: showUploadZone ? '#FFFFFF' : '#334155',
-            borderColor: '#E2E8F0',
-            fontWeight: 700,
-            fontSize: '13px',
-            textTransform: 'none',
-            borderRadius: '8px',
-            boxShadow: showUploadZone ? '0 2px 6px rgba(220,38,38,0.25)' : 'none',
-            '&:hover': {
-              backgroundColor: showUploadZone ? '#B91C1C' : '#F8FAFC',
-              borderColor: '#F59E0B',
-            },
-          }}
-        >
-          {showUploadZone ? 'Close Upload Panel ✕' : 'Upload / Import Price List ▾'}
-        </Button>
-      </Box>
-
-      {/* VIEW 1: Main Price List Table */}
-      {activeViewMode === 'table' && (
-        <Paper
-          elevation={0}
-          sx={{
-            width: '100%',
-            backgroundColor: '#FFFFFF',
-            borderRadius: '14px',
-            border: '1.5px solid #E2E8F0',
-            boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Sticky Header Wrapper: Fixed Explorer Header + Category Bar */}
-          <Box
-            sx={{
-              backgroundColor: '#FFFFFF',
-              borderTopLeftRadius: '13px',
-              borderTopRightRadius: '13px',
-            }}
-          >
-            {/* Festive Red Top Banner */}
-            <Box
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TableChartRoundedIcon sx={{ fontSize: 18, color: '#1E3A8A' }} />
+            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', letterSpacing: 0.2 }}>
+              Price List Master & Catalog
+            </Typography>
+            <Chip
+              label={`${filteredItems.length} / ${items.length} Items`}
+              size="small"
               sx={{
-                background: 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)',
-                borderBottom: '2px solid #F59E0B',
-                borderTopLeftRadius: '13px',
-                borderTopRightRadius: '13px',
-                px: { xs: 2, sm: 3 },
-                py: 1.5,
-                display: 'flex',
-                flexDirection: { xs: 'column', lg: 'row' },
-                alignItems: { xs: 'stretch', lg: 'center' },
-                justifyContent: 'space-between',
-                gap: 1.5,
-                minHeight: '60px',
+                height: '20px',
+                fontSize: '11px',
+                fontWeight: 700,
+                bgcolor: '#D2E3F5',
+                color: '#1E3A8A',
+                border: '1px solid #99BBE8',
               }}
-            >
-              {/* Title & Count Badge */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-                <Typography
-                  sx={{
-                    color: '#FFFFFF',
-                    fontSize: '18px',
-                    fontWeight: 800,
-                    letterSpacing: '-0.01em',
-                  }}
-                >
-                  Price List Explorer
-                </Typography>
-                <Typography
-                  sx={{
-                    color: '#FEF08A',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    backgroundColor: 'rgba(254, 240, 138, 0.2)',
-                    border: '1px solid rgba(254, 240, 138, 0.35)',
-                    px: 1.2,
-                    py: 0.3,
-                    borderRadius: '12px',
-                  }}
-                >
-                  {filteredItems.length} of {items.length} items
-                </Typography>
-              </Box>
-
-              {/* Search, Action Buttons */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                  flexWrap: { xs: 'wrap', sm: 'nowrap' },
-                }}
-              >
-                {/* Search Input */}
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: '8px',
-                    px: 1.2,
-                    height: '38px',
-                    width: { xs: '100%', sm: '220px' },
-                    boxSizing: 'border-box',
-                    border: '1.5px solid #E2E8F0',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                  }}
-                >
-                  <SearchRoundedIcon sx={{ color: '#D97706', fontSize: 19, mr: 0.8, flexShrink: 0 }} />
-                  <InputBase
-                    placeholder="Search item / rate..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    sx={{
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      color: '#1F1714',
-                      width: '100%',
-                      '& input': {
-                        p: 0,
-                        '&::placeholder': { color: '#A8998A', opacity: 1 },
-                      },
-                    }}
-                  />
-                  {searchTerm && (
-                    <IconButton
-                      size="small"
-                      onClick={() => setSearchTerm('')}
-                      sx={{ p: 0.4, color: '#D97706', '&:hover': { color: '#B45309' } }}
-                    >
-                      <ClearRoundedIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                  )}
-                </Box>
-
-                {/* Quick Upload Button */}
-                <Button
-                  variant="contained"
-                  disableElevation
-                  onClick={() => fileInputRef.current?.click()}
-                  startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 18 }} />}
-                  sx={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-                    color: '#FFFFFF',
-                    border: '1px solid rgba(254, 240, 138, 0.4)',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    px: 1.8,
-                    height: '38px',
-                    borderRadius: '8px',
-                    whiteSpace: 'nowrap',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                    },
-                  }}
-                >
-                  Upload File
-                </Button>
-
-                {/* Print Price List Button */}
-                <Button
-                  variant="contained"
-                  disableElevation
-                  onClick={handlePrintPriceList}
-                  startIcon={<PrintOutlinedIcon sx={{ fontSize: 18 }} />}
-                  sx={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-                    color: '#FFFFFF',
-                    border: '1px solid rgba(254, 240, 138, 0.4)',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    px: 1.8,
-                    height: '38px',
-                    borderRadius: '8px',
-                    whiteSpace: 'nowrap',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                    },
-                  }}
-                >
-                  Print Sheet
-                </Button>
-
-                {/* Export Excel Button */}
-                <Button
-                  variant="contained"
-                  disableElevation
-                  onClick={handleExportExcel}
-                  startIcon={<DownloadRoundedIcon sx={{ fontSize: 18 }} />}
-                  sx={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-                    color: '#FFFFFF',
-                    border: '1px solid rgba(254, 240, 138, 0.4)',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    px: 1.8,
-                    height: '38px',
-                    borderRadius: '8px',
-                    whiteSpace: 'nowrap',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                    },
-                  }}
-                >
-                  Export
-                </Button>
-
-                {/* Add Item Button */}
-                <Button
-                  variant="contained"
-                  disableElevation
-                  onClick={handleOpenAdd}
-                  startIcon={<AddRoundedIcon sx={{ fontSize: 18 }} />}
-                  sx={{
-                    backgroundColor: '#FFFFFF',
-                    color: '#B91C1C',
-                    border: '1.5px solid #E2E8F0',
-                    fontSize: '13px',
-                    fontWeight: 800,
-                    textTransform: 'none',
-                    px: 2,
-                    height: '38px',
-                    borderRadius: '8px',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
-                    whiteSpace: 'nowrap',
-                    '&:hover': {
-                      backgroundColor: '#F8FAFC',
-                    },
-                  }}
-                >
-                  Add Item
-                </Button>
-              </Box>
-            </Box>
-
-            {/* Category Pills Filter Bar */}
-            <Box
-              sx={{
-                p: 1.5,
-                px: { xs: 2, sm: 3 },
-                backgroundColor: '#FFFFFF',
-                borderBottom: '1px solid #E2E8F0',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                overflowX: 'auto',
-                scrollbarWidth: 'none',
-                '&::-webkit-scrollbar': { display: 'none' },
-              }}
-            >
-              <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#334155', mr: 0.5, flexShrink: 0 }}>
-                Category:
-              </Typography>
-
-              <Chip
-                label={`All Items (${items.length})`}
-                onClick={() => setSelectedCategory('ALL')}
-                size="small"
-                sx={{
-                  fontWeight: 700,
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  backgroundColor: selectedCategory === 'ALL' ? '#B91C1C' : '#FFFFFF',
-                  color: selectedCategory === 'ALL' ? '#FFFFFF' : '#475569',
-                  border: selectedCategory === 'ALL' ? '1px solid #991B1B' : '1px solid #E2E8F0',
-                  '&:hover': {
-                    backgroundColor: selectedCategory === 'ALL' ? '#991B1B' : '#F1F5F9',
-                  },
-                }}
-              />
-
-              {categories.map((cat) => {
-                const isSelected = selectedCategory === cat.name;
-                const count = items.filter((i) => i.category === cat.name).length;
-                return (
-                  <Chip
-                    key={cat.name}
-                    label={`${cat.name} (${count})`}
-                    onClick={() => setSelectedCategory(cat.name)}
-                    size="small"
-                    sx={{
-                      fontWeight: 700,
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      backgroundColor: isSelected ? '#B91C1C' : '#FFFFFF',
-                      color: isSelected ? '#FFFFFF' : '#57463A',
-                      border: isSelected ? '1px solid #991B1B' : '1px solid #E5E7EB',
-                      '&:hover': {
-                        backgroundColor: isSelected ? '#991B1B' : '#F3F4F6',
-                      },
-                    }}
-                  />
-                );
-              })}
-
-              {items.length > 0 && (
-                <Tooltip title="Clear entire price list" arrow>
-                  <IconButton
-                    size="small"
-                    onClick={handleClearAll}
-                    sx={{
-                      ml: 'auto',
-                      color: '#DC2626',
-                      backgroundColor: '#FEF2F2',
-                      border: '1px solid #FECACA',
-                      borderRadius: '6px',
-                      p: 0.5,
-                      '&:hover': { backgroundColor: '#FEE2E2' },
-                    }}
-                  >
-                    <DeleteSweepRoundedIcon sx={{ fontSize: 18 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Box>
+            />
           </Box>
 
-          {/* Price List Table with explicit vertical scroll height */}
-          <TableContainer
+          {/* Subtabs & Import Toggle */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+            <Button
+              size="small"
+              onClick={() => setActiveViewMode('table')}
+              sx={{
+                fontSize: '11.5px',
+                fontWeight: 700,
+                textTransform: 'none',
+                px: 1.2,
+                py: 0.3,
+                minHeight: '26px',
+                borderRadius: '3px',
+                bgcolor: activeViewMode === 'table' ? '#D2E3F5' : '#EDF4FB',
+                color: '#1E3A8A',
+                border: '1px solid #99BBE8',
+                '&:hover': { bgcolor: '#C5DCF5' },
+              }}
+            >
+              Price List Table ({items.length})
+            </Button>
+            <Button
+              size="small"
+              onClick={() => setActiveViewMode('documents')}
+              sx={{
+                fontSize: '11.5px',
+                fontWeight: 700,
+                textTransform: 'none',
+                px: 1.2,
+                py: 0.3,
+                minHeight: '26px',
+                borderRadius: '3px',
+                bgcolor: activeViewMode === 'documents' ? '#D2E3F5' : '#EDF4FB',
+                color: '#1E3A8A',
+                border: '1px solid #99BBE8',
+                '&:hover': { bgcolor: '#C5DCF5' },
+              }}
+            >
+              Uploaded Documents ({uploadedDocs.length})
+            </Button>
+            <Button
+              size="small"
+              onClick={() => setShowUploadZone((prev) => !prev)}
+              startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 15 }} />}
+              sx={{
+                fontSize: '11.5px',
+                fontWeight: 700,
+                textTransform: 'none',
+                px: 1.2,
+                py: 0.3,
+                minHeight: '26px',
+                borderRadius: '3px',
+                bgcolor: showUploadZone ? '#741748' : '#EDF4FB',
+                color: showUploadZone ? '#FFFFFF' : '#0F172A',
+                border: '1px solid #94A3B8',
+                '&:hover': { bgcolor: showUploadZone ? '#580e34' : '#E2E8F0' },
+              }}
+            >
+              {showUploadZone ? 'Close Upload ✕' : 'Import / Upload ▾'}
+            </Button>
+          </Box>
+        </Box>
+
+        {/* Collapsible Multi-Format Upload Zone */}
+        <Collapse in={showUploadZone}>
+          <Box
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
             sx={{
-              height: { xs: 'auto', md: 'calc(100vh - 215px)' },
-              maxHeight: { xs: '600px', md: 'calc(100vh - 215px)' },
-              overflowX: 'auto',
-              overflowY: 'auto',
-              WebkitOverflowScrolling: 'touch',
+              p: 1.5,
+              m: 1,
+              bgcolor: isDragging ? '#FEF2F2' : '#F8FAFC',
+              border: isDragging ? '1.5px dashed #DC2626' : '1px dashed #9BB3CC',
+              borderRadius: '3px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 1.5,
             }}
           >
-            <Table stickyHeader sx={{ minWidth: { xs: '680px', sm: '100%' } }} aria-label="price list table">
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Box
+                sx={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '3px',
+                  bgcolor: '#741748',
+                  color: '#FFFFFF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <CloudUploadRoundedIcon sx={{ fontSize: 20 }} />
+              </Box>
+              <Box>
+                <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                  Bulk Import Price List
+                </Typography>
+                <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
+                  Supports Excel (.xlsx, .xls), CSV (.csv), PDF documents, or scanned Rate Card photos (.png, .jpg).
+                </Typography>
+              </Box>
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <Button
+                size="small"
+                onClick={handleDownloadTemplate}
+                startIcon={<DownloadRoundedIcon sx={{ fontSize: 15 }} />}
+                sx={{
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  bgcolor: '#FFFFFF',
+                  color: '#0F172A',
+                  border: '1px solid #94A3B8',
+                  borderRadius: '3px',
+                  px: 1.2,
+                  py: 0.3,
+                  '&:hover': { bgcolor: '#F1F5F9' },
+                }}
+              >
+                Template
+              </Button>
+              <Button
+                size="small"
+                onClick={() => setPasteModalOpen(true)}
+                startIcon={<ContentPasteRoundedIcon sx={{ fontSize: 15 }} />}
+                sx={{
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  bgcolor: '#FFFFFF',
+                  color: '#0F172A',
+                  border: '1px solid #94A3B8',
+                  borderRadius: '3px',
+                  px: 1.2,
+                  py: 0.3,
+                  '&:hover': { bgcolor: '#F1F5F9' },
+                }}
+              >
+                Paste Text / WhatsApp
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={() => fileInputRef.current?.click()}
+                startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 15 }} />}
+                sx={{
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  bgcolor: '#741748',
+                  color: '#FFFFFF',
+                  borderRadius: '3px',
+                  px: 1.5,
+                  py: 0.4,
+                  '&:hover': { bgcolor: '#580e34' },
+                }}
+              >
+                Choose File to Upload
+              </Button>
+            </Box>
+          </Box>
+        </Collapse>
+
+        {/* Toolbar & Action Bar */}
+        <Box
+          sx={{
+            p: 1,
+            bgcolor: '#F8FAFC',
+            borderBottom: '1px solid #DCE7F5',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 1,
+          }}
+        >
+          {/* Search Box */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              bgcolor: '#FFFFFF',
+              border: '1px solid #94A3B8',
+              borderRadius: '2px',
+              px: 1,
+              py: 0.2,
+              width: { xs: '100%', sm: '240px' },
+            }}
+          >
+            <SearchRoundedIcon sx={{ fontSize: 17, color: '#64748B', mr: 0.5 }} />
+            <InputBase
+              placeholder="Search product / rate..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              sx={{
+                fontSize: '12px',
+                width: '100%',
+                '& input': { p: 0 },
+              }}
+            />
+            {searchTerm && (
+              <IconButton size="small" onClick={() => setSearchTerm('')} sx={{ p: 0.2 }}>
+                <ClearRoundedIcon sx={{ fontSize: 15 }} />
+              </IconButton>
+            )}
+          </Box>
+
+          {/* Action Buttons */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flexWrap: 'wrap' }}>
+            <Button
+              size="small"
+              onClick={handlePrintPriceList}
+              startIcon={<PrintOutlinedIcon sx={{ fontSize: 16 }} />}
+              sx={{
+                bgcolor: '#EDF4FB',
+                color: '#0F172A',
+                border: '1px solid #94A3B8',
+                borderRadius: '3px',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                textTransform: 'none',
+                px: 1.2,
+                py: 0.4,
+                '&:hover': { bgcolor: '#E2E8F0' },
+              }}
+            >
+              Print Sheet
+            </Button>
+            <Button
+              size="small"
+              onClick={handleExportExcel}
+              startIcon={<DownloadRoundedIcon sx={{ fontSize: 16 }} />}
+              sx={{
+                bgcolor: '#EDF4FB',
+                color: '#0F172A',
+                border: '1px solid #94A3B8',
+                borderRadius: '3px',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                textTransform: 'none',
+                px: 1.2,
+                py: 0.4,
+                '&:hover': { bgcolor: '#E2E8F0' },
+              }}
+            >
+              Export Excel
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={handleOpenAdd}
+              startIcon={<AddRoundedIcon sx={{ fontSize: 16 }} />}
+              sx={{
+                bgcolor: '#741748',
+                color: '#FFFFFF',
+                borderRadius: '3px',
+                fontSize: '12px',
+                fontWeight: 700,
+                textTransform: 'none',
+                px: 1.5,
+                py: 0.4,
+                '&:hover': { bgcolor: '#580e34' },
+              }}
+            >
+              + Add Item
+            </Button>
+          </Box>
+        </Box>
+
+        {/* Category Pills Filter Bar */}
+        {activeViewMode === 'table' && (
+          <Box
+            sx={{
+              px: 1.2,
+              py: 0.6,
+              bgcolor: '#FFFFFF',
+              borderBottom: '1px solid #DCE7F5',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.6,
+              overflowX: 'auto',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
+            }}
+          >
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', mr: 0.5, flexShrink: 0 }}>
+              Category:
+            </Typography>
+
+            <Chip
+              label={`All Items (${items.length})`}
+              onClick={() => setSelectedCategory('ALL')}
+              size="small"
+              sx={{
+                fontWeight: 700,
+                fontSize: '11px',
+                height: '22px',
+                cursor: 'pointer',
+                bgcolor: selectedCategory === 'ALL' ? '#D2E3F5' : '#EDF4FB',
+                color: '#1E3A8A',
+                border: selectedCategory === 'ALL' ? '1px solid #1E3A8A' : '1px solid #99BBE8',
+                '&:hover': { bgcolor: '#C5DCF5' },
+              }}
+            />
+
+            {categories.map((cat) => {
+              const isSelected = selectedCategory === cat.name;
+              const count = items.filter((i) => i.category === cat.name).length;
+              return (
+                <Chip
+                  key={cat.name}
+                  label={`${cat.name} (${count})`}
+                  onClick={() => setSelectedCategory(cat.name)}
+                  size="small"
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: '11px',
+                    height: '22px',
+                    cursor: 'pointer',
+                    bgcolor: isSelected ? '#D2E3F5' : '#EDF4FB',
+                    color: '#1E3A8A',
+                    border: isSelected ? '1px solid #1E3A8A' : '1px solid #99BBE8',
+                    '&:hover': { bgcolor: '#C5DCF5' },
+                  }}
+                />
+              );
+            })}
+
+            {items.length > 0 && (
+              <Tooltip title="Clear entire price list" arrow>
+                <IconButton
+                  size="small"
+                  onClick={handleClearAll}
+                  sx={{
+                    ml: 'auto',
+                    color: '#DC2626',
+                    bgcolor: '#FEF2F2',
+                    border: '1px solid #FECACA',
+                    borderRadius: '2px',
+                    p: 0.3,
+                    '&:hover': { bgcolor: '#FEE2E2' },
+                  }}
+                >
+                  <DeleteSweepRoundedIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        )}
+
+        {/* VIEW 1: Main Price List Table */}
+        {activeViewMode === 'table' && (
+          <TableContainer
+            sx={{
+              maxHeight: 'calc(100vh - 210px)',
+              overflowX: 'auto',
+              overflowY: 'auto',
+            }}
+          >
+            <Table size="small" stickyHeader aria-label="price list table">
               <TableHead>
-                <TableRow sx={{ backgroundColor: '#F8FAFC' }}>
+                <TableRow>
                   <TableCell
                     sx={{
-                      py: 1.5,
-                      px: { xs: 2, sm: 3 },
-                      fontSize: '12px',
-                      fontWeight: 800,
-                      color: '#1E293B',
-                      letterSpacing: '0.04em',
-                      backgroundColor: '#F8FAFC',
-                      borderBottom: '2px solid #E2E8F0',
-                      width: '70px',
+                      py: 0.6,
+                      px: 1,
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      bgcolor: '#DCE7F5',
+                      borderBottom: '1px solid #B0C4DE',
+                      borderRight: '1px solid #CBD5E1',
+                      width: '45px',
+                      textAlign: 'center',
                     }}
                   >
-                    SL.NO
+                    S.No
                   </TableCell>
                   <TableCell
                     sx={{
-                      py: 1.5,
-                      px: { xs: 2, sm: 3 },
-                      fontSize: '12px',
-                      fontWeight: 800,
-                      color: '#1E293B',
-                      letterSpacing: '0.04em',
-                      backgroundColor: '#F8FAFC',
-                      borderBottom: '2px solid #E2E8F0',
+                      py: 0.6,
+                      px: 1.5,
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      bgcolor: '#DCE7F5',
+                      borderBottom: '1px solid #B0C4DE',
+                      borderRight: '1px solid #CBD5E1',
                     }}
                   >
-                    ITEM NAME
+                    Item / Product Name
                   </TableCell>
                   <TableCell
                     sx={{
-                      py: 1.5,
-                      px: { xs: 1.5, sm: 2.5 },
-                      fontSize: '12px',
-                      fontWeight: 800,
-                      color: '#1E293B',
-                      letterSpacing: '0.04em',
-                      backgroundColor: '#F8FAFC',
-                      borderBottom: '2px solid #E2E8F0',
+                      py: 0.6,
+                      px: 1.2,
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      bgcolor: '#DCE7F5',
+                      borderBottom: '1px solid #B0C4DE',
+                      borderRight: '1px solid #CBD5E1',
                       width: '180px',
                     }}
                   >
-                    CATEGORY
+                    Category
                   </TableCell>
                   <TableCell
                     align="center"
                     sx={{
-                      py: 1.5,
-                      px: { xs: 1, sm: 2 },
-                      fontSize: '12px',
-                      fontWeight: 800,
-                      color: '#1E293B',
-                      letterSpacing: '0.04em',
-                      backgroundColor: '#F8FAFC',
-                      borderBottom: '2px solid #E2E8F0',
-                      width: '80px',
+                      py: 0.6,
+                      px: 1,
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      bgcolor: '#DCE7F5',
+                      borderBottom: '1px solid #B0C4DE',
+                      borderRight: '1px solid #CBD5E1',
+                      width: '70px',
                     }}
                   >
-                    UNIT
+                    Unit
                   </TableCell>
                   <TableCell
                     align="right"
                     sx={{
-                      py: 1.5,
-                      px: { xs: 1.5, sm: 2.5 },
-                      fontSize: '12px',
-                      fontWeight: 800,
-                      color: '#1E293B',
-                      letterSpacing: '0.04em',
-                      backgroundColor: '#F8FAFC',
-                      borderBottom: '2px solid #E2E8F0',
-                      width: '110px',
+                      py: 0.6,
+                      px: 1.2,
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      bgcolor: '#DCE7F5',
+                      borderBottom: '1px solid #B0C4DE',
+                      borderRight: '1px solid #CBD5E1',
+                      width: '90px',
                     }}
                   >
                     MRP (₹)
@@ -2062,459 +1883,319 @@ export const PriceListPage: FC = () => {
                   <TableCell
                     align="center"
                     sx={{
-                      py: 1.5,
-                      px: { xs: 1, sm: 2 },
-                      fontSize: '12px',
-                      fontWeight: 800,
-                      color: '#1E293B',
-                      letterSpacing: '0.04em',
-                      backgroundColor: '#F8FAFC',
-                      borderBottom: '2px solid #E2E8F0',
-                      width: '90px',
+                      py: 0.6,
+                      px: 1,
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      bgcolor: '#DCE7F5',
+                      borderBottom: '1px solid #B0C4DE',
+                      borderRight: '1px solid #CBD5E1',
+                      width: '75px',
                     }}
                   >
-                    DISCOUNT
+                    Disc %
                   </TableCell>
                   <TableCell
                     align="right"
                     sx={{
-                      py: 1.5,
-                      px: { xs: 2, sm: 3 },
-                      fontSize: '12px',
-                      fontWeight: 800,
-                      color: '#1E293B',
-                      letterSpacing: '0.04em',
-                      backgroundColor: '#F8FAFC',
-                      borderBottom: '2px solid #E2E8F0',
-                      width: '130px',
+                      py: 0.6,
+                      px: 1.5,
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      bgcolor: '#DCE7F5',
+                      borderBottom: '1px solid #B0C4DE',
+                      borderRight: '1px solid #CBD5E1',
+                      width: '110px',
                     }}
                   >
-                    NET RATE (₹)
+                    Rate (₹)
                   </TableCell>
                   <TableCell
                     align="center"
                     sx={{
-                      py: 1.5,
-                      px: { xs: 1.5, sm: 2.5 },
-                      fontSize: '12px',
-                      fontWeight: 800,
-                      color: '#1E293B',
-                      letterSpacing: '0.04em',
-                      backgroundColor: '#F8FAFC',
-                      borderBottom: '2px solid #E2E8F0',
+                      py: 0.6,
+                      px: 0.8,
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      bgcolor: '#DCE7F5',
+                      borderBottom: '1px solid #B0C4DE',
                       width: '80px',
                     }}
                   >
-                    EDIT
-                  </TableCell>
-                  <TableCell
-                    align="center"
-                    sx={{
-                      py: 1.5,
-                      px: { xs: 1.5, sm: 2.5 },
-                      fontSize: '12px',
-                      fontWeight: 800,
-                      color: '#1E293B',
-                      letterSpacing: '0.04em',
-                      backgroundColor: '#F8FAFC',
-                      borderBottom: '2px solid #E2E8F0',
-                      width: '80px',
-                    }}
-                  >
-                    DELETE
+                    Actions
                   </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
-                      <CircularProgress size={32} sx={{ color: '#DC2626' }} />
+                    <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                      <CircularProgress size={24} sx={{ color: '#741748' }} />
                     </TableCell>
                   </TableRow>
                 ) : filteredItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 6, color: '#786C58' }}>
+                    <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#64748B' }}>
                       {searchTerm ? (
-                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                          <Typography sx={{ fontSize: '14px', color: '#786C58', fontWeight: 500 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                          <Typography sx={{ fontSize: '12.5px', color: '#64748B' }}>
                             No price list items matching "{searchTerm}" found.
                           </Typography>
                           <Button
                             size="small"
                             onClick={() => setSearchTerm('')}
-                            sx={{ textTransform: 'none', color: '#B91C1C', fontWeight: 700 }}
+                            sx={{ textTransform: 'none', color: '#741748', fontWeight: 700, fontSize: '11.5px' }}
                           >
                             Clear Search
                           </Button>
                         </Box>
                       ) : (
-                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
-                          <FilePresentRoundedIcon sx={{ fontSize: 44, color: '#D97706' }} />
-                          <Typography sx={{ fontSize: '15px', color: '#786C58', fontWeight: 700 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                          <FilePresentRoundedIcon sx={{ fontSize: 36, color: '#94A3B8' }} />
+                          <Typography sx={{ fontSize: '13px', color: '#475569', fontWeight: 700 }}>
                             No items in price list yet.
                           </Typography>
-                          <Typography sx={{ fontSize: '13px', color: '#9CA3AF' }}>
-                            Upload an Excel, CSV, PDF, or Image file above to view prices.
+                          <Typography sx={{ fontSize: '11.5px', color: '#94A3B8' }}>
+                            Click "+ Add Item" or "Import / Upload" above to populate your catalog.
                           </Typography>
                         </Box>
                       )}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredItems.map((item, index) => {
-                    const isLast = index === filteredItems.length - 1;
-                    return (
-                      <TableRow
-                        key={item._id || item.id || index}
-                        sx={{
-                          '&:hover': {
-                            backgroundColor: '#FEFDF5',
-                          },
-                        }}
-                      >
-                        {/* Sl. No */}
-                        <TableCell
+                  filteredItems.map((item, index) => (
+                    <TableRow
+                      key={item._id || item.id || index}
+                      sx={{
+                        '&:hover': { bgcolor: '#F1F7FD' },
+                        bgcolor: index % 2 === 1 ? '#FAFCFE' : '#FFFFFF',
+                      }}
+                    >
+                      <TableCell align="center" sx={{ py: 0.5, px: 1, fontSize: '12px', borderRight: '1px solid #E2E8F0', color: '#64748B' }}>
+                        {item.slNo || index + 1}
+                      </TableCell>
+                      <TableCell sx={{ py: 0.5, px: 1.5, fontSize: '12.5px', fontWeight: 600, borderRight: '1px solid #E2E8F0', color: '#0F172A' }}>
+                        {item.itemName}
+                      </TableCell>
+                      <TableCell sx={{ py: 0.5, px: 1.2, fontSize: '11.5px', borderRight: '1px solid #E2E8F0' }}>
+                        <Chip
+                          label={item.category || 'General'}
+                          size="small"
                           sx={{
-                            py: 1.4,
-                            px: { xs: 2, sm: 3 },
-                            fontSize: '13.5px',
-                            fontWeight: 700,
-                            color: '#786C58',
-                            borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                          }}
-                        >
-                          {item.slNo || index + 1}
-                        </TableCell>
-
-                        {/* Item Name */}
-                        <TableCell
-                          sx={{
-                            py: 1.4,
-                            px: { xs: 2, sm: 3 },
-                            fontSize: '14px',
-                            fontWeight: 700,
-                            color: '#1F1714',
-                            borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                          }}
-                        >
-                          {item.itemName}
-                        </TableCell>
-
-                        {/* Category */}
-                        <TableCell
-                          sx={{
-                            py: 1.4,
-                            px: { xs: 1.5, sm: 2.5 },
-                            borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                          }}
-                        >
-                          <Chip
-                            label={item.category || 'General'}
-                            size="small"
-                            sx={{
-                              fontSize: '11.5px',
-                              fontWeight: 700,
-                              backgroundColor: '#F8FAFC',
-                              color: '#334155',
-                              border: '1px solid #E2E8F0',
-                              borderRadius: '6px',
-                              height: '24px',
-                            }}
-                          />
-                        </TableCell>
-
-                        {/* Unit */}
-                        <TableCell
-                          align="center"
-                          sx={{
-                            py: 1.4,
-                            px: { xs: 1, sm: 2 },
-                            fontSize: '13px',
+                            fontSize: '11px',
                             fontWeight: 600,
-                            color: '#57463A',
-                            borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
+                            bgcolor: '#EDF4FB',
+                            color: '#1E3A8A',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '2px',
+                            height: '20px',
                           }}
-                        >
-                          {item.unit || 'Box'}
-                        </TableCell>
-
-                        {/* MRP */}
-                        <TableCell
-                          align="right"
-                          sx={{
-                            py: 1.4,
-                            px: { xs: 1.5, sm: 2.5 },
-                            fontSize: '13.5px',
-                            fontWeight: 600,
-                            color: '#6B7280',
-                            borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                          }}
-                        >
-                          {item.mrp ? `₹${Number(item.mrp).toLocaleString('en-IN')}` : '—'}
-                        </TableCell>
-
-                        {/* Discount % */}
-                        <TableCell
-                          align="center"
-                          sx={{
-                            py: 1.4,
-                            px: { xs: 1, sm: 2 },
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            color: item.discountPercent ? '#059669' : '#9CA3AF',
-                            borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                          }}
-                        >
-                          {item.discountPercent ? `${item.discountPercent}%` : '—'}
-                        </TableCell>
-
-                        {/* Rate */}
-                        <TableCell
-                          align="right"
-                          sx={{
-                            py: 1.4,
-                            px: { xs: 2, sm: 3 },
-                            fontSize: '14.5px',
-                            fontWeight: 800,
-                            color: '#B91C1C',
-                            borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                          }}
-                        >
-                          ₹{Number(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </TableCell>
-
-                        {/* Edit Action */}
-                        <TableCell
-                          align="center"
-                          sx={{
-                            py: 1.4,
-                            px: { xs: 1.5, sm: 2.5 },
-                            borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                          }}
-                        >
-                          <Tooltip title="Edit Item Price" arrow>
+                        />
+                      </TableCell>
+                      <TableCell align="center" sx={{ py: 0.5, px: 1, fontSize: '12px', borderRight: '1px solid #E2E8F0', color: '#475569' }}>
+                        {item.unit || 'Box'}
+                      </TableCell>
+                      <TableCell align="right" sx={{ py: 0.5, px: 1.2, fontSize: '12px', borderRight: '1px solid #E2E8F0', color: '#64748B' }}>
+                        {item.mrp ? `₹${Number(item.mrp).toFixed(2)}` : '—'}
+                      </TableCell>
+                      <TableCell align="center" sx={{ py: 0.5, px: 1, fontSize: '12px', fontWeight: 600, borderRight: '1px solid #E2E8F0', color: item.discountPercent ? '#059669' : '#94A3B8' }}>
+                        {item.discountPercent ? `${item.discountPercent}%` : '—'}
+                      </TableCell>
+                      <TableCell align="right" sx={{ py: 0.5, px: 1.5, fontSize: '12.5px', fontWeight: 700, borderRight: '1px solid #E2E8F0', color: '#741748' }}>
+                        ₹{Number(item.rate || 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell align="center" sx={{ py: 0.4, px: 0.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.4 }}>
+                          <Tooltip title="Edit" arrow>
                             <IconButton
                               size="small"
                               onClick={() => handleOpenEdit(item)}
                               sx={{
-                                color: '#D97706',
-                                backgroundColor: '#F8FAFC',
-                                border: '1px solid #E2E8F0',
-                                borderRadius: '6px',
-                                p: 0.6,
-                                '&:hover': {
-                                  color: '#FFFFFF',
-                                  backgroundColor: '#D97706',
-                                  borderColor: '#D97706',
-                                },
+                                color: '#1E3A8A',
+                                bgcolor: '#EDF4FB',
+                                border: '1px solid #CBD5E1',
+                                borderRadius: '2px',
+                                p: 0.3,
+                                '&:hover': { bgcolor: '#DBEAFE' },
                               }}
                             >
-                              <ModeEditOutlineRoundedIcon sx={{ fontSize: 16 }} />
+                              <ModeEditOutlineRoundedIcon sx={{ fontSize: 14 }} />
                             </IconButton>
                           </Tooltip>
-                        </TableCell>
-
-                        {/* Delete Action */}
-                        <TableCell
-                          align="center"
-                          sx={{
-                            py: 1.4,
-                            px: { xs: 1.5, sm: 2.5 },
-                            borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                          }}
-                        >
-                          <Tooltip title="Delete Item" arrow>
+                          <Tooltip title="Delete" arrow>
                             <IconButton
                               size="small"
                               onClick={() => handleDeleteItem(item)}
                               sx={{
                                 color: '#DC2626',
-                                backgroundColor: '#FEF2F2',
+                                bgcolor: '#FEF2F2',
                                 border: '1px solid #FECACA',
-                                borderRadius: '6px',
-                                p: 0.6,
-                                '&:hover': {
-                                  color: '#FFFFFF',
-                                  backgroundColor: '#DC2626',
-                                  borderColor: '#DC2626',
-                                },
+                                borderRadius: '2px',
+                                p: 0.3,
+                                '&:hover': { bgcolor: '#FEE2E2' },
                               }}
                             >
-                              <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
+                              <DeleteOutlineRoundedIcon sx={{ fontSize: 14 }} />
                             </IconButton>
                           </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
           </TableContainer>
-        </Paper>
-      )}
+        )}
 
-      {/* VIEW 2: Uploaded Documents & Catalogs (PDF / Images) */}
-      {activeViewMode === 'documents' && (
-        <Paper
-          elevation={0}
-          sx={{
-            width: '100%',
-            backgroundColor: '#FFFFFF',
-            borderRadius: '14px',
-            border: '1.5px solid #E2E8F0',
-            boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
-            p: { xs: 2, sm: 3 },
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
-            <Box>
-              <Typography sx={{ fontSize: '18px', fontWeight: 800, color: '#B91C1C' }}>
-                Uploaded Price Documents & Rate Cards
+        {/* VIEW 2: Uploaded Documents & Catalogs */}
+        {activeViewMode === 'documents' && (
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                Uploaded Price Documents & Rate Cards ({uploadedDocs.length})
               </Typography>
-              <Typography sx={{ fontSize: '13px', color: '#786C58' }}>
-                Access and view all your uploaded price sheet PDFs, images, and rate cards anytime.
-              </Typography>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={() => fileInputRef.current?.click()}
+                startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 16 }} />}
+                sx={{
+                  bgcolor: '#741748',
+                  color: '#FFFFFF',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  borderRadius: '3px',
+                  '&:hover': { bgcolor: '#580e34' },
+                }}
+              >
+                Upload New Document
+              </Button>
             </Box>
-            <Button
-              variant="contained"
-              disableElevation
-              onClick={() => fileInputRef.current?.click()}
-              startIcon={<CloudUploadRoundedIcon />}
-              sx={{
-                background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
-                color: '#FFFFFF',
-                fontWeight: 700,
-                textTransform: 'none',
-                borderRadius: '8px',
-              }}
-            >
-              Upload New Document
-            </Button>
-          </Box>
 
-          {uploadedDocs.length === 0 ? (
-            <Box sx={{ py: 6, textAlign: 'center', color: '#786C58' }}>
-              <PictureAsPdfRoundedIcon sx={{ fontSize: 48, color: '#D97706', mb: 1 }} />
-              <Typography sx={{ fontSize: '15px', fontWeight: 700 }}>
-                No PDF or Image rate cards uploaded yet.
-              </Typography>
-              <Typography sx={{ fontSize: '13px', color: '#9CA3AF', mt: 0.5 }}>
-                Click "Upload File / PDF / Image" above to upload PDF price sheets or photo rate cards.
-              </Typography>
-            </Box>
-          ) : (
-            <Grid container spacing={2}>
-              {uploadedDocs.map((doc) => (
-                <Grid key={doc.id} size={{ xs: 12, sm: 6, md: 4 }}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      borderRadius: '12px',
-                      border: '1.5px solid #E2E8F0',
-                      backgroundColor: '#FFFFFF',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 1.5,
-                      transition: 'all 0.2s ease',
-                      '&:hover': {
-                        borderColor: '#D97706',
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.06)',
-                      },
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Box
-                        sx={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: '10px',
-                          backgroundColor: doc.type === 'pdf' ? '#FEF2F2' : doc.type === 'image' ? '#EFF6FF' : '#ECFDF5',
-                          color: doc.type === 'pdf' ? '#DC2626' : doc.type === 'image' ? '#2563EB' : '#059669',
-                          border: `1px solid ${doc.type === 'pdf' ? '#FECACA' : doc.type === 'image' ? '#BFDBFE' : '#A7F3D0'}`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {doc.type === 'pdf' ? (
-                          <PictureAsPdfRoundedIcon sx={{ fontSize: 24 }} />
-                        ) : doc.type === 'image' ? (
-                          <ImageRoundedIcon sx={{ fontSize: 24 }} />
-                        ) : (
-                          <TableChartRoundedIcon sx={{ fontSize: 24 }} />
-                        )}
-                      </Box>
-                      <Box sx={{ overflow: 'hidden' }}>
-                        <Typography noWrap sx={{ fontSize: '13.5px', fontWeight: 700, color: '#1F1714' }}>
-                          {doc.name}
-                        </Typography>
-                        <Typography sx={{ fontSize: '11.5px', color: '#786C58' }}>
-                          {doc.type.toUpperCase()} • {doc.size} • {doc.uploadDate}
-                        </Typography>
-                      </Box>
-                    </Box>
-
-                    {/* Image Preview Thumbnail */}
-                    {doc.type === 'image' && doc.dataUrl && (
-                      <Box
-                        component="img"
-                        src={doc.dataUrl}
-                        alt={doc.name}
-                        sx={{
-                          width: '100%',
-                          height: '140px',
-                          objectFit: 'cover',
-                          borderRadius: '8px',
-                          border: '1px solid #E5E7EB',
-                        }}
-                      />
-                    )}
-
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 'auto' }}>
-                      {doc.dataUrl ? (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<VisibilityRoundedIcon sx={{ fontSize: 16 }} />}
-                          onClick={() => {
-                            setViewingDoc(doc);
-                            setViewDocModalOpen(true);
-                          }}
+            {uploadedDocs.length === 0 ? (
+              <Box sx={{ py: 6, textAlign: 'center', color: '#64748B' }}>
+                <PictureAsPdfRoundedIcon sx={{ fontSize: 40, color: '#94A3B8', mb: 1 }} />
+                <Typography sx={{ fontSize: '13px', fontWeight: 700 }}>
+                  No PDF or Image rate cards uploaded yet.
+                </Typography>
+                <Typography sx={{ fontSize: '11.5px', color: '#94A3B8', mt: 0.5 }}>
+                  Click "Upload New Document" to store price sheet PDFs or scanned rate card photos.
+                </Typography>
+              </Box>
+            ) : (
+              <Grid container spacing={1.5}>
+                {uploadedDocs.map((doc) => (
+                  <Grid key={doc.id} size={{ xs: 12, sm: 6, md: 4 }}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: '3px',
+                        border: '1px solid #CBD5E1',
+                        bgcolor: '#FFFFFF',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1,
+                        '&:hover': { borderColor: '#1E3A8A' },
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box
                           sx={{
-                            borderColor: '#E2E8F0',
-                            color: '#334155',
-                            fontWeight: 700,
-                            fontSize: '12px',
-                            textTransform: 'none',
-                            borderRadius: '6px',
-                            '&:hover': { backgroundColor: '#F8FAFC' },
+                            width: 32,
+                            height: 32,
+                            borderRadius: '3px',
+                            bgcolor: doc.type === 'pdf' ? '#FEF2F2' : doc.type === 'image' ? '#EFF6FF' : '#ECFDF5',
+                            color: doc.type === 'pdf' ? '#DC2626' : doc.type === 'image' ? '#2563EB' : '#059669',
+                            border: `1px solid ${doc.type === 'pdf' ? '#FECACA' : doc.type === 'image' ? '#BFDBFE' : '#A7F3D0'}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
                           }}
                         >
-                          View Document
-                        </Button>
-                      ) : (
-                        <Chip label="Imported Sheet" size="small" sx={{ fontSize: '11px', fontWeight: 700 }} />
+                          {doc.type === 'pdf' ? (
+                            <PictureAsPdfRoundedIcon sx={{ fontSize: 18 }} />
+                          ) : doc.type === 'image' ? (
+                            <ImageRoundedIcon sx={{ fontSize: 18 }} />
+                          ) : (
+                            <TableChartRoundedIcon sx={{ fontSize: 18 }} />
+                          )}
+                        </Box>
+                        <Box sx={{ overflow: 'hidden' }}>
+                          <Typography noWrap sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                            {doc.name}
+                          </Typography>
+                          <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
+                            {doc.type.toUpperCase()} • {doc.size} • {doc.uploadDate}
+                          </Typography>
+                        </Box>
+                      </Box>
+
+                      {doc.type === 'image' && doc.dataUrl && (
+                        <Box
+                          component="img"
+                          src={doc.dataUrl}
+                          alt={doc.name}
+                          sx={{
+                            width: '100%',
+                            height: '110px',
+                            objectFit: 'cover',
+                            borderRadius: '2px',
+                            border: '1px solid #E2E8F0',
+                          }}
+                        />
                       )}
 
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDeleteDoc(doc.id)}
-                        sx={{ color: '#DC2626', p: 0.6, '&:hover': { backgroundColor: '#FEF2F2' } }}
-                      >
-                        <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} />
-                      </IconButton>
-                    </Box>
-                  </Paper>
-                </Grid>
-              ))}
-            </Grid>
-          )}
-        </Paper>
-      )}
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 'auto', pt: 0.5 }}>
+                        {doc.dataUrl ? (
+                          <Button
+                            size="small"
+                            startIcon={<VisibilityRoundedIcon sx={{ fontSize: 14 }} />}
+                            onClick={() => {
+                              setViewingDoc(doc);
+                              setViewDocModalOpen(true);
+                            }}
+                            sx={{
+                              bgcolor: '#EDF4FB',
+                              border: '1px solid #94A3B8',
+                              color: '#0F172A',
+                              fontWeight: 700,
+                              fontSize: '11px',
+                              textTransform: 'none',
+                              borderRadius: '2px',
+                              py: 0.2,
+                              px: 1,
+                              '&:hover': { bgcolor: '#E2E8F0' },
+                            }}
+                          >
+                            View
+                          </Button>
+                        ) : (
+                          <Chip label="Imported Sheet" size="small" sx={{ fontSize: '10px', height: '18px', fontWeight: 600 }} />
+                        )}
+
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDeleteDoc(doc.id)}
+                          sx={{ color: '#DC2626', p: 0.4, '&:hover': { bgcolor: '#FEF2F2' } }}
+                        >
+                          <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </Box>
+        )}
+      </Paper>
 
       {/* Live OCR / Scanning Progress Dialog */}
       <Dialog
@@ -2522,49 +2203,36 @@ export const PriceListPage: FC = () => {
         slotProps={{
           paper: {
             sx: {
-              borderRadius: '14px',
-              p: 3,
-              width: '420px',
+              borderRadius: '4px',
+              p: 2.5,
+              width: '380px',
               maxWidth: '90vw',
               textAlign: 'center',
-              border: '1.5px solid #E2E8F0',
+              border: '1px solid #9BB3CC',
             },
           },
         }}
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-          <Box
-            sx={{
-              width: 60,
-              height: 60,
-              borderRadius: '50%',
-              backgroundColor: '#FEF2F2',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#DC2626',
-            }}
-          >
-            <AutoFixHighRoundedIcon sx={{ fontSize: 32 }} />
-          </Box>
-          <Typography sx={{ fontSize: '17px', fontWeight: 800, color: '#991B1B' }}>
-            AI OCR Scanning Rate Card...
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+          <AutoFixHighRoundedIcon sx={{ fontSize: 28, color: '#741748' }} />
+          <Typography sx={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+            AI OCR Scanning Document...
           </Typography>
-          <Typography sx={{ fontSize: '13px', color: '#786C58' }}>
-            {ocrStatusText || 'Extracting products, categories, and rates from document...'}
+          <Typography sx={{ fontSize: '11.5px', color: '#64748B' }}>
+            {ocrStatusText || 'Extracting products, categories, and rates...'}
           </Typography>
-          <Box sx={{ width: '100%', mt: 1 }}>
+          <Box sx={{ width: '100%', mt: 0.5 }}>
             <LinearProgress
               variant="determinate"
               value={ocrProgress || 30}
               sx={{
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: '#E2E8F0',
-                '& .MuiLinearProgress-bar': { backgroundColor: '#DC2626' },
+                height: 6,
+                borderRadius: 3,
+                bgcolor: '#E2E8F0',
+                '& .MuiLinearProgress-bar': { bgcolor: '#741748' },
               }}
             />
-            <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#334155', mt: 0.8, textAlign: 'right' }}>
+            <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#64748B', mt: 0.5, textAlign: 'right' }}>
               {ocrProgress}%
             </Typography>
           </Box>
@@ -2580,73 +2248,78 @@ export const PriceListPage: FC = () => {
         slotProps={{
           paper: {
             sx: {
-              borderRadius: '14px',
-              p: 1,
-              border: '1.5px solid #E2E8F0',
+              borderRadius: '4px',
+              border: '1px solid #9BB3CC',
             },
           },
         }}
       >
-        <DialogTitle sx={{ fontSize: '18px', fontWeight: 800, color: '#B91C1C', pb: 0.5 }}>
+        <DialogTitle
+          sx={{
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            fontSize: '13px',
+            fontWeight: 700,
+            color: '#0F172A',
+            py: 1,
+            px: 2,
+          }}
+        >
           Paste Price List Text (WhatsApp / Notes / SMS)
         </DialogTitle>
-        <DialogContent sx={{ pt: '10px !important' }}>
-          <Typography sx={{ fontSize: '13px', color: '#786C58', mb: 1.5 }}>
-            Paste any price list text from WhatsApp, Excel, or SMS below. The AI parser will automatically extract product names, rates, and categories!
+        <DialogContent sx={{ p: 2 }}>
+          <Typography sx={{ fontSize: '11.5px', color: '#64748B', mb: 1 }}>
+            Paste price list text below. Product names, rates, and categories will be automatically extracted:
           </Typography>
           <TextField
             multiline
-            rows={10}
+            rows={9}
             fullWidth
-            placeholder={`Example:
-ONE SOUND CRACKERS
-1. 2 3/4" Kuruvi Crackers - 1 Box - Rs. 45
-2. 3 1/2" Lakshmi Crackers - 1 Pkt - Rs. 65
-
-SPARKLERS
-3. 10 cm Electric Sparklers - 1 Box - Rs. 35
-4. 15 cm Color Sparklers - 1 Box - Rs. 75`}
+            placeholder={`ONE SOUND CRACKERS\n1. 2 3/4" Kuruvi Crackers - 1 Box - Rs. 45\n2. 3 1/2" Lakshmi Crackers - 1 Pkt - Rs. 65\n\nSPARKLERS\n3. 10 cm Electric Sparklers - 1 Box - Rs. 35`}
             value={pasteTextContent}
             onChange={(e) => setPasteTextContent(e.target.value)}
             slotProps={{
               input: {
                 sx: {
                   fontFamily: 'monospace',
-                  fontSize: '13px',
-                  backgroundColor: '#FFFFFF',
+                  fontSize: '12px',
+                  bgcolor: '#FFFFFF',
+                  borderRadius: '2px',
                 },
               },
             }}
           />
         </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 1 }}>
+        <DialogActions sx={{ p: 1.5, bgcolor: '#F8FAFC', borderTop: '1px solid #DCE7F5' }}>
           <Button
+            size="small"
             onClick={() => setPasteModalOpen(false)}
-            sx={{ color: '#786C58', fontWeight: 600, textTransform: 'none' }}
+            sx={{ color: '#475569', fontWeight: 600, fontSize: '12px', textTransform: 'none' }}
           >
             Cancel
           </Button>
           <Button
+            size="small"
             variant="contained"
-            disableElevation
             onClick={handleExtractFromPasteText}
-            startIcon={<AutoFixHighRoundedIcon />}
+            startIcon={<AutoFixHighRoundedIcon sx={{ fontSize: 16 }} />}
             sx={{
-              background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
+              bgcolor: '#741748',
               color: '#FFFFFF',
-              fontWeight: 800,
+              fontWeight: 700,
+              fontSize: '12px',
               textTransform: 'none',
-              px: 3,
-              borderRadius: '8px',
-              '&:hover': { background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)' },
+              px: 2,
+              borderRadius: '3px',
+              '&:hover': { bgcolor: '#580e34' },
             }}
           >
-            Extract & Sync Products
+            Extract & Review
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Interactive & Editable Upload Preview Dialog (PDF, Excel, Images, Pasted Text) */}
+      {/* Upload Preview Dialog */}
       <Dialog
         open={uploadModalOpen}
         onClose={() => !uploading && setUploadModalOpen(false)}
@@ -2655,144 +2328,134 @@ SPARKLERS
         slotProps={{
           paper: {
             sx: {
-              borderRadius: '14px',
-              p: 1,
-              border: '1.5px solid #E2E8F0',
+              borderRadius: '4px',
+              border: '1px solid #9BB3CC',
             },
           },
         }}
       >
-        <DialogTitle sx={{ fontSize: '18px', fontWeight: 800, color: '#B91C1C', pb: 0.5 }}>
-          Preview & Edit Detected Price Items ({previewItems.length} Products Found)
+        <DialogTitle
+          sx={{
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            fontSize: '13px',
+            fontWeight: 700,
+            color: '#0F172A',
+            py: 1,
+            px: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <span>Preview Detected Price Items ({previewItems.length} Products Found)</span>
+          <Chip
+            label={`Source: ${uploadFileName}`}
+            size="small"
+            sx={{ bgcolor: '#D2E3F5', color: '#1E3A8A', fontSize: '11px', fontWeight: 700 }}
+          />
         </DialogTitle>
-        <DialogContent sx={{ pt: '10px !important' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
-            <Chip
-              icon={<CheckCircleRoundedIcon sx={{ color: '#059669 !important' }} />}
-              label={`Found ${previewItems.length} valid product rows`}
-              sx={{ backgroundColor: '#ECFDF5', color: '#065F46', fontWeight: 700 }}
-            />
-            <Chip
-              label={`Source: ${uploadFileName}`}
-              sx={{ backgroundColor: '#F8FAFC', color: '#334155', fontWeight: 600 }}
-            />
-            <Typography sx={{ fontSize: '12.5px', color: '#786C58', ml: 'auto' }}>
-              💡 <em>You can edit any row or add new items below before syncing!</em>
-            </Typography>
-          </Box>
-
-          <Grid container spacing={2} sx={{ mb: 2 }}>
+        <DialogContent sx={{ p: 2 }}>
+          <Grid container spacing={1.5} sx={{ mb: 1.5, alignItems: 'center' }}>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
-                Batch / Catalog Label
-              </Typography>
               <TextField
                 fullWidth
                 size="small"
+                label="Batch / Catalog Label"
                 value={uploadBatchName}
                 onChange={(e) => setUploadBatchName(e.target.value)}
-                slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 600 } } }}
+                slotProps={{ input: { sx: { fontSize: '12px' } }, inputLabel: { sx: { fontSize: '12px' } } }}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6 }} sx={{ display: 'flex', alignItems: 'center' }}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <FormControlLabel
                 control={
                   <Checkbox
                     checked={replaceExisting}
                     onChange={(e) => setReplaceExisting(e.target.checked)}
-                    color="error"
+                    size="small"
+                    sx={{ color: '#741748', '&.Mui-checked': { color: '#741748' } }}
                   />
                 }
                 label={
-                  <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#DC2626' }}>
-                    Replace existing price list (Uncheck to merge/append into current catalog)
+                  <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#DC2626' }}>
+                    Replace existing catalog (Leave unchecked to append/merge)
                   </Typography>
                 }
               />
             </Grid>
           </Grid>
 
-          <Divider sx={{ my: 1.5, borderColor: '#E2E8F0' }} />
-
-          {/* Fully Interactive & Editable Table Container */}
           <TableContainer
             component={Paper}
             elevation={0}
-            sx={{ border: '1px solid #E5E7EB', maxHeight: '380px', overflowY: 'auto' }}
+            sx={{ border: '1px solid #CBD5E1', maxHeight: '340px', overflowY: 'auto', borderRadius: '2px' }}
           >
             <Table size="small" stickyHeader>
-              <TableHead sx={{ backgroundColor: '#F9FAFB' }}>
+              <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', width: '60px' }}>SL</TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', minWidth: '220px' }}>
-                    ITEM / PRODUCT NAME *
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', width: '180px' }}>
-                    CATEGORY
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', width: '90px' }}>UNIT</TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', width: '100px' }}>MRP (₹)</TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', width: '110px', color: '#B91C1C' }}>
-                    RATE (₹) *
-                  </TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 700, fontSize: '11.5px', width: '50px' }}>
-                    DEL
-                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '11px', width: '45px', bgcolor: '#DCE7F5' }}>S.No</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '11px', minWidth: '200px', bgcolor: '#DCE7F5' }}>Item Name *</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '11px', width: '160px', bgcolor: '#DCE7F5' }}>Category</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '11px', width: '80px', bgcolor: '#DCE7F5' }}>Unit</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '11px', width: '90px', bgcolor: '#DCE7F5' }}>MRP (₹)</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '11px', width: '100px', color: '#741748', bgcolor: '#DCE7F5' }}>Rate (₹) *</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700, fontSize: '11px', width: '45px', bgcolor: '#DCE7F5' }}>Del</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {previewItems.map((p, i) => (
-                  <TableRow key={i} sx={{ '&:hover': { backgroundColor: '#FFFFFF' } }}>
-                    <TableCell sx={{ fontSize: '12px', color: '#6B7280' }}>
+                  <TableRow key={i} sx={{ '&:hover': { bgcolor: '#F1F7FD' } }}>
+                    <TableCell sx={{ fontSize: '11.5px', color: '#64748B', textAlign: 'center' }}>
                       {p.slNo || i + 1}
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ py: 0.3 }}>
                       <TextField
                         fullWidth
                         size="small"
                         value={p.itemName || ''}
                         onChange={(e) => handleUpdatePreviewItem(i, 'itemName', e.target.value)}
-                        slotProps={{ input: { sx: { fontSize: '12.5px', fontWeight: 600 } } }}
+                        slotProps={{ input: { sx: { fontSize: '12px', py: 0.2 } } }}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ py: 0.3 }}>
                       <FormControl fullWidth size="small">
                         <Select
                           value={p.category || 'General'}
                           onChange={(e) => handleUpdatePreviewItem(i, 'category', e.target.value)}
-                          sx={{ fontSize: '12.5px' }}
+                          sx={{ fontSize: '12px' }}
                         >
                           {categories.map((c) => (
-                            <MenuItem key={c.name} value={c.name}>
+                            <MenuItem key={c.name} value={c.name} sx={{ fontSize: '12px' }}>
                               {c.name}
                             </MenuItem>
                           ))}
                           {categories.every((c) => c.name !== p.category) && (
-                            <MenuItem value={p.category || 'General'}>{p.category || 'General'}</MenuItem>
+                            <MenuItem value={p.category || 'General'} sx={{ fontSize: '12px' }}>{p.category || 'General'}</MenuItem>
                           )}
                         </Select>
                       </FormControl>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ py: 0.3 }}>
                       <TextField
                         fullWidth
                         size="small"
                         value={p.unit || 'Box'}
                         onChange={(e) => handleUpdatePreviewItem(i, 'unit', e.target.value)}
-                        slotProps={{ input: { sx: { fontSize: '12.5px' } } }}
+                        slotProps={{ input: { sx: { fontSize: '12px', py: 0.2 } } }}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ py: 0.3 }}>
                       <TextField
                         fullWidth
                         size="small"
                         type="number"
                         value={p.mrp || 0}
                         onChange={(e) => handleUpdatePreviewItem(i, 'mrp', Number(e.target.value))}
-                        slotProps={{ input: { sx: { fontSize: '12.5px' } } }}
+                        slotProps={{ input: { sx: { fontSize: '12px', py: 0.2 } } }}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ py: 0.3 }}>
                       <TextField
                         fullWidth
                         size="small"
@@ -2801,18 +2464,18 @@ SPARKLERS
                         onChange={(e) => handleUpdatePreviewItem(i, 'rate', Number(e.target.value))}
                         slotProps={{
                           input: {
-                            sx: { fontSize: '13px', fontWeight: 800, color: '#B91C1C' },
+                            sx: { fontSize: '12px', fontWeight: 700, color: '#741748', py: 0.2 },
                           },
                         }}
                       />
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell align="center" sx={{ py: 0.3 }}>
                       <IconButton
                         size="small"
                         onClick={() => handleDeletePreviewItem(i)}
-                        sx={{ color: '#DC2626', p: 0.4 }}
+                        sx={{ color: '#DC2626', p: 0.3 }}
                       >
-                        <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} />
+                        <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
                       </IconButton>
                     </TableCell>
                   </TableRow>
@@ -2821,61 +2484,59 @@ SPARKLERS
             </Table>
           </TableContainer>
 
-          <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ mt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Button
               size="small"
               onClick={handleAddPreviewRow}
-              startIcon={<AddRoundedIcon />}
+              startIcon={<AddRoundedIcon sx={{ fontSize: 15 }} />}
               sx={{
-                color: '#334155',
+                color: '#1E3A8A',
                 fontWeight: 700,
-                fontSize: '12.5px',
+                fontSize: '11.5px',
                 textTransform: 'none',
               }}
             >
-              + Add Another Product Row
+              + Add Another Row
             </Button>
-            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#991B1B' }}>
-              Total: {previewItems.length} Products ready to sync
+            <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#741748' }}>
+              Total: {previewItems.length} Products
             </Typography>
           </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 1, justifyContent: 'space-between' }}>
+        <DialogActions sx={{ p: 1.5, bgcolor: '#F8FAFC', borderTop: '1px solid #DCE7F5' }}>
           <Button
+            size="small"
             onClick={() => setUploadModalOpen(false)}
             disabled={uploading}
-            sx={{ color: '#786C58', fontWeight: 600, textTransform: 'none' }}
+            sx={{ color: '#475569', fontWeight: 600, fontSize: '12px', textTransform: 'none' }}
           >
             Cancel
           </Button>
           <Button
+            size="small"
             variant="contained"
-            disableElevation
             onClick={handleConfirmSpreadsheetUpload}
             disabled={uploading || previewItems.length === 0}
             startIcon={
-              uploading ? <CircularProgress size={16} color="inherit" /> : <CloudUploadRoundedIcon />
+              uploading ? <CircularProgress size={14} color="inherit" /> : <CloudUploadRoundedIcon sx={{ fontSize: 16 }} />
             }
             sx={{
-              background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
+              bgcolor: '#741748',
               color: '#FFFFFF',
-              fontWeight: 800,
-              fontSize: '14px',
+              fontWeight: 700,
+              fontSize: '12px',
               textTransform: 'none',
-              px: 3.5,
-              py: 1,
-              borderRadius: '8px',
-              '&:hover': { background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)' },
+              px: 2.5,
+              borderRadius: '3px',
+              '&:hover': { bgcolor: '#580e34' },
             }}
           >
-            {uploading
-              ? 'Syncing to Database...'
-              : `Confirm & Sync All ${previewItems.length} Products & Categories`}
+            {uploading ? 'Syncing...' : `Confirm & Save ${previewItems.length} Products`}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* NEW: PDF & Image Upload Confirmation Modal with Direct Quick-Entry & Upload Action */}
+      {/* PDF / Image Document Upload Dialog */}
       {docUploadModalOpen && pendingDocUpload && (
         <Dialog
           open={docUploadModalOpen}
@@ -2885,57 +2546,50 @@ SPARKLERS
           slotProps={{
             paper: {
               sx: {
-                borderRadius: '14px',
-                p: 1,
-                border: '1.5px solid #E2E8F0',
-                overflow: 'hidden',
+                borderRadius: '4px',
+                border: '1px solid #9BB3CC',
               },
             },
           }}
         >
-          <DialogTitle sx={{ fontSize: '18px', fontWeight: 800, color: '#B91C1C', pb: 0.5 }}>
-            Upload Rate Card ({pendingDocUpload.type === 'pdf' ? 'PDF Document' : 'Photo / Image'})
+          <DialogTitle
+            sx={{
+              background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+              borderBottom: '1px solid #A8C2DC',
+              fontSize: '13px',
+              fontWeight: 700,
+              color: '#0F172A',
+              py: 1,
+              px: 2,
+            }}
+          >
+            Upload Rate Card Document ({pendingDocUpload.type.toUpperCase()})
           </DialogTitle>
-          <DialogContent sx={{ pt: '10px !important' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
-              <Chip
-                label={`Format: ${pendingDocUpload.type.toUpperCase()}`}
-                sx={{ backgroundColor: '#F1F5F9', color: '#334155', fontWeight: 700 }}
-              />
-              <Chip
-                label={`Size: ${pendingDocUpload.size}`}
-                sx={{ backgroundColor: '#F3F4F6', color: '#374151', fontWeight: 600 }}
-              />
-            </Box>
-
-            <Box sx={{ mb: 2 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
-                Rate Card / Document Name
-              </Typography>
+          <DialogContent sx={{ p: 2 }}>
+            <Box sx={{ mb: 1.5 }}>
               <TextField
                 fullWidth
                 size="small"
+                label="Rate Card / Document Name"
                 value={docTitle}
                 onChange={(e) => setDocTitle(e.target.value)}
-                placeholder="e.g. 2024 Diwali Wholesale Rate Card"
-                slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 600 } } }}
+                slotProps={{ input: { sx: { fontSize: '12.5px' } }, inputLabel: { sx: { fontSize: '12.5px' } } }}
               />
             </Box>
 
-            {/* Document / Image Preview Window */}
             <Box
               sx={{
                 width: '100%',
-                maxHeight: '260px',
-                minHeight: '160px',
-                backgroundColor: '#F8FAFC',
-                borderRadius: '10px',
-                border: '1px solid #E2E8F0',
+                maxHeight: '220px',
+                minHeight: '140px',
+                bgcolor: '#F8FAFC',
+                borderRadius: '2px',
+                border: '1px solid #CBD5E1',
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
                 overflow: 'hidden',
-                mb: 2,
+                mb: 1.5,
               }}
             >
               {pendingDocUpload.type === 'image' && pendingDocUpload.dataUrl ? (
@@ -2945,7 +2599,7 @@ SPARKLERS
                   alt={pendingDocUpload.name}
                   sx={{
                     maxWidth: '100%',
-                    maxHeight: '260px',
+                    maxHeight: '220px',
                     objectFit: 'contain',
                   }}
                 />
@@ -2954,36 +2608,28 @@ SPARKLERS
                   src={pendingDocUpload.dataUrl}
                   title="PDF Preview"
                   width="100%"
-                  height="260px"
+                  height="220px"
                   style={{ border: 'none' }}
                 />
               ) : (
-                <Typography sx={{ color: '#64748B' }}>File ready to upload</Typography>
+                <Typography sx={{ color: '#64748B', fontSize: '12px' }}>File ready to upload</Typography>
               )}
             </Box>
 
-            {/* Optional Quick Add Item from this Rate Card to Live Database */}
-            <Paper
-              elevation={0}
-              sx={{
-                p: 1.5,
-                borderRadius: '10px',
-                backgroundColor: '#FFFFFF',
-                border: '1px dashed #F59E0B',
-              }}
-            >
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#334155', mb: 1 }}>
-                ✍️ Optional: Add Product Rates from this image into your Price List table:
+            {/* Optional Quick Add */}
+            <Box sx={{ p: 1, bgcolor: '#F1F7FD', border: '1px dashed #9BB3CC', borderRadius: '2px' }}>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#1E3A8A', mb: 0.8 }}>
+                Quick Add item from this photo/document:
               </Typography>
               <Grid container spacing={1} sx={{ alignItems: 'center' }}>
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <TextField
                     fullWidth
                     size="small"
-                    placeholder="Product Name (e.g. 2 3/4 Kuruvi)"
+                    placeholder="Item Name"
                     value={quickItemName}
                     onChange={(e) => setQuickItemName(e.target.value)}
-                    slotProps={{ input: { sx: { fontSize: '12.5px', fontWeight: 600 } } }}
+                    slotProps={{ input: { sx: { fontSize: '12px', py: 0.2 } } }}
                   />
                 </Grid>
                 <Grid size={{ xs: 6, sm: 3 }}>
@@ -2991,16 +2637,13 @@ SPARKLERS
                     <Select
                       value={quickCategory}
                       onChange={(e) => setQuickCategory(e.target.value)}
-                      sx={{ fontSize: '12.5px', fontWeight: 600 }}
+                      sx={{ fontSize: '12px' }}
                     >
                       {categories.map((c) => (
-                        <MenuItem key={c.name} value={c.name}>
+                        <MenuItem key={c.name} value={c.name} sx={{ fontSize: '12px' }}>
                           {c.name}
                         </MenuItem>
                       ))}
-                      {categories.every((c) => c.name !== quickCategory) && (
-                        <MenuItem value={quickCategory}>{quickCategory}</MenuItem>
-                      )}
                     </Select>
                   </FormControl>
                 </Grid>
@@ -3012,7 +2655,7 @@ SPARKLERS
                     type="number"
                     value={quickRate}
                     onChange={(e) => setQuickRate(e.target.value)}
-                    slotProps={{ input: { sx: { fontSize: '12.5px', fontWeight: 700, color: '#B91C1C' } } }}
+                    slotProps={{ input: { sx: { fontSize: '12px', fontWeight: 700, color: '#741748', py: 0.2 } } }}
                   />
                 </Grid>
                 <Grid size={{ xs: 3, sm: 1.5 }}>
@@ -3022,56 +2665,58 @@ SPARKLERS
                     placeholder="Unit"
                     value={quickUnit}
                     onChange={(e) => setQuickUnit(e.target.value)}
-                    slotProps={{ input: { sx: { fontSize: '12.5px', fontWeight: 600 } } }}
+                    slotProps={{ input: { sx: { fontSize: '12px', py: 0.2 } } }}
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 1.5 }}>
                   <Button
                     fullWidth
                     size="small"
-                    variant="outlined"
                     onClick={handleQuickAddProductFromDoc}
                     disabled={quickSaving || !quickItemName.trim() || !quickRate}
                     sx={{
-                      borderColor: '#D97706',
-                      color: '#334155',
+                      bgcolor: '#EDF4FB',
+                      border: '1px solid #94A3B8',
+                      color: '#0F172A',
                       fontWeight: 700,
-                      fontSize: '11.5px',
+                      fontSize: '11px',
                       textTransform: 'none',
-                      height: '36px',
-                      borderRadius: '6px',
-                      '&:hover': { backgroundColor: '#F8FAFC' },
+                      height: '32px',
+                      borderRadius: '2px',
+                      '&:hover': { bgcolor: '#E2E8F0' },
                     }}
                   >
                     + Add
                   </Button>
                 </Grid>
               </Grid>
-            </Paper>
+            </Box>
           </DialogContent>
-          <DialogActions sx={{ p: 2, pt: 1 }}>
+          <DialogActions sx={{ p: 1.5, bgcolor: '#F8FAFC', borderTop: '1px solid #DCE7F5' }}>
             <Button
+              size="small"
               onClick={() => setDocUploadModalOpen(false)}
-              sx={{ color: '#786C58', fontWeight: 600, textTransform: 'none' }}
+              sx={{ color: '#475569', fontWeight: 600, fontSize: '12px', textTransform: 'none' }}
             >
               Cancel
             </Button>
             <Button
+              size="small"
               variant="contained"
-              disableElevation
               onClick={handleConfirmDocUpload}
-              startIcon={<CloudUploadRoundedIcon />}
+              startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 16 }} />}
               sx={{
-                background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
+                bgcolor: '#741748',
                 color: '#FFFFFF',
-                fontWeight: 800,
+                fontWeight: 700,
+                fontSize: '12px',
                 textTransform: 'none',
-                px: 3,
-                borderRadius: '8px',
-                '&:hover': { background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)' },
+                px: 2,
+                borderRadius: '3px',
+                '&:hover': { bgcolor: '#580e34' },
               }}
             >
-              Confirm & Upload Rate Card
+              Confirm Upload
             </Button>
           </DialogActions>
         </Dialog>
@@ -3087,9 +2732,9 @@ SPARKLERS
           slotProps={{
             paper: {
               sx: {
-                borderRadius: '14px',
+                borderRadius: '4px',
                 overflow: 'hidden',
-                border: '1.5px solid #E2E8F0',
+                border: '1px solid #9BB3CC',
                 height: '85vh',
                 display: 'flex',
                 flexDirection: 'column',
@@ -3097,59 +2742,58 @@ SPARKLERS
             },
           }}
         >
-          {/* Header */}
           <Box
             sx={{
-              background: 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)',
-              borderBottom: '2px solid #F59E0B',
-              px: 3,
-              py: 1.5,
+              background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+              borderBottom: '1px solid #A8C2DC',
+              px: 2,
+              py: 0.8,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              color: '#FFFFFF',
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {viewingDoc.type === 'pdf' ? (
-                <PictureAsPdfRoundedIcon sx={{ color: '#FEF08A' }} />
+                <PictureAsPdfRoundedIcon sx={{ color: '#DC2626', fontSize: 18 }} />
               ) : (
-                <ImageRoundedIcon sx={{ color: '#FEF08A' }} />
+                <ImageRoundedIcon sx={{ color: '#2563EB', fontSize: 18 }} />
               )}
-              <Typography sx={{ fontSize: '16px', fontWeight: 800 }}>
+              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
                 {viewingDoc.name}
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
               {viewingDoc.dataUrl && (
                 <Button
-                  variant="contained"
                   size="small"
                   onClick={() => {
                     const win = window.open(viewingDoc.dataUrl, '_blank');
                     win?.focus();
                   }}
-                  startIcon={<PrintOutlinedIcon />}
+                  startIcon={<PrintOutlinedIcon sx={{ fontSize: 15 }} />}
                   sx={{
-                    backgroundColor: '#FEF08A',
-                    color: '#1E293B',
+                    bgcolor: '#FFFFFF',
+                    border: '1px solid #94A3B8',
+                    color: '#0F172A',
                     fontWeight: 700,
+                    fontSize: '11px',
                     textTransform: 'none',
-                    borderRadius: '6px',
-                    '&:hover': { backgroundColor: '#E2E8F0' },
+                    borderRadius: '2px',
+                    py: 0.2,
+                    px: 1,
                   }}
                 >
-                  Open in New Tab / Print
+                  Open in New Tab
                 </Button>
               )}
-              <IconButton onClick={() => setViewDocModalOpen(false)} sx={{ color: '#FFFFFF' }}>
-                <ClearRoundedIcon />
+              <IconButton size="small" onClick={() => setViewDocModalOpen(false)}>
+                <ClearRoundedIcon sx={{ fontSize: 18 }} />
               </IconButton>
             </Box>
           </Box>
 
-          {/* Body Viewer */}
-          <DialogContent sx={{ p: 0, flex: 1, backgroundColor: '#1E293B', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'auto' }}>
+          <DialogContent sx={{ p: 0, flex: 1, bgcolor: '#0F172A', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'auto' }}>
             {viewingDoc.type === 'pdf' && viewingDoc.dataUrl ? (
               <iframe
                 src={viewingDoc.dataUrl}
@@ -3167,62 +2811,13 @@ SPARKLERS
                   maxWidth: '100%',
                   maxHeight: '100%',
                   objectFit: 'contain',
-                  p: 2,
+                  p: 1,
                 }}
               />
             ) : (
-              <Typography sx={{ color: '#FFFFFF' }}>Unable to preview document.</Typography>
+              <Typography sx={{ color: '#FFFFFF', fontSize: '12px' }}>Unable to preview document.</Typography>
             )}
           </DialogContent>
-          <DialogActions sx={{ p: 1.5, backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', justifyContent: 'space-between' }}>
-            <Button
-              variant="outlined"
-              color="error"
-              size="small"
-              onClick={() => {
-                handleDeleteDoc(viewingDoc.id);
-                setViewDocModalOpen(false);
-              }}
-              startIcon={<DeleteOutlineRoundedIcon />}
-              sx={{ fontWeight: 700, textTransform: 'none', borderRadius: '6px' }}
-            >
-              Delete Rate Card
-            </Button>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => {
-                  setViewDocModalOpen(false);
-                  fileInputRef.current?.click();
-                }}
-                startIcon={<CloudUploadRoundedIcon />}
-                sx={{
-                  borderColor: '#D97706',
-                  color: '#334155',
-                  fontWeight: 700,
-                  textTransform: 'none',
-                  borderRadius: '6px',
-                }}
-              >
-                Upload Another File
-              </Button>
-              <Button
-                variant="contained"
-                size="small"
-                onClick={() => setViewDocModalOpen(false)}
-                sx={{
-                  background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
-                  fontWeight: 700,
-                  textTransform: 'none',
-                  borderRadius: '6px',
-                  px: 2.5,
-                }}
-              >
-                Done / Close
-              </Button>
-            </Box>
-          </DialogActions>
         </Dialog>
       )}
 
@@ -3235,20 +2830,29 @@ SPARKLERS
         slotProps={{
           paper: {
             sx: {
-              borderRadius: '14px',
-              p: 1,
-              border: '1.5px solid #E2E8F0',
+              borderRadius: '4px',
+              border: '1px solid #9BB3CC',
             },
           },
         }}
       >
-        <DialogTitle sx={{ fontSize: '18px', fontWeight: 800, color: '#B91C1C', pb: 1 }}>
+        <DialogTitle
+          sx={{
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            fontSize: '13px',
+            fontWeight: 700,
+            color: '#0F172A',
+            py: 1,
+            px: 2,
+          }}
+        >
           {editingItem ? 'Edit Price Item' : 'Add Price List Item'}
         </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '10px !important' }}>
-          <Grid container spacing={2}>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, p: 2 }}>
+          <Grid container spacing={1.5}>
             <Grid size={{ xs: 12, sm: 4 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', mb: 0.4 }}>
                 Sl No
               </Typography>
               <TextField
@@ -3257,27 +2861,27 @@ SPARKLERS
                 type="number"
                 value={formSlNo}
                 onChange={(e) => setFormSlNo(Number(e.target.value))}
-                slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 600 } } }}
+                slotProps={{ input: { sx: { fontSize: '12px' } } }}
               />
             </Grid>
 
             <Grid size={{ xs: 12, sm: 8 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', mb: 0.4 }}>
                 Category
               </Typography>
               <FormControl fullWidth size="small">
                 <Select
                   value={formCategory}
                   onChange={(e) => setFormCategory(e.target.value)}
-                  sx={{ fontSize: '13.5px', fontWeight: 600 }}
+                  sx={{ fontSize: '12px' }}
                 >
                   {categories.map((c) => (
-                    <MenuItem key={c.name} value={c.name}>
+                    <MenuItem key={c.name} value={c.name} sx={{ fontSize: '12px' }}>
                       {c.name}
                     </MenuItem>
                   ))}
                   {categories.every((c) => c.name !== formCategory) && (
-                    <MenuItem value={formCategory}>{formCategory}</MenuItem>
+                    <MenuItem value={formCategory} sx={{ fontSize: '12px' }}>{formCategory}</MenuItem>
                   )}
                 </Select>
               </FormControl>
@@ -3285,7 +2889,7 @@ SPARKLERS
           </Grid>
 
           <Box>
-            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', mb: 0.4 }}>
               Item / Product Name *
             </Typography>
             <TextField
@@ -3295,13 +2899,13 @@ SPARKLERS
               placeholder="e.g. 2 3/4 Kuruvi, Ground Chakkar Deluxe..."
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
-              slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 600 } } }}
+              slotProps={{ input: { sx: { fontSize: '12.5px' } } }}
             />
           </Box>
 
-          <Grid container spacing={2}>
+          <Grid container spacing={1.5}>
             <Grid size={{ xs: 6, sm: 3 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', mb: 0.4 }}>
                 Unit
               </Typography>
               <TextField
@@ -3310,12 +2914,12 @@ SPARKLERS
                 placeholder="Box, Pcs, Pkt"
                 value={formUnit}
                 onChange={(e) => setFormUnit(e.target.value)}
-                slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 600 } } }}
+                slotProps={{ input: { sx: { fontSize: '12px' } } }}
               />
             </Grid>
 
             <Grid size={{ xs: 6, sm: 3 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', mb: 0.4 }}>
                 MRP (₹)
               </Typography>
               <TextField
@@ -3324,12 +2928,12 @@ SPARKLERS
                 type="number"
                 value={formMrp}
                 onChange={(e) => handleMrpChange(e.target.value)}
-                slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 600 } } }}
+                slotProps={{ input: { sx: { fontSize: '12px' } } }}
               />
             </Grid>
 
             <Grid size={{ xs: 6, sm: 3 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.6 }}>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', mb: 0.4 }}>
                 Discount (%)
               </Typography>
               <TextField
@@ -3338,12 +2942,12 @@ SPARKLERS
                 type="number"
                 value={formDiscount}
                 onChange={(e) => handleDiscountChange(e.target.value)}
-                slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 600 } } }}
+                slotProps={{ input: { sx: { fontSize: '12px' } } }}
               />
             </Grid>
 
             <Grid size={{ xs: 6, sm: 3 }}>
-              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#B91C1C', mb: 0.6 }}>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#741748', mb: 0.4 }}>
                 Net Rate (₹) *
               </Typography>
               <TextField
@@ -3352,31 +2956,33 @@ SPARKLERS
                 type="number"
                 value={formRate}
                 onChange={(e) => setFormRate(e.target.value)}
-                slotProps={{ input: { sx: { fontSize: '14px', fontWeight: 800, color: '#B91C1C' } } }}
+                slotProps={{ input: { sx: { fontSize: '12.5px', fontWeight: 700, color: '#741748' } } }}
               />
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 1 }}>
+        <DialogActions sx={{ p: 1.5, bgcolor: '#F8FAFC', borderTop: '1px solid #DCE7F5' }}>
           <Button
+            size="small"
             onClick={() => setItemModalOpen(false)}
-            sx={{ color: '#786C58', fontWeight: 600, textTransform: 'none' }}
+            sx={{ color: '#475569', fontWeight: 600, fontSize: '12px', textTransform: 'none' }}
           >
             Cancel
           </Button>
           <Button
+            size="small"
             variant="contained"
-            disableElevation
             onClick={handleSaveItem}
             disabled={savingItem}
             sx={{
-              background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
+              bgcolor: '#741748',
               color: '#FFFFFF',
               fontWeight: 700,
+              fontSize: '12px',
               textTransform: 'none',
-              px: 3,
-              borderRadius: '8px',
-              '&:hover': { background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)' },
+              px: 2.5,
+              borderRadius: '3px',
+              '&:hover': { bgcolor: '#580e34' },
             }}
           >
             {savingItem ? 'Saving...' : editingItem ? 'Update Price' : 'Add to Price List'}
@@ -3394,7 +3000,7 @@ SPARKLERS
         <Alert
           onClose={() => setToast((prev) => ({ ...prev, open: false }))}
           severity={toast.severity}
-          sx={{ width: '100%', fontWeight: 700, borderRadius: '10px' }}
+          sx={{ width: '100%', fontWeight: 600, fontSize: '12px', borderRadius: '3px' }}
         >
           {toast.message}
         </Alert>

@@ -9,30 +9,20 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   IconButton,
-  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   CircularProgress,
-  InputBase,
-  Chip,
   FormControlLabel,
   Switch,
-  Grid,
 } from '@mui/material';
-import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
-import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import ModeEditOutlineRoundedIcon from '@mui/icons-material/ModeEditOutlineRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
-import DeleteSweepRoundedIcon from '@mui/icons-material/DeleteSweepRounded';
 import CategoryRoundedIcon from '@mui/icons-material/CategoryRounded';
-import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
+import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import { CategoriesApi } from '../services/api';
 
 export interface CategoryItem {
@@ -100,10 +90,6 @@ export const CategoriesPage: FC = () => {
     );
   }, [categories, searchTerm]);
 
-  const activeCount = useMemo(() => {
-    return categories.filter((c) => c.isActive !== false).length;
-  }, [categories]);
-
   const handleOpenAdd = () => {
     setEditingCategory(null);
     setName('');
@@ -119,7 +105,7 @@ export const CategoriesPage: FC = () => {
     setName(cat.name || '');
     setCode(cat.code || '');
     setDescription(cat.description || '');
-    setColor(cat.color || '#DC2626');
+    setColor(cat.color || '#1E40AF');
     setIsActive(cat.isActive !== false);
     setOpenModal(true);
   };
@@ -175,786 +161,389 @@ export const CategoriesPage: FC = () => {
     }
   };
 
-  const handleClearAll = async () => {
-    if (!categories.length) return;
-    if (!window.confirm(`Are you sure you want to delete ALL ${categories.length} categories? This will permanently remove them from the database.`)) return;
-
-    try {
-      setLoading(true);
-      await CategoriesApi.clearAll();
-      setCategories([]);
-    } catch (err: any) {
-      console.error('Failed to clear all categories:', err);
-      alert(err.message || 'Error clearing categories');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <Box
-      sx={{
-        width: '100%',
-        px: { xs: 2, sm: 3, md: 4 },
-        py: { xs: 2, md: 3 },
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* Top Stats Overview */}
-      <Grid container spacing={2} sx={{ mb: 2.5 }}>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2,
-              borderRadius: '12px',
-              border: '1.5px solid #E2E8F0',
-              background: 'linear-gradient(135deg, #F8FAFC 0%, #FFFFFF 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-            }}
-          >
-            <Box
-              sx={{
-                width: 44,
-                height: 44,
-                borderRadius: '10px',
-                backgroundColor: '#DC2626',
-                color: '#FFFFFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
-              }}
-            >
-              <CategoryRoundedIcon sx={{ fontSize: 24 }} />
-            </Box>
-            <Box>
-              <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>
-                Total Categories
-              </Typography>
-              <Typography sx={{ fontSize: '22px', fontWeight: 800, color: '#475569', lineHeight: 1.1 }}>
-                {categories.length}
-              </Typography>
-            </Box>
-          </Paper>
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2,
-              borderRadius: '12px',
-              border: '1.5px solid #BBF7D0',
-              background: 'linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-            }}
-          >
-            <Box
-              sx={{
-                width: 44,
-                height: 44,
-                borderRadius: '10px',
-                backgroundColor: '#059669',
-                color: '#FFFFFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(5, 150, 105, 0.3)',
-              }}
-            >
-              <CheckCircleOutlineRoundedIcon sx={{ fontSize: 24 }} />
-            </Box>
-            <Box>
-              <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#065F46', textTransform: 'uppercase' }}>
-                Active Categories
-              </Typography>
-              <Typography sx={{ fontSize: '22px', fontWeight: 800, color: '#064E3B', lineHeight: 1.1 }}>
-                {activeCount}
-              </Typography>
-            </Box>
-          </Paper>
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2,
-              borderRadius: '12px',
-              border: '1.5px solid #E2E8F0',
-              background: 'linear-gradient(135deg, #F8FAFC 0%, #FFFFFF 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <Box>
-              <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
-                Quick Action
-              </Typography>
-              <Typography sx={{ fontSize: '13px', fontWeight: 600, color: '#64748B' }}>
-                Manage item classifications
-              </Typography>
-            </Box>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={fetchCategories}
-              startIcon={<RefreshRoundedIcon sx={{ fontSize: 16 }} />}
-              sx={{
-                borderColor: '#CBD5E1',
-                color: '#475569',
-                fontSize: '12px',
-                fontWeight: 700,
-                textTransform: 'none',
-                borderRadius: '8px',
-                '&:hover': { borderColor: '#94A3B8', backgroundColor: '#F1F5F9' },
-              }}
-            >
-              Refresh
-            </Button>
-          </Paper>
-        </Grid>
-      </Grid>
-
-      {/* Main Table Card */}
-      <Paper
-        elevation={0}
+    <Box sx={{ width: '100%', p: { xs: 1, sm: 1.5 }, bgcolor: '#D9E4F2', minHeight: 'calc(100vh - 70px)' }}>
+      {/* Outer Window Card */}
+      <Box
         sx={{
-          width: '100%',
-          backgroundColor: '#FFFFFF',
-          borderRadius: '12px',
-          border: '1.5px solid #E2E8F0',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+          bgcolor: '#FFFFFF',
+          border: '1px solid #9BB3CC',
+          borderRadius: '4px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
           overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        {/* Festive Red Banner Header */}
+        {/* Window Title Header Bar */}
         <Box
           sx={{
-            background: 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)',
-            borderBottom: '2px solid #F59E0B',
-            px: { xs: 2, sm: 3 },
-            py: 1.5,
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            px: 1.5,
+            py: 0.8,
             display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            alignItems: { xs: 'stretch', sm: 'center' },
+            alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 1.5,
-            minHeight: '58px',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CategoryRoundedIcon sx={{ fontSize: 18, color: '#0284C7' }} />
             <Typography
               sx={{
-                color: '#FFFFFF',
-                fontSize: '17px',
-                fontWeight: 800,
-                letterSpacing: '-0.01em',
-              }}
-            >
-              Product Categories
-            </Typography>
-            <Typography
-              sx={{
-                color: '#FEF08A',
-                fontSize: '12px',
+                fontSize: '13px',
                 fontWeight: 700,
-                backgroundColor: 'rgba(254, 240, 138, 0.2)',
-                border: '1px solid rgba(254, 240, 138, 0.35)',
-                px: 1.2,
-                py: 0.3,
-                borderRadius: '12px',
+                color: '#0F172A',
+                letterSpacing: '0.01em',
               }}
             >
-              {filteredCategories.length} {filteredCategories.length === 1 ? 'category' : 'categories'}
+              Category Master Directory
             </Typography>
           </Box>
 
+          <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#1E3A8A' }}>
+            Total Categories: {categories.length}
+          </Typography>
+        </Box>
+
+        {/* Inner Content Area */}
+        <Box sx={{ p: { xs: 1, sm: 1.5 }, bgcolor: '#F0F5FA' }}>
+          {/* Top Control Bar */}
           <Box
             sx={{
               display: 'flex',
               alignItems: 'center',
-              gap: 1.5,
-              flexWrap: { xs: 'wrap', sm: 'nowrap' },
+              justifyContent: 'space-between',
+              gap: 1,
+              mb: 1,
+              bgcolor: '#FFFFFF',
+              border: '1px solid #B0C4DE',
+              borderRadius: '3px',
+              p: 0.8,
+              flexWrap: 'wrap',
             }}
           >
-            {/* Search Input */}
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                backgroundColor: '#FFFFFF',
-                borderRadius: '8px',
-                px: 1.2,
-                height: '38px',
-                width: { xs: '100%', sm: '250px' },
-                boxSizing: 'border-box',
-                border: '1.5px solid #E2E8F0',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-              }}
-            >
-              <SearchRoundedIcon sx={{ color: '#D97706', fontSize: 19, mr: 0.8, flexShrink: 0 }} />
-              <InputBase
-                placeholder="Search categories..."
+            {/* Search Box */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flex: 1, minWidth: '220px' }}>
+              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap' }}>
+                Search Category:
+              </Typography>
+              <input
+                type="text"
+                placeholder="Search by category name, code, description..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                sx={{
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: '#1F1714',
-                  width: '100%',
-                  '& input': {
-                    p: 0,
-                    '&::placeholder': { color: '#A8998A', opacity: 1 },
-                  },
-                }}
+                className="erp-input"
+                style={{ flex: 1, maxWidth: '320px' }}
               />
               {searchTerm && (
-                <IconButton
-                  size="small"
-                  onClick={() => setSearchTerm('')}
-                  sx={{ p: 0.4, color: '#D97706', '&:hover': { color: '#B45309' } }}
-                >
-                  <ClearRoundedIcon sx={{ fontSize: 16 }} />
+                <IconButton size="small" onClick={() => setSearchTerm('')} sx={{ p: 0.2 }}>
+                  <ClearRoundedIcon sx={{ fontSize: 14 }} />
                 </IconButton>
               )}
             </Box>
 
-            {/* Clear All Categories Button */}
-            {categories.length > 0 && (
+            {/* Right Buttons */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Button
-                variant="contained"
-                disableElevation
-                onClick={handleClearAll}
-                startIcon={<DeleteSweepRoundedIcon sx={{ fontSize: 18 }} />}
+                onClick={fetchCategories}
+                startIcon={<RefreshRoundedIcon sx={{ fontSize: 14 }} />}
+                size="small"
                 sx={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                  color: '#FFFFFF',
-                  border: '1px solid rgba(255, 255, 255, 0.4)',
-                  fontSize: '13px',
+                  height: '26px',
+                  bgcolor: '#EDF4FB',
+                  border: '1px solid #94A3B8',
+                  color: '#0F172A',
+                  fontSize: '11.5px',
                   fontWeight: 700,
+                  px: 1.5,
+                  borderRadius: '3px',
                   textTransform: 'none',
-                  px: 1.8,
-                  height: '38px',
-                  borderRadius: '8px',
-                  whiteSpace: 'nowrap',
-                  '&:hover': {
-                    backgroundColor: 'rgba(239, 68, 68, 0.9)',
-                    borderColor: '#EF4444',
-                  },
+                  '&:hover': { bgcolor: '#D9E4F2' },
                 }}
               >
-                Clear All
+                Refresh
               </Button>
-            )}
 
-            {/* Add Category Button */}
-            <Button
-              variant="contained"
-              disableElevation
-              onClick={handleOpenAdd}
-              startIcon={<AddRoundedIcon sx={{ fontSize: 18 }} />}
-              sx={{
-                backgroundColor: '#FFFFFF',
-                color: '#B91C1C',
-                border: '1.5px solid #E2E8F0',
-                fontSize: '13px',
-                fontWeight: 800,
-                textTransform: 'none',
-                px: 2,
-                height: '38px',
-                borderRadius: '8px',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
-                whiteSpace: 'nowrap',
-                '&:hover': {
-                  backgroundColor: '#F8FAFC',
-                },
-              }}
-            >
-              Add Category
-            </Button>
+              <Button
+                onClick={handleOpenAdd}
+                startIcon={<AddRoundedIcon sx={{ fontSize: 15 }} />}
+                size="small"
+                sx={{
+                  height: '26px',
+                  bgcolor: '#741748',
+                  color: '#FFFFFF',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  px: 1.5,
+                  borderRadius: '3px',
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: '#580e34' },
+                }}
+              >
+                Add Category
+              </Button>
+            </Box>
           </Box>
-        </Box>
 
-        {/* Categories Table */}
-        <TableContainer sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <Table sx={{ minWidth: { xs: '650px', sm: '100%' } }} aria-label="categories table">
-            <TableHead>
-              <TableRow sx={{ backgroundColor: '#F8FAFC' }}>
-                <TableCell
-                  sx={{
-                    py: 1.6,
-                    px: { xs: 2, sm: 3 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '80px',
-                  }}
-                >
-                  SL.NO
-                </TableCell>
-                <TableCell
-                  sx={{
-                    py: 1.6,
-                    px: { xs: 2, sm: 3 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    borderBottom: '2px solid #E2E8F0',
-                  }}
-                >
-                  CATEGORY NAME
-                </TableCell>
-                <TableCell
-                  sx={{
-                    py: 1.6,
-                    px: { xs: 1.5, sm: 2.5 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '120px',
-                  }}
-                >
-                  CODE
-                </TableCell>
-                <TableCell
-                  sx={{
-                    py: 1.6,
-                    px: { xs: 2, sm: 3 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    borderBottom: '2px solid #E2E8F0',
-                  }}
-                >
-                  DESCRIPTION
-                </TableCell>
-                <TableCell
-                  align="center"
-                  sx={{
-                    py: 1.6,
-                    px: { xs: 1.5, sm: 2.5 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '110px',
-                  }}
-                >
-                  STATUS
-                </TableCell>
-                <TableCell
-                  align="center"
-                  sx={{
-                    py: 1.6,
-                    px: { xs: 1.5, sm: 2.5 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '90px',
-                  }}
-                >
-                  EDIT
-                </TableCell>
-                <TableCell
-                  align="center"
-                  sx={{
-                    py: 1.6,
-                    px: { xs: 2, sm: 3 },
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#1E293B',
-                    letterSpacing: '0.04em',
-                    borderBottom: '2px solid #E2E8F0',
-                    width: '90px',
-                  }}
-                >
-                  DELETE
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
-                    <CircularProgress size={32} sx={{ color: '#DC2626' }} />
-                  </TableCell>
-                </TableRow>
-              ) : filteredCategories.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 6, color: '#786C58' }}>
-                    {searchTerm ? (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                        <Typography sx={{ fontSize: '14px', color: '#786C58', fontWeight: 500 }}>
-                          No categories matching "{searchTerm}" found.
-                        </Typography>
-                        <Button
-                          size="small"
-                          onClick={() => setSearchTerm('')}
-                          sx={{ textTransform: 'none', color: '#B91C1C', fontWeight: 700 }}
-                        >
-                          Clear Search
-                        </Button>
-                      </Box>
-                    ) : (
-                      'No categories found. Click "Add Category" to create one.'
-                    )}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredCategories.map((cat, index) => {
-                  const isLast = index === filteredCategories.length - 1;
-                  const catColor = cat.color || '#DC2626';
-
-                  return (
-                    <TableRow
-                      key={cat._id || cat.id || index}
-                      sx={{
-                        '&:hover': {
-                          backgroundColor: '#FEFDF5',
-                        },
-                      }}
-                    >
-                      {/* Sl. No */}
-                      <TableCell
-                        sx={{
-                          py: 1.6,
-                          px: { xs: 2, sm: 3 },
-                          fontSize: '13.5px',
-                          fontWeight: 700,
-                          color: '#786C58',
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        {index + 1}
-                      </TableCell>
-
-                      {/* Category Name & Color Tag */}
-                      <TableCell
-                        sx={{
-                          py: 1.6,
-                          px: { xs: 2, sm: 3 },
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                          <Box
-                            sx={{
-                              width: 12,
-                              height: 12,
-                              borderRadius: '50%',
-                              backgroundColor: catColor,
-                              boxShadow: `0 0 6px ${catColor}80`,
-                              flexShrink: 0,
-                            }}
-                          />
-                          <Typography
-                            sx={{
-                              fontSize: '14px',
-                              fontWeight: 700,
-                              color: '#1F1714',
-                              letterSpacing: '0.01em',
-                            }}
-                          >
-                            {cat.name}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-
-                      {/* Code */}
-                      <TableCell
-                        sx={{
-                          py: 1.6,
-                          px: { xs: 1.5, sm: 2.5 },
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        {cat.code ? (
-                          <Chip
-                            label={cat.code}
-                            size="small"
-                            sx={{
-                              fontSize: '11.5px',
-                              fontWeight: 800,
-                              backgroundColor: '#F8FAFC',
-                              color: '#334155',
-                              border: '1px solid #E2E8F0',
-                              borderRadius: '6px',
-                              height: '24px',
-                            }}
-                          />
-                        ) : (
-                          <Typography sx={{ fontSize: '13px', color: '#9CA3AF' }}>—</Typography>
-                        )}
-                      </TableCell>
-
-                      {/* Description */}
-                      <TableCell
-                        sx={{
-                          py: 1.6,
-                          px: { xs: 2, sm: 3 },
-                          fontSize: '13px',
-                          color: '#57463A',
-                          fontWeight: 500,
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        {cat.description || <span style={{ color: '#9CA3AF' }}>No description</span>}
-                      </TableCell>
-
-                      {/* Status */}
-                      <TableCell
-                        align="center"
-                        sx={{
-                          py: 1.6,
-                          px: { xs: 1.5, sm: 2.5 },
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        <Chip
-                          label={cat.isActive !== false ? 'Active' : 'Inactive'}
-                          size="small"
-                          sx={{
-                            fontSize: '11.5px',
-                            fontWeight: 700,
-                            backgroundColor: cat.isActive !== false ? '#ECFDF5' : '#FEF2F2',
-                            color: cat.isActive !== false ? '#065F46' : '#991B1B',
-                            border: `1px solid ${cat.isActive !== false ? '#A7F3D0' : '#FECACA'}`,
-                            borderRadius: '12px',
-                            height: '24px',
-                          }}
-                        />
-                      </TableCell>
-
-                      {/* Edit */}
-                      <TableCell
-                        align="center"
-                        sx={{
-                          py: 1.6,
-                          px: { xs: 1.5, sm: 2.5 },
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        <Tooltip title="Edit Category" arrow>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenEdit(cat)}
-                            sx={{
-                              color: '#D97706',
-                              backgroundColor: '#F8FAFC',
-                              border: '1px solid #E2E8F0',
-                              borderRadius: '6px',
-                              p: 0.7,
-                              transition: 'all 0.15s ease',
-                              '&:hover': {
-                                color: '#FFFFFF',
-                                backgroundColor: '#D97706',
-                                borderColor: '#D97706',
-                              },
-                            }}
-                          >
-                            <ModeEditOutlineRoundedIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-
-                      {/* Delete */}
-                      <TableCell
-                        align="center"
-                        sx={{
-                          py: 1.6,
-                          px: { xs: 2, sm: 3 },
-                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
-                        }}
-                      >
-                        <Tooltip title="Delete Category" arrow>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDelete(cat)}
-                            sx={{
-                              color: '#DC2626',
-                              backgroundColor: '#FEF2F2',
-                              border: '1px solid #FECACA',
-                              borderRadius: '6px',
-                              p: 0.7,
-                              transition: 'all 0.15s ease',
-                              '&:hover': {
-                                color: '#FFFFFF',
-                                backgroundColor: '#DC2626',
-                                borderColor: '#DC2626',
-                              },
-                            }}
-                          >
-                            <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
+          {/* Categories Table */}
+          <Box
+            sx={{
+              bgcolor: '#FFFFFF',
+              border: '1px solid #B0C4DE',
+              borderRadius: '3px',
+              overflow: 'hidden',
+            }}
+          >
+            <TableContainer sx={{ maxHeight: 'calc(100vh - 210px)', minHeight: '380px' }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: '#DCE7F5' }}>
+                    <TableCell sx={{ width: '60px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      S.No
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Category Name
+                    </TableCell>
+                    <TableCell sx={{ width: '130px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Category Code
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Description
+                    </TableCell>
+                    <TableCell sx={{ width: '100px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Status
+                    </TableCell>
+                    <TableCell align="center" sx={{ width: '140px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Actions
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+                        <CircularProgress size={24} sx={{ color: '#1E40AF' }} />
                       </TableCell>
                     </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+                  ) : filteredCategories.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
+                        {searchTerm ? 'No categories match your search criteria.' : 'No categories found.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredCategories.map((cat, index) => {
+                      return (
+                        <TableRow
+                          key={cat._id || cat.id || index}
+                          sx={{
+                            '&:hover': { bgcolor: '#F1F7FD' },
+                            '& td': { borderBottom: '1px solid #E2E8F0', py: 0.4 },
+                          }}
+                        >
+                          {/* S.No */}
+                          <TableCell sx={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748B' }}>
+                            {index + 1}
+                          </TableCell>
+
+                          {/* Category Name */}
+                          <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Box
+                                sx={{
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: '2px',
+                                  backgroundColor: cat.color || '#1E40AF',
+                                  flexShrink: 0,
+                                }}
+                              />
+                              {cat.name}
+                            </Box>
+                          </TableCell>
+
+                          {/* Code */}
+                          <TableCell sx={{ fontSize: '12px', fontWeight: 700, color: '#1E40AF' }}>
+                            {cat.code || '-'}
+                          </TableCell>
+
+                          {/* Description */}
+                          <TableCell sx={{ fontSize: '12px', color: '#334155' }}>
+                            {cat.description || '-'}
+                          </TableCell>
+
+                          {/* Status */}
+                          <TableCell sx={{ textAlign: 'center', fontSize: '11.5px', fontWeight: 700, color: cat.isActive !== false ? '#166534' : '#991B1B' }}>
+                            {cat.isActive !== false ? 'Active' : 'Inactive'}
+                          </TableCell>
+
+                          {/* Actions */}
+                          <TableCell align="center">
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                              {/* Edit */}
+                              <Button
+                                size="small"
+                                onClick={() => handleOpenEdit(cat)}
+                                sx={{
+                                  height: '24px',
+                                  px: 1,
+                                  py: 0,
+                                  bgcolor: '#EDF4FB',
+                                  border: '1px solid #94A3B8',
+                                  color: '#0F172A',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  textTransform: 'none',
+                                  borderRadius: '2px',
+                                  '&:hover': { bgcolor: '#D9E4F2' },
+                                }}
+                              >
+                                Edit
+                              </Button>
+
+                              {/* Delete */}
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDelete(cat)}
+                                sx={{
+                                  color: '#DC2626',
+                                  bgcolor: '#FEF2F2',
+                                  border: '1px solid #FECACA',
+                                  borderRadius: '2px',
+                                  p: 0.3,
+                                  '&:hover': { bgcolor: '#DC2626', color: '#FFFFFF' },
+                                }}
+                              >
+                                <DeleteOutlineRoundedIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </Box>
+      </Box>
 
       {/* Add / Edit Category Dialog */}
       <Dialog
         open={openModal}
         onClose={() => setOpenModal(false)}
-        maxWidth="sm"
+        maxWidth="xs"
         fullWidth
         slotProps={{
           paper: {
             sx: {
-              borderRadius: '14px',
-              p: 1,
-              border: '1.5px solid #E2E8F0',
+              borderRadius: '4px',
+              border: '1px solid #9BB3CC',
+              overflow: 'hidden',
             },
           },
         }}
       >
-        <DialogTitle sx={{ fontSize: '18px', fontWeight: 800, color: '#B91C1C', pb: 1 }}>
-          {editingCategory ? 'Edit Category' : 'Create New Category'}
+        <DialogTitle
+          sx={{
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            fontWeight: 700,
+            fontSize: '13.5px',
+            color: '#0F172A',
+            py: 1,
+            px: 2,
+          }}
+        >
+          {editingCategory ? 'Edit Category' : 'Add New Category'}
         </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '10px !important' }}>
+
+        <DialogContent sx={{ bgcolor: '#F0F5FA', display: 'flex', flexDirection: 'column', gap: 1.5, p: 2 }}>
           <Box>
-            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.8 }}>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
               Category Name *
             </Typography>
-            <TextField
-              autoFocus
-              fullWidth
-              size="small"
-              placeholder="e.g. Fancy Aerial Shots, Sparklers..."
+            <input
+              type="text"
+              placeholder="e.g. Ground Chakkars"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              slotProps={{
-                input: {
-                  sx: { fontSize: '13.5px', fontWeight: 600, borderRadius: '8px' },
-                },
-              }}
+              className="erp-input"
+              style={{ width: '100%' }}
             />
           </Box>
 
           <Box>
-            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.8 }}>
-              Category Code (Short code for invoices / reports)
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
+              Category Code
             </Typography>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="e.g. FAS, RKT, SPK"
+            <input
+              type="text"
+              placeholder="e.g. CHK"
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              slotProps={{
-                input: {
-                  sx: { fontSize: '13.5px', fontWeight: 600, borderRadius: '8px' },
-                },
-              }}
+              onChange={(e) => setCode(e.target.value)}
+              className="erp-input"
+              style={{ width: '100%', textTransform: 'uppercase' }}
             />
           </Box>
 
           <Box>
-            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.8 }}>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
               Description
             </Typography>
-            <TextField
-              fullWidth
-              multiline
+            <textarea
               rows={2}
-              size="small"
-              placeholder="Brief description about items under this category..."
+              placeholder="Optional notes or details..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              slotProps={{
-                input: {
-                  sx: { fontSize: '13px', fontWeight: 500, borderRadius: '8px' },
-                },
-              }}
+              className="erp-input"
+              style={{ width: '100%', resize: 'vertical' }}
             />
           </Box>
 
-          {/* Color Selector */}
-          <Box>
-            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#786C58', mb: 0.8 }}>
-              Badge Color
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A' }}>
+              Active Status
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-              {PRESET_COLORS.map((c) => (
-                <Box
-                  key={c}
-                  onClick={() => setColor(c)}
-                  sx={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    backgroundColor: c,
-                    cursor: 'pointer',
-                    border: color === c ? '3px solid #1F1714' : '2px solid transparent',
-                    boxShadow: color === c ? '0 0 8px rgba(0,0,0,0.3)' : 'none',
-                    transition: 'transform 0.15s ease',
-                    '&:hover': { transform: 'scale(1.15)' },
-                  }}
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
                 />
-              ))}
-            </Box>
+              }
+              label={<Typography sx={{ fontSize: '12px', fontWeight: 600 }}>{isActive ? 'Active' : 'Inactive'}</Typography>}
+            />
           </Box>
-
-          {/* Active Switch */}
-          <FormControlLabel
-            control={
-              <Switch
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-                color="error"
-              />
-            }
-            label={
-              <Typography sx={{ fontSize: '13.5px', fontWeight: 700, color: '#1F1714' }}>
-                Active Category (Available in Price List & Billing)
-              </Typography>
-            }
-          />
         </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 1 }}>
+
+        <DialogActions sx={{ bgcolor: '#EDF4FB', borderTop: '1px solid #B0C4DE', p: 1 }}>
           <Button
             onClick={() => setOpenModal(false)}
-            sx={{ color: '#786C58', fontWeight: 600, textTransform: 'none' }}
+            sx={{ textTransform: 'none', color: '#0F172A', fontWeight: 700, fontSize: '12px' }}
           >
             Cancel
           </Button>
           <Button
-            variant="contained"
-            disableElevation
             onClick={handleSave}
             disabled={modalLoading}
+            variant="contained"
+            size="small"
             sx={{
-              background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',
+              bgcolor: '#741748',
               color: '#FFFFFF',
               fontWeight: 700,
+              fontSize: '12px',
               textTransform: 'none',
-              px: 3,
-              borderRadius: '8px',
-              '&:hover': { background: 'linear-gradient(135deg, #B91C1C 0%, #991B1B 100%)' },
+              px: 2.5,
+              borderRadius: '3px',
+              '&:hover': { bgcolor: '#580e34' },
             }}
           >
-            {modalLoading ? 'Saving...' : editingCategory ? 'Update Category' : 'Create Category'}
+            {modalLoading ? <CircularProgress size={16} color="inherit" /> : 'Save Category'}
           </Button>
         </DialogActions>
       </Dialog>
