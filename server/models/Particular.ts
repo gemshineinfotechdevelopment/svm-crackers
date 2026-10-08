@@ -50,6 +50,19 @@ export interface IParticular extends Document {
   igstTotal?: string;
   roundOff?: string;
   year?: string;
+  despatchTo?: string;
+  lorryTransport?: string;
+  lrNo?: string;
+  lrDate?: string;
+  taxType?: 'CGST_SGST' | 'IGST' | string;
+  taxPercent?: string;
+  cgstPercent?: string;
+  sgstPercent?: string;
+  igstPercent?: string;
+  subTotal?: string;
+  netAmount?: string;
+  inWords?: string;
+  billFlag?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -105,6 +118,19 @@ const ParticularSchema: Schema = new Schema(
     igstTotal: { type: String, default: '0.00' },
     roundOff: { type: String, default: '0.00' },
     year: { type: String, default: () => new Date().getFullYear().toString(), trim: true },
+    despatchTo: { type: String, default: '' },
+    lorryTransport: { type: String, default: '' },
+    lrNo: { type: String, default: '' },
+    lrDate: { type: String, default: '' },
+    taxType: { type: String, default: 'IGST' },
+    taxPercent: { type: String, default: '18' },
+    cgstPercent: { type: String, default: '0' },
+    sgstPercent: { type: String, default: '0' },
+    igstPercent: { type: String, default: '18' },
+    subTotal: { type: String, default: '0' },
+    netAmount: { type: String, default: '0' },
+    inWords: { type: String, default: '' },
+    billFlag: { type: String, default: '' },
   },
   { timestamps: true }
 );
