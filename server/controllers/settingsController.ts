@@ -2,30 +2,34 @@ import type { Request, Response, NextFunction } from 'express';
 import { Settings } from '../models/Settings';
 
 /**
- * Server-authoritative system date and billing period helper.
+ * Get system date and annual billing information derived from authoritative server date.
  */
-export const getSystemBillingInfo = () => {
-  const now = new Date();
+export const getBillingPeriodInfo = (customDate?: Date) => {
+  const now = customDate || new Date();
   const currentYear = now.getFullYear();
-  const billingStartDate = `01-01-${currentYear}`;
-  const billingEndDate = `31-12-${currentYear}`;
-
+  const systemYear = currentYear.toString();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const systemDateStr = `${day}-${month}-${systemYear}`;
+  
   return {
-    systemDate: now.toISOString(),
+    systemDate: systemDateStr,
     systemYear: currentYear,
     billingYear: currentYear,
-    billingStartDate,
-    billingEndDate,
+    billingStartDate: `01-01-${currentYear}`,
+    billingEndDate: `31-12-${currentYear}`,
     billingStatus: 'Active',
   };
 };
+
+export const getSystemBillingInfo = getBillingPeriodInfo;
 
 /**
  * Get the current company settings from MongoDB database.
  */
 export const getSettings = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const billingInfo = getSystemBillingInfo();
+    const billingInfo = getBillingPeriodInfo();
     let settings = await Settings.findOne();
 
     if (!settings) {
@@ -70,12 +74,11 @@ export const getSettings = async (_req: Request, res: Response, next: NextFuncti
         needsSave = true;
       }
 
-      // Automatic Billing Period Synchronization with Server Date
+      // Auto-sync billing fields if year rolled over or fields missing
       if (
-        settings.billingYear !== billingInfo.billingYear ||
-        settings.billingStartDate !== billingInfo.billingStartDate ||
-        settings.billingEndDate !== billingInfo.billingEndDate ||
-        settings.billingStatus !== billingInfo.billingStatus
+        String(settings.billingYear) !== String(billingInfo.billingYear) ||
+        !settings.billingStartDate ||
+        !settings.billingEndDate
       ) {
         settings.billingYear = billingInfo.billingYear;
         settings.billingStartDate = billingInfo.billingStartDate;
@@ -90,13 +93,8 @@ export const getSettings = async (_req: Request, res: Response, next: NextFuncti
     }
 
     const responseData = {
-      ...(settings.toObject ? settings.toObject() : settings),
-      systemDate: billingInfo.systemDate,
-      systemYear: billingInfo.systemYear,
-      billingYear: billingInfo.billingYear,
-      billingStartDate: billingInfo.billingStartDate,
-      billingEndDate: billingInfo.billingEndDate,
-      billingStatus: billingInfo.billingStatus,
+      ...(settings ? (settings.toObject ? settings.toObject() : settings) : {}),
+      ...billingInfo,
     };
 
     res.status(200).json({ success: true, data: responseData });
@@ -110,26 +108,20 @@ export const getSettings = async (_req: Request, res: Response, next: NextFuncti
  */
 export const updateSettings = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const billingInfo = getSystemBillingInfo();
+    const billingInfo = getBillingPeriodInfo();
     const { _id, id, createdAt, updatedAt, __v, ...cleanedData } = req.body;
 
-    // Backend Year Restriction & Validation
-    const requestedYear = cleanedData.billingYear !== undefined
-      ? cleanedData.billingYear
-      : (cleanedData.billing_year !== undefined ? cleanedData.billing_year : undefined);
-
-    if (requestedYear !== undefined && requestedYear !== null && requestedYear !== '') {
-      const parsedYear = Number(requestedYear);
-      if (isNaN(parsedYear) || parsedYear !== billingInfo.systemYear) {
-        res.status(400).json({
-          success: false,
-          error: 'Invalid Billing Year: The selected billing year does not match the current system year. Billing dates are automatically synchronized with the system date.',
-        });
-        return;
-      }
+    // Backend Validation: Compare requested billingYear against authoritative server system year
+    if (cleanedData.billingYear && Number(cleanedData.billingYear) !== billingInfo.systemYear) {
+      res.status(400).json({
+        success: false,
+        error: 'Billing year cannot be changed manually. The billing year must remain synchronized with the current system date.',
+        message: 'Invalid Billing Year. The selected billing year does not match the current system year. Billing dates are automatically synchronized with the system date.',
+      });
+      return;
     }
 
-    // Always enforce authoritative server billing period values
+    // Always enforce server system billing period fields
     cleanedData.billingYear = billingInfo.billingYear;
     cleanedData.billingStartDate = billingInfo.billingStartDate;
     cleanedData.billingEndDate = billingInfo.billingEndDate;
@@ -143,12 +135,7 @@ export const updateSettings = async (req: Request, res: Response, next: NextFunc
 
     const responseData = {
       ...(settings ? (settings.toObject ? settings.toObject() : settings) : {}),
-      systemDate: billingInfo.systemDate,
-      systemYear: billingInfo.systemYear,
-      billingYear: billingInfo.billingYear,
-      billingStartDate: billingInfo.billingStartDate,
-      billingEndDate: billingInfo.billingEndDate,
-      billingStatus: billingInfo.billingStatus,
+      ...billingInfo,
     };
 
     res.status(200).json({

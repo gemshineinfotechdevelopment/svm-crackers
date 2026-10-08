@@ -59,6 +59,8 @@ import {
   getStandardYearOptions,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
+import { getSelectedBillYear } from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -179,11 +181,12 @@ export const PriceListPage: FC = () => {
   };
 
   // Fetch initial data for selected year
-  const fetchData = async (targetYear: number = selectedYear) => {
+  const fetchData = async (targetYear: number | string = selectedYear) => {
     try {
       setLoading(true);
+      const effectiveYear = targetYear || getSelectedBillYear();
       const [priceData, catData] = await Promise.all([
-        PriceListsApi.getAll({ year: targetYear }),
+        PriceListsApi.getAll({ year: effectiveYear }),
         CategoriesApi.getAll().catch(() => []),
       ]);
 
@@ -191,7 +194,7 @@ export const PriceListPage: FC = () => {
       if (Array.isArray(priceData)) {
         mergedItems = priceData.map((item: any) => ({
           ...item,
-          year: item.year || targetYear,
+          year: item.year || effectiveYear,
         }));
       }
 
@@ -216,14 +219,19 @@ export const PriceListPage: FC = () => {
     fetchData(selectedYear);
 
     const handleGlobalYear = (e: any) => {
-      if (e.detail?.year && e.detail.year !== selectedYear) {
-        setSelectedYear(e.detail.year);
-        fetchData(e.detail.year);
+      const year = e?.detail?.year ? Number(e.detail.year) : (typeof getSelectedBillYear === 'function' ? Number(getSelectedBillYear()) : undefined);
+      if (year && year !== selectedYear) {
+        setSelectedYear(year);
+        fetchData(year);
+      } else {
+        fetchData();
       }
     };
     window.addEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+    window.addEventListener('apsara_bill_year_changed', handleGlobalYear);
     return () => {
       window.removeEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+      window.removeEventListener('apsara_bill_year_changed', handleGlobalYear);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1253,6 +1261,13 @@ export const PriceListPage: FC = () => {
   };
 
   const handleOpenAdd = () => {
+    const currentSystemYear = new Date().getFullYear().toString();
+    const selectedViewYear = getSelectedBillYear();
+    if (selectedViewYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+      return;
+    }
+
     setEditingItem(null);
     setFormSlNo(items.length > 0 ? Math.max(...items.map((i) => i.slNo || 0)) + 1 : 1);
     setFormName('');
@@ -1285,6 +1300,15 @@ export const PriceListPage: FC = () => {
     if (isNaN(rateNum) || rateNum < 0) {
       alert('Please enter a valid rate/price');
       return;
+    }
+
+    if (!editingItem) {
+      const currentSystemYear = new Date().getFullYear().toString();
+      const selectedViewYear = getSelectedBillYear();
+      if (selectedViewYear !== currentSystemYear) {
+        triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+        return;
+      }
     }
 
     try {

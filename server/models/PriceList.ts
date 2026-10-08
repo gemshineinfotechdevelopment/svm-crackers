@@ -10,7 +10,7 @@ export interface IPriceListItem extends Document {
   rate: number;
   effectiveDate?: string;
   batchName?: string;
-  year?: number;
+  year?: number | string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,7 +59,7 @@ const PriceListItemSchema: Schema = new Schema(
       default: 'Standard Price List',
     },
     year: {
-      type: Number,
+      type: Schema.Types.Mixed,
       default: () => new Date().getFullYear(),
       index: true,
     },

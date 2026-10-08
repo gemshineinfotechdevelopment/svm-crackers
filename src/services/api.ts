@@ -102,10 +102,25 @@ export const CompaniesApi = {
 
 // Products API
 export const ProductsApi = {
-  getAll: (year?: number | string) => {
-    const params = new URLSearchParams();
-    if (year !== undefined && year !== null && year !== 'ALL') params.append('year', String(year));
-    const qs = params.toString();
+  getAll: (searchOrYear?: string | number, yearParam?: string | number) => {
+    const query = new URLSearchParams();
+    let search: string | undefined;
+    let year: string | number | undefined;
+
+    if (typeof searchOrYear === 'number' || (typeof searchOrYear === 'string' && /^\d{4}$/.test(searchOrYear.trim()))) {
+      year = searchOrYear;
+    } else if (typeof searchOrYear === 'string') {
+      search = searchOrYear;
+      year = yearParam;
+    } else {
+      year = yearParam;
+    }
+
+    if (search && search.trim() !== '') query.append('search', search.trim());
+    if (year !== undefined && year !== null && String(year).toUpperCase() !== 'ALL') {
+      query.append('year', String(year));
+    }
+    const qs = query.toString();
     return request<any[]>(`/products${qs ? `?${qs}` : ''}`);
   },
   getById: (id: string) => request<any>(`/products/${id}`),
@@ -131,7 +146,9 @@ export const PriceListsApi = {
     const query = new URLSearchParams();
     if (params?.category && params.category !== 'ALL') query.append('category', params.category);
     if (params?.search) query.append('search', params.search);
-    if (params?.year !== undefined && params?.year !== null && params?.year !== 'ALL') query.append('year', String(params.year));
+    if (params?.year !== undefined && params?.year !== null && String(params.year).toUpperCase() !== 'ALL') {
+      query.append('year', String(params.year));
+    }
     const queryString = query.toString();
     return request<any[]>(`/pricelists${queryString ? `?${queryString}` : ''}`);
   },
@@ -150,7 +167,7 @@ export const ParticularsApi = {
     const params = new URLSearchParams();
     if (customerName && customerName !== 'ALL') params.append('customerName', customerName);
     if (billType && billType !== 'ALL') params.append('billType', billType);
-    if (year !== undefined && year !== null && year !== 'ALL') params.append('year', String(year));
+    if (year !== undefined && year !== null && String(year).toUpperCase() !== 'ALL') params.append('year', String(year));
     const qs = params.toString();
     return request<any[]>(`/particulars${qs ? `?${qs}` : ''}`);
   },

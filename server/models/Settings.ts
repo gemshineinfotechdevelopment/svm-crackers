@@ -18,7 +18,7 @@ export interface ISettings extends Document {
   defaultTaxRate?: string;
   gstTurnoverBaseline?: string;
   gstTurnoverCurrent?: string;
-  billingYear?: number;
+  billingYear?: number | string;
   billingStartDate?: string;
   billingEndDate?: string;
   billingStatus?: string;
@@ -45,9 +45,9 @@ const SettingsSchema: Schema = new Schema(
     defaultTaxRate: { type: String, default: '18' },
     gstTurnoverBaseline: { type: String, default: '726900.00', trim: true },
     gstTurnoverCurrent: { type: String, default: '726900.00', trim: true },
-    billingYear: { type: Number, default: () => new Date().getFullYear() },
-    billingStartDate: { type: String, default: () => `01-01-${new Date().getFullYear()}` },
-    billingEndDate: { type: String, default: () => `31-12-${new Date().getFullYear()}` },
+    billingYear: { type: Schema.Types.Mixed, default: () => new Date().getFullYear() },
+    billingStartDate: { type: String, default: () => `01-01-${new Date().getFullYear()}`, trim: true },
+    billingEndDate: { type: String, default: () => `31-12-${new Date().getFullYear()}`, trim: true },
     billingStatus: { type: String, default: 'Active', trim: true },
   },
   { timestamps: true, strict: false }

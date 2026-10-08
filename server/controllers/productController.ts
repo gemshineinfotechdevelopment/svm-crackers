@@ -4,13 +4,30 @@ import PriceList from '../models/PriceList';
 
 export const getProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { year } = req.query;
+    const { year, search } = req.query;
     const filter: any = {};
 
-    if (year && typeof year === 'string' && year.trim() !== '' && year.toUpperCase() !== 'ALL') {
-      const parsedYear = parseInt(year, 10);
-      if (!isNaN(parsedYear)) {
-        filter.year = parsedYear;
+    if (year && typeof year === 'string' && year.trim() !== '' && year.toLowerCase() !== 'all') {
+      const yearStr = year.trim();
+      const yearNum = parseInt(yearStr, 10);
+      if (!isNaN(yearNum)) {
+        const startOfYear = new Date(Date.UTC(yearNum, 0, 1, 0, 0, 0));
+        const endOfYear = new Date(Date.UTC(yearNum, 11, 31, 23, 59, 59, 999));
+        filter.$or = [
+          { year: yearNum },
+          { year: yearStr },
+          { createdAt: { $gte: startOfYear, $lte: endOfYear } },
+        ];
+      }
+    }
+
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      const searchFilter = { name: { $regex: search.trim(), $options: 'i' } };
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, searchFilter];
+        delete filter.$or;
+      } else {
+        filter.name = searchFilter.name;
       }
     }
 
@@ -36,9 +53,27 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
 
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { shopStock, godownStock, stock, ...rest } = req.body;
-    const targetYear = rest.year ? Number(rest.year) : new Date().getFullYear();
-    const product = await Product.create({ ...rest, year: targetYear });
+    const currentSystemYear = new Date().getFullYear();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    // Security Restriction: Product creation ONLY allowed in current system year
+    if (selectedViewYear && Number(selectedViewYear) !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New products can only be added to the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before adding a new product.`,
+        error: 'Product creation is only allowed in the current system year.',
+      });
+      return;
+    }
+
+    const { shopStock, godownStock, stock, selectedViewYear: _v, viewYear: _vy, ...rest } = req.body;
+    rest.year = rest.year ? Number(rest.year) : currentSystemYear;
+    if (!rest.slNo) {
+      const highestSl = await Product.findOne().sort({ slNo: -1 });
+      rest.slNo = (highestSl?.slNo || 0) + 1;
+    }
+
+    const product = await Product.create(rest);
 
     // Sync to PriceList
     try {
@@ -46,9 +81,10 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
       if (cleanName) {
         const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const nameRegex = new RegExp(`^${escapedName}$`, 'i');
+        const targetYear = rest.year;
         const existingPriceItem = await PriceList.findOne({
           itemName: { $regex: nameRegex },
-          year: targetYear,
+          $or: [{ year: targetYear }, { year: String(targetYear) }],
         });
         if (!existingPriceItem) {
           await PriceList.create({

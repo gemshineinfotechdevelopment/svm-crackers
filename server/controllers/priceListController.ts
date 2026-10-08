@@ -96,10 +96,18 @@ export const getPriceList = async (req: Request, res: Response): Promise<void> =
     const { category, search, year } = req.query;
     const filter: any = {};
 
-    if (year && typeof year === 'string' && year.trim() !== '' && year.toUpperCase() !== 'ALL') {
-      const parsedYear = parseInt(year, 10);
-      if (!isNaN(parsedYear)) {
-        filter.year = parsedYear;
+    if (year && typeof year === 'string' && year.trim() !== '' && year.toLowerCase() !== 'all') {
+      const yearStr = year.trim();
+      const yearNum = parseInt(yearStr, 10);
+      if (!isNaN(yearNum)) {
+        const startOfYear = new Date(Date.UTC(yearNum, 0, 1, 0, 0, 0));
+        const endOfYear = new Date(Date.UTC(yearNum, 11, 31, 23, 59, 59, 999));
+        filter.$or = [
+          { year: yearNum },
+          { year: yearStr },
+          { createdAt: { $gte: startOfYear, $lte: endOfYear } },
+          { effectiveDate: { $regex: new RegExp(yearStr) } },
+        ];
       }
     }
 
@@ -108,11 +116,17 @@ export const getPriceList = async (req: Request, res: Response): Promise<void> =
     }
 
     if (search) {
-      filter.$or = [
+      const searchFilter = [
         { itemName: { $regex: String(search), $options: 'i' } },
         { category: { $regex: String(search), $options: 'i' } },
         { batchName: { $regex: String(search), $options: 'i' } },
       ];
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: searchFilter }];
+        delete filter.$or;
+      } else {
+        filter.$or = searchFilter;
+      }
     }
 
     const items = await PriceList.find(filter).lean().sort({ slNo: 1, createdAt: -1 });
@@ -132,6 +146,18 @@ export const getPriceList = async (req: Request, res: Response): Promise<void> =
 
 export const createPriceListItem = async (req: Request, res: Response): Promise<void> => {
   try {
+    const currentSystemYear = new Date().getFullYear();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    if (selectedViewYear && Number(selectedViewYear) !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New products can only be added to the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before adding a new product.`,
+        error: 'Product creation is only allowed in the current system year.',
+      });
+      return;
+    }
+
     const { itemName, category, unit, mrp, discountPercent, rate, effectiveDate, batchName, slNo, year } = req.body;
 
     if (!itemName || !itemName.trim()) {
@@ -140,7 +166,7 @@ export const createPriceListItem = async (req: Request, res: Response): Promise<
     }
 
     const nextSlNo = slNo || (await PriceList.countDocuments()) + 1;
-    const targetYear = year ? Number(year) : new Date().getFullYear();
+    const targetYear = year ? Number(year) : currentSystemYear;
 
     const item = await PriceList.create({
       slNo: nextSlNo,
@@ -166,6 +192,18 @@ export const createPriceListItem = async (req: Request, res: Response): Promise<
 
 export const bulkImportPriceList = async (req: Request, res: Response): Promise<void> => {
   try {
+    const currentSystemYear = new Date().getFullYear();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    if (selectedViewYear && Number(selectedViewYear) !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New products can only be added to the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before adding a new product.`,
+        error: 'Product creation is only allowed in the current system year.',
+      });
+      return;
+    }
+
     const { items, batchName, replaceExisting, year } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -173,14 +211,14 @@ export const bulkImportPriceList = async (req: Request, res: Response): Promise<
       return;
     }
 
-    const targetYear = year ? Number(year) : new Date().getFullYear();
+    const targetYear = year ? Number(year) : currentSystemYear;
 
     if (replaceExisting) {
-      await PriceList.deleteMany({ year: targetYear });
-      await Product.deleteMany({ year: targetYear });
+      await PriceList.deleteMany({ $or: [{ year: targetYear }, { year: String(targetYear) }] });
+      await Product.deleteMany({ $or: [{ year: targetYear }, { year: String(targetYear) }] });
     }
 
-    const currentCount = replaceExisting ? 0 : await PriceList.countDocuments({ year: targetYear });
+    const currentCount = replaceExisting ? 0 : await PriceList.countDocuments({ $or: [{ year: targetYear }, { year: String(targetYear) }] });
     const batchTitle = batchName || `Upload-${new Date().toLocaleDateString('en-GB')}`;
 
     const formattedItems = items.map((item: any, idx: number) => {

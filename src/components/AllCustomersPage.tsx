@@ -35,6 +35,7 @@ import {
   getStandardYearOptions,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
+import { getSelectedBillYear } from '../utils/billYearUtils';
 
 export interface CustomerItem {
   _id?: string;
@@ -152,10 +153,11 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
     }
   };
 
-  const fetchRecentBills = async (yearToFetch: number = selectedYear) => {
+  const fetchRecentBills = async (yearToFetch?: number | string) => {
     try {
       setLoadingRecentBills(true);
-      const bills = await ParticularsApi.getAll(undefined, 'REGULAR', yearToFetch);
+      const targetYear = yearToFetch !== undefined ? yearToFetch : (selectedYear || getSelectedBillYear());
+      const bills = await ParticularsApi.getAll(undefined, 'REGULAR', targetYear);
       const regularBills = (Array.isArray(bills) ? bills : []).filter(
         (b: any) => b.billType !== 'GST' && !(b.billNo && String(b.billNo).toUpperCase().startsWith('GST'))
       );
@@ -175,17 +177,22 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
       setStoreSettings(getStoredSettings());
     };
     const handleYearChange = (e: any) => {
-      if (e.detail?.year) {
-        setSelectedYear(e.detail.year);
-        fetchRecentBills(e.detail.year);
+      const year = e?.detail?.year ? Number(e.detail.year) : (typeof getSelectedBillYear === 'function' ? Number(getSelectedBillYear()) : undefined);
+      if (year) {
+        setSelectedYear(year);
+        fetchRecentBills(year);
+      } else {
+        fetchRecentBills();
       }
     };
 
     window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
     window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+    window.addEventListener('apsara_bill_year_changed', handleYearChange);
     return () => {
       window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
       window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+      window.removeEventListener('apsara_bill_year_changed', handleYearChange);
     };
   }, []);
 

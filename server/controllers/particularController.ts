@@ -18,28 +18,48 @@ export const getParticulars = async (req: Request, res: Response, next: NextFunc
   try {
     const { customerName, billType, year } = req.query;
     const filter: any = {};
+    const andConditions: any[] = [];
 
     // Filter by Financial / Calendar Year if specified
     if (year && typeof year === 'string' && year.trim() !== '' && year.toUpperCase() !== 'ALL') {
       const parsedYear = parseInt(year, 10);
       if (!isNaN(parsedYear)) {
-        filter.year = parsedYear;
+        andConditions.push({
+          $or: [
+            { year: parsedYear },
+            { year: String(parsedYear) },
+            { date: { $regex: new RegExp(String(parsedYear)) } },
+          ],
+        });
       }
     }
 
+    // 2. Customer Name Filter
     if (customerName && typeof customerName === 'string' && customerName.trim() !== '' && customerName.toLowerCase() !== 'all') {
-      filter.customerName = { $regex: new RegExp(`^${escapeRegex(customerName.trim())}$`, 'i') };
+      andConditions.push({
+        customerName: { $regex: new RegExp(`^${escapeRegex(customerName.trim())}$`, 'i') },
+      });
     }
+
+    // 3. Bill Type Filter (GST / REGULAR)
     if (billType && typeof billType === 'string' && billType.trim() !== '' && billType.toLowerCase() !== 'all') {
       const bType = billType.trim().toUpperCase();
       if (bType === 'GST') {
-        filter.$or = [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }];
+        andConditions.push({
+          $or: [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }],
+        });
       } else if (bType === 'REGULAR') {
-        filter.billType = { $ne: 'GST' };
-        filter.billNo = { $not: { $regex: /^GST/i } };
+        andConditions.push({
+          billType: { $ne: 'GST' },
+          billNo: { $not: { $regex: /^GST/i } },
+        });
       } else {
-        filter.billType = bType;
+        andConditions.push({ billType: bType });
       }
+    }
+
+    if (andConditions.length > 0) {
+      filter.$and = andConditions;
     }
 
     const particulars = await Particular.find(filter).sort({ createdAt: -1, _id: -1 });
@@ -65,7 +85,7 @@ export const getCustomerBillingHistory = async (req: Request, res: Response, nex
 
     const yearCounts = new Map<number, number>();
     for (const b of bills) {
-      const bYear = b.year || extractYearFromDate(b.date || b.createdAt, currentYear);
+      const bYear = Number(b.year) || extractYearFromDate(b.date || b.createdAt, currentYear);
       if (bYear < currentYear) {
         yearCounts.set(bYear, (yearCounts.get(bYear) || 0) + 1);
       }
@@ -153,6 +173,18 @@ export const getNextBillNo = async (req: Request, res: Response, next: NextFunct
 
 export const createParticular = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const currentSystemYear = new Date().getFullYear().toString();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    // Backend Security Restriction: Bill creation ONLY allowed in current system year
+    if (selectedViewYear && String(selectedViewYear).trim() !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New bills can only be created in the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before creating a new bill.`,
+        error: 'Bill creation is only allowed in the current system year.',
+      });
+      return;
+    }
     const {
       customerName,
       customerPhone,
@@ -343,6 +375,19 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       sgstTotal: sgstTotal || '0.00',
       igstTotal: igstTotal || '0.00',
       roundOff: roundOff || '0.00',
+      despatchTo: req.body.despatchTo || req.body.dispatchTo || '',
+      lorryTransport: req.body.lorryTransport || transport || '',
+      lrNo: req.body.lrNo || '',
+      lrDate: req.body.lrDate || '',
+      taxType: req.body.taxType || 'IGST',
+      taxPercent: req.body.taxPercent || gstRate || '18',
+      cgstPercent: req.body.cgstPercent || '0',
+      sgstPercent: req.body.sgstPercent || '0',
+      igstPercent: req.body.igstPercent || '18',
+      subTotal: req.body.subTotal || '0.00',
+      netAmount: req.body.netAmount || total || '0.00',
+      inWords: req.body.inWords || '',
+      billFlag: req.body.billFlag || '',
     });
 
     // 1. Automatically log Bill DEBIT to Account Ledger (Regular Bills ONLY, never for GST)
@@ -461,6 +506,19 @@ export const updateParticular = async (req: Request, res: Response, next: NextFu
         ...(req.body.sgstTotal !== undefined && { sgstTotal: req.body.sgstTotal }),
         ...(req.body.igstTotal !== undefined && { igstTotal: req.body.igstTotal }),
         ...(req.body.roundOff !== undefined && { roundOff: req.body.roundOff }),
+        ...(req.body.despatchTo !== undefined && { despatchTo: req.body.despatchTo }),
+        ...(req.body.lorryTransport !== undefined && { lorryTransport: req.body.lorryTransport }),
+        ...(req.body.lrNo !== undefined && { lrNo: req.body.lrNo }),
+        ...(req.body.lrDate !== undefined && { lrDate: req.body.lrDate }),
+        ...(req.body.taxType !== undefined && { taxType: req.body.taxType }),
+        ...(req.body.taxPercent !== undefined && { taxPercent: req.body.taxPercent }),
+        ...(req.body.cgstPercent !== undefined && { cgstPercent: req.body.cgstPercent }),
+        ...(req.body.sgstPercent !== undefined && { sgstPercent: req.body.sgstPercent }),
+        ...(req.body.igstPercent !== undefined && { igstPercent: req.body.igstPercent }),
+        ...(req.body.subTotal !== undefined && { subTotal: req.body.subTotal }),
+        ...(req.body.netAmount !== undefined && { netAmount: req.body.netAmount }),
+        ...(req.body.inWords !== undefined && { inWords: req.body.inWords }),
+        ...(req.body.billFlag !== undefined && { billFlag: req.body.billFlag }),
       },
       { new: true, runValidators: true }
     );

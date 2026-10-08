@@ -42,6 +42,8 @@ import {
   validateDateMatchesYear,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
+import { getSelectedBillYear } from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 interface ProductRowItem {
   id: string;
@@ -408,6 +410,14 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
   // Save Quotation / Bill
   const handleSaveBill = async () => {
+    if (!isEditMode) {
+      const currentSystemYear = new Date().getFullYear().toString();
+      const selectedViewYear = getSelectedBillYear();
+      if (selectedViewYear !== currentSystemYear) {
+        triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+        return;
+      }
+    }
     if (!customerName.trim()) {
       setSnackbarMessage('Please enter or select Customer Name.');
       setSnackbarOpen(true);
@@ -1033,6 +1043,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                             type="number"
                             value={row.rate}
                             onChange={(e) => handleRowChange(row.id, 'rate', e.target.value)}
+                            onWheel={(e) => (e.target as HTMLElement).blur()}
                             style={{
                               width: '100%',
                               border: 'none',
@@ -1052,6 +1063,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                             type="number"
                             value={row.quantity}
                             onChange={(e) => handleRowChange(row.id, 'quantity', e.target.value)}
+                            onWheel={(e) => (e.target as HTMLElement).blur()}
                             style={{
                               width: '100%',
                               border: 'none',
@@ -1145,6 +1157,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                     const pct = parseFloat(e.target.value) || 0;
                     setDiscountRs(((subtotal * pct) / 100).toFixed(0));
                   }}
+                  onWheel={(e) => (e.target as HTMLElement).blur()}
                   className="erp-input"
                   style={{ width: '150px', textAlign: 'right' }}
                 />
@@ -1163,6 +1176,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                     const val = parseFloat(e.target.value) || 0;
                     setDiscountPercent(subtotal > 0 ? ((val / subtotal) * 100).toFixed(2) : '0');
                   }}
+                  onWheel={(e) => (e.target as HTMLElement).blur()}
                   className="erp-input"
                   style={{ width: '150px', textAlign: 'right' }}
                 />
@@ -1177,6 +1191,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                   type="number"
                   value={packingRs}
                   onChange={(e) => setPackingRs(e.target.value)}
+                  onWheel={(e) => (e.target as HTMLElement).blur()}
                   className="erp-input"
                   style={{ width: '150px', textAlign: 'right' }}
                 />
@@ -1191,6 +1206,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                   type="number"
                   value={packingPercent}
                   onChange={(e) => setPackingPercent(e.target.value)}
+                  onWheel={(e) => (e.target as HTMLElement).blur()}
                   className="erp-input"
                   style={{ width: '150px', textAlign: 'right' }}
                 />

@@ -32,6 +32,8 @@ import {
   getStandardYearOptions,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
+import { getSelectedBillYear } from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 export interface ProductItem {
   _id?: string;
@@ -71,13 +73,14 @@ export const ProductsPage: FC = () => {
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const fetchProductsAndPrices = async (targetYear: number = selectedYear) => {
+  const fetchProductsAndPrices = async (targetYear: number | string = selectedYear) => {
     try {
       setLoading(true);
+      const effectiveYear = targetYear || getSelectedBillYear();
       const [prodsData, catsData, priceData] = await Promise.all([
-        ProductsApi.getAll(targetYear).catch(() => []),
+        ProductsApi.getAll(undefined, effectiveYear).catch(() => []),
         CategoriesApi.getAll().catch(() => []),
-        PriceListsApi.getAll({ year: targetYear }).catch(() => []),
+        PriceListsApi.getAll({ year: effectiveYear }).catch(() => []),
       ]);
 
       const priceMap = new Map<string, any>();
@@ -156,14 +159,19 @@ export const ProductsPage: FC = () => {
     fetchProductsAndPrices(selectedYear);
 
     const handleGlobalYear = (e: any) => {
-      if (e.detail?.year && e.detail.year !== selectedYear) {
-        setSelectedYear(e.detail.year);
-        fetchProductsAndPrices(e.detail.year);
+      const year = e?.detail?.year ? Number(e.detail.year) : (typeof getSelectedBillYear === 'function' ? Number(getSelectedBillYear()) : undefined);
+      if (year && year !== selectedYear) {
+        setSelectedYear(year);
+        fetchProductsAndPrices(year);
+      } else {
+        fetchProductsAndPrices();
       }
     };
     window.addEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+    window.addEventListener('apsara_bill_year_changed', handleGlobalYear);
     return () => {
       window.removeEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+      window.removeEventListener('apsara_bill_year_changed', handleGlobalYear);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -183,6 +191,12 @@ export const ProductsPage: FC = () => {
   }, [products, selectedCategory, searchTerm]);
 
   const handleOpenAdd = () => {
+    const selectedViewYear = getSelectedBillYear();
+    const currentSystemYear = new Date().getFullYear().toString();
+    if (selectedViewYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+      return;
+    }
     setEditingProduct(null);
     setProductName('');
     setProductCategory(categories[0]?.name || 'General');
@@ -208,16 +222,25 @@ export const ProductsPage: FC = () => {
       return;
     }
 
+    const selectedViewYear = getSelectedBillYear();
+    const currentSystemYear = new Date().getFullYear().toString();
+
+    if (!editingProduct && selectedViewYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
+      return;
+    }
+
     try {
       setModalLoading(true);
 
-      const payload = {
+      const payload: any = {
         name: productName.trim(),
         category: productCategory,
         unit: productUnit,
         rate: Number(productRate) || 0,
         mrp: Number(productMrp) || 0,
         year: selectedYear,
+        selectedViewYear,
       };
 
       if (editingProduct) {
