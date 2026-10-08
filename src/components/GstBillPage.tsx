@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type FC, type ChangeEvent } from 'react';
+import { useState, useEffect, useMemo, type FC } from 'react';
 import {
   Box,
   Typography,
@@ -27,7 +27,6 @@ import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
-import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 
 import {
@@ -299,10 +298,8 @@ export const GstBillPage: FC = () => {
     try {
       let bills: any[] = [];
       try {
-        const res = await ParticularsApi.getAll({ billType: 'GST' });
-        if (res && res.data && Array.isArray(res.data)) {
-          bills = res.data;
-        } else if (Array.isArray(res)) {
+        const res = await ParticularsApi.getAll(undefined, 'GST');
+        if (Array.isArray(res)) {
           bills = res;
         }
       } catch (err) {
@@ -1068,6 +1065,17 @@ export const GstBillPage: FC = () => {
                     }}
                   />
                 )}
+              />
+
+              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
+                HSN
+              </Typography>
+              <input
+                type="text"
+                value={quickHsn}
+                onChange={(e) => setQuickHsn(e.target.value)}
+                className="erp-input"
+                style={{ width: '55px', textAlign: 'center' }}
               />
 
               <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
