@@ -44,7 +44,7 @@ export const BillPrintModal: React.FC<BillPrintModalProps> = ({ open, onClose, b
         customerPhone: bill.customerPhone,
         totalAmount: bill.total || bill.amount || 0,
         date: bill.date,
-        companyName: bill.companyName || 'APSARA CRACKERS',
+        companyName: bill.companyName || 'SVM CRACKERS',
         isGst: false,
       });
     } catch (err) {
@@ -65,7 +65,7 @@ export const BillPrintModal: React.FC<BillPrintModalProps> = ({ open, onClose, b
         customerPhone: bill.customerPhone,
         totalAmount: bill.total || bill.amount || 0,
         date: bill.date,
-        companyName: bill.companyName || 'APSARA CRACKERS',
+        companyName: bill.companyName || 'SVM CRACKERS',
         isGst: false,
       });
     } catch (err) {

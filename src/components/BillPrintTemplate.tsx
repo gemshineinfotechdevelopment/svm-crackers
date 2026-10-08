@@ -95,11 +95,11 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
   const rawComp =
     bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
       ? bill.companyName
-      : storeSettings.companyName || 'APSARA TRADERS';
+      : storeSettings.companyName || 'SVM TRADERS';
   const displayCompanyName =
     rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-      ? 'APSARA TRADERS'
-      : (rawComp.toUpperCase().includes('APSARA') ? 'APSARA TRADERS' : rawComp.toUpperCase());
+      ? 'SVM TRADERS'
+      : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
 
   // Subtotal from products
   const products = bill.products || [];

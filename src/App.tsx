@@ -16,7 +16,7 @@ import { SettingsApi } from './services/api';
 const ACTIVE_TAB_KEY = 'apsara_active_tab';
 const CUSTOMER_SUBVIEW_KEY = 'apsara_customer_subview';
 
-const VALID_TABS = ['All Customers', 'Billing', 'GST Bill', 'Categories', 'Price List', 'Product', 'Settings'] as const;
+const VALID_TABS = ['All Customers', 'Quotation', 'GST Bill', 'Categories', 'Price List', 'Product', 'Settings'] as const;
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -24,6 +24,7 @@ function App() {
   });
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
     const saved = localStorage.getItem(ACTIVE_TAB_KEY);
+    if (saved === 'Billing') return 'Quotation';
     if (saved && VALID_TABS.includes(saved as NavTab)) {
       return saved as NavTab;
     }
@@ -46,7 +47,7 @@ function App() {
 
     const updateTitle = () => {
       const settings = getStoredSettings();
-      const compName = settings.companyName || 'Apsara Crackers';
+      const compName = settings.companyName || 'SVM Crackers';
       document.title = `${compName} - Billing & Management`;
     };
     updateTitle();
@@ -57,7 +58,7 @@ function App() {
         const data = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res;
         if (data && typeof data === 'object') {
           const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha'))
-            ? 'Apsara Crackers'
+            ? 'SVM Crackers'
             : (data.companyName ?? DEFAULT_COMPANY_SETTINGS.companyName);
 
           const remoteSettings = { ...DEFAULT_COMPANY_SETTINGS, ...data, companyName: compName };
@@ -97,7 +98,7 @@ function App() {
       setCustomerSubView('list');
       localStorage.setItem(CUSTOMER_SUBVIEW_KEY, 'list');
     }
-    if (tab === 'Billing') {
+    if (tab === 'Quotation') {
       setSelectedCustomerName('');
       setEditingBill(null);
     }
@@ -106,15 +107,15 @@ function App() {
   const handleCustomerSelectedForParticular = (customerName: string) => {
     setSelectedCustomerName(customerName);
     setEditingBill(null);
-    setActiveTab('Billing');
-    localStorage.setItem(ACTIVE_TAB_KEY, 'Billing');
+    setActiveTab('Quotation');
+    localStorage.setItem(ACTIVE_TAB_KEY, 'Quotation');
   };
 
   const handleEditBill = (bill: any) => {
     setEditingBill(bill);
     setSelectedCustomerName('');
-    setActiveTab('Billing');
-    localStorage.setItem(ACTIVE_TAB_KEY, 'Billing');
+    setActiveTab('Quotation');
+    localStorage.setItem(ACTIVE_TAB_KEY, 'Quotation');
   };
 
   const handleEditBillSuccess = () => {
@@ -169,8 +170,8 @@ function App() {
             </>
           )}
 
-          {/* Billing / Particulars Tab */}
-          {activeTab === 'Billing' && (
+          {/* Quotation / Particulars Tab */}
+          {activeTab === 'Quotation' && (
             <ParticularsPage
               initialCustomerName={selectedCustomerName}
               editBillData={editingBill}
