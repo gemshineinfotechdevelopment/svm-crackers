@@ -10,6 +10,7 @@ export interface IPriceListItem extends Document {
   rate: number;
   effectiveDate?: string;
   batchName?: string;
+  year?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,6 +58,11 @@ const PriceListItemSchema: Schema = new Schema(
       trim: true,
       default: 'Standard Price List',
     },
+    year: {
+      type: Number,
+      default: () => new Date().getFullYear(),
+      index: true,
+    },
   },
   {
     timestamps: true,
@@ -65,6 +71,7 @@ const PriceListItemSchema: Schema = new Schema(
 );
 
 PriceListItemSchema.index({ itemName: 1, category: 1 });
+PriceListItemSchema.index({ year: 1, slNo: 1 });
 
 export const PriceList = mongoose.model<IPriceListItem>('PriceList', PriceListItemSchema);
 export default PriceList;

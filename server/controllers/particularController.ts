@@ -7,18 +7,26 @@ import { Product } from '../models/Product';
 import { Inventory } from '../models/Inventory';
 import { escapeRegex, recalculateCustomerBalance } from '../utils/ledgerUtils';
 import { isCloudinaryConfigured, uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
+import { extractYearFromDate } from '../utils/yearUtils';
 
 // Stock tracking is disabled
 const adjustStock = async (_products: any[], _multiplier: number): Promise<void> => {
   // No-op
 };
 
-
-
 export const getParticulars = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { customerName, billType } = req.query;
+    const { customerName, billType, year } = req.query;
     const filter: any = {};
+
+    // Filter by Financial / Calendar Year if specified
+    if (year && typeof year === 'string' && year.trim() !== '' && year.toUpperCase() !== 'ALL') {
+      const parsedYear = parseInt(year, 10);
+      if (!isNaN(parsedYear)) {
+        filter.year = parsedYear;
+      }
+    }
+
     if (customerName && typeof customerName === 'string' && customerName.trim() !== '' && customerName.toLowerCase() !== 'all') {
       filter.customerName = { $regex: new RegExp(`^${escapeRegex(customerName.trim())}$`, 'i') };
     }
@@ -41,6 +49,45 @@ export const getParticulars = async (req: Request, res: Response, next: NextFunc
   }
 };
 
+export const getCustomerBillingHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const customerName = String(req.query.customerName || req.params.customerName || '').trim();
+    const currentYear = Number(req.query.currentYear || req.query.year) || new Date().getFullYear();
+
+    if (!customerName) {
+      res.status(200).json({ success: true, data: { hasPreviousBills: false, currentYear, previousYears: [] } });
+      return;
+    }
+
+    const bills = await Particular.find({
+      customerName: { $regex: new RegExp(`^${escapeRegex(customerName)}$`, 'i') },
+    }).lean();
+
+    const yearCounts = new Map<number, number>();
+    for (const b of bills) {
+      const bYear = b.year || extractYearFromDate(b.date || b.createdAt, currentYear);
+      if (bYear < currentYear) {
+        yearCounts.set(bYear, (yearCounts.get(bYear) || 0) + 1);
+      }
+    }
+
+    const previousYears = Array.from(yearCounts.entries())
+      .map(([yr, billCount]) => ({ year: yr, billCount }))
+      .sort((a, b) => b.year - a.year);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        hasPreviousBills: previousYears.length > 0,
+        currentYear,
+        previousYears,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getParticularById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const particular = await Particular.findById(req.params.id);
@@ -57,8 +104,12 @@ export const getParticularById = async (req: Request, res: Response, next: NextF
 export const getNextBillNo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const type = (req.query.type as string || '').toUpperCase();
+    const year = req.query.year ? parseInt(String(req.query.year), 10) : undefined;
+    const yearQuery = year && !isNaN(year) ? { year } : {};
+
     if (type === 'GST') {
       const gstParticulars = await Particular.find({
+        ...yearQuery,
         $or: [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }]
       }, 'billNo');
       let maxNum = 0;
@@ -77,6 +128,7 @@ export const getNextBillNo = async (req: Request, res: Response, next: NextFunct
     }
 
     const regularParticulars = await Particular.find({
+      ...yearQuery,
       $and: [
         { billType: { $ne: 'GST' } },
         { billNo: { $not: { $regex: /^GST/i } } }
@@ -247,6 +299,18 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       computedStatus = 'PARTIAL';
     }
 
+    const rawDate = date || new Date().toISOString().split('T')[0];
+    const dateYear = extractYearFromDate(rawDate);
+    const targetYear = req.body.year ? Number(req.body.year) : dateYear;
+
+    if (req.body.year && dateYear !== Number(req.body.year)) {
+      res.status(400).json({
+        success: false,
+        error: `Bill date does not belong to the selected year (${req.body.year}). Please select a date from ${req.body.year}.`,
+      });
+      return;
+    }
+
     const particular = await Particular.create({
       customerName: trimmedCustName,
       customerPhone: customerPhone || '',
@@ -266,7 +330,8 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       paymentMode: paymentMode || (computedStatus === 'PAID' ? 'CASH' : 'CREDIT'),
       paidAmount: paidNum > 0 ? paidNum.toFixed(2) : '0.00',
       notes: notes || '',
-      date: date || new Date().toISOString().split('T')[0],
+      date: rawDate,
+      year: targetYear,
       products: products || [],
       billType: billType === 'GST' ? 'GST' : 'REGULAR',
       placeOfSupply: placeOfSupply || '',
@@ -382,6 +447,9 @@ export const updateParticular = async (req: Request, res: Response, next: NextFu
         ...(paidAmount !== undefined && { paidAmount }),
         ...(notes !== undefined && { notes }),
         ...(date !== undefined && { date }),
+        ...(date !== undefined
+          ? { year: req.body.year ? Number(req.body.year) : extractYearFromDate(date) }
+          : (req.body.year !== undefined ? { year: Number(req.body.year) } : {})),
         ...(products !== undefined && { products }),
         ...(req.body.billType !== undefined && { billType: req.body.billType }),
         ...(req.body.placeOfSupply !== undefined && { placeOfSupply: req.body.placeOfSupply }),

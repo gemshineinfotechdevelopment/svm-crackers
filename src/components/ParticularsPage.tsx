@@ -35,6 +35,13 @@ import { getStoredSettings } from './SettingsPage';
 import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
 import { printBillDirectly } from '../utils/printUtils';
+import {
+  getActiveBillingYear,
+  setActiveBillingYear,
+  getStandardYearOptions,
+  validateDateMatchesYear,
+  YEAR_CHANGE_EVENT,
+} from '../utils/yearContext';
 
 interface ProductRowItem {
   id: string;
@@ -70,11 +77,11 @@ interface ParticularsPageProps {
   onEditSuccess?: () => void;
 }
 
-const getInitialDateStr = () => {
+const getInitialDateStr = (targetYear?: number) => {
   const d = new Date();
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
+  const year = targetYear || d.getFullYear();
   return `${day}-${month}-${year}`;
 };
 
@@ -85,6 +92,18 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 }) => {
   const [storeSettings] = useState(() => getStoredSettings());
 
+  // Year state
+  const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
+  const yearOptions = useMemo(() => getStandardYearOptions(), []);
+
+  // Previous year billing history modal
+  const [historyAlertOpen, setHistoryAlertOpen] = useState(false);
+  const [customerHistoryInfo, setCustomerHistoryInfo] = useState<{
+    customerName: string;
+    currentYear: number;
+    previousYears: { year: number; billCount: number }[];
+  } | null>(null);
+
   // Dropdown options
   const [customerOptions, setCustomerOptions] = useState<CustomerOptionItem[]>([]);
   const [, setCompanyOptions] = useState<{ id: string; name: string }[]>([]);
@@ -92,7 +111,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
   // 1. Customer Info Left Box State
   const [customerNo, setCustomerNo] = useState<string>('');
-  const [billDate, setBillDate] = useState<string>(getInitialDateStr);
+  const [billDate, setBillDate] = useState<string>(() => getInitialDateStr(selectedYear));
   const [billNo, setBillNo] = useState<string>('');
   const [rateType, setRateType] = useState<string>('Befor Rate');
   const [customerGst, setCustomerGst] = useState<string>('');
@@ -133,15 +152,33 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
   const isEditMode = Boolean(editBillData && (editBillData._id || editBillData.id));
 
-  // Load backend data
-  const loadOptions = async () => {
+  // Check customer previous history
+  const checkPreviousHistory = async (name: string, targetYear: number = selectedYear) => {
+    if (!name || !name.trim() || isEditMode) return;
+    try {
+      const res = await ParticularsApi.getCustomerHistory(name.trim(), targetYear);
+      if (res && res.hasPreviousBills && Array.isArray(res.previousYears) && res.previousYears.length > 0) {
+        setCustomerHistoryInfo({
+          customerName: name.trim(),
+          currentYear: res.currentYear || targetYear,
+          previousYears: res.previousYears,
+        });
+        setHistoryAlertOpen(true);
+      }
+    } catch (err) {
+      console.error('Error checking customer billing history:', err);
+    }
+  };
+
+  // Load backend data for a specific year
+  const loadOptions = async (targetYear: number = selectedYear) => {
     try {
       const [custRes, compRes, prodRes, priceRes, lastBillRes] = await Promise.all([
         CustomersApi.getAll().catch(() => []),
         CompaniesApi.getAll().catch(() => []),
-        ProductsApi.getAll().catch(() => []),
-        PriceListsApi.getAll().catch(() => []),
-        ParticularsApi.getNextBillNo('REGULAR').catch(() => ({ nextBillNo: '1001' })),
+        ProductsApi.getAll(targetYear).catch(() => []),
+        PriceListsApi.getAll({ year: targetYear }).catch(() => []),
+        ParticularsApi.getNextBillNo('REGULAR', targetYear).catch(() => ({ nextBillNo: '1001' })),
       ]);
 
       if (Array.isArray(custRes) && custRes.length > 0) {
@@ -167,6 +204,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             setCustomerAddress(match.address || '');
             setCustomerGst(match.gst || '');
             setCustomerNo(match.idCode || 'C452');
+            checkPreviousHistory(match.name, targetYear);
           }
         }
       }
@@ -176,11 +214,11 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       }
 
       // Auto-assign Next Bill No if not editing
-      if (!isEditMode && !billNo) {
+      if (!isEditMode) {
         setBillNo(lastBillRes.nextBillNo || '1001');
       }
 
-      // Merge Products & Price List
+      // Merge Products & Price List for selected year
       const prodMap = new Map<string, ProductCatalogOption>();
       if (Array.isArray(prodRes)) {
         prodRes.forEach((p: any, idx: number) => {
@@ -217,16 +255,33 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       }
 
       const unified = Array.from(prodMap.values());
-      if (unified.length > 0) {
-        setProductOptions(unified);
-      }
+      setProductOptions(unified);
     } catch (err) {
       console.error('Error loading data for Quotation page:', err);
     }
   };
 
+  const handleYearChange = (newYear: number) => {
+    setSelectedYear(newYear);
+    setActiveBillingYear(newYear);
+    setBillDate(getInitialDateStr(newYear));
+    loadOptions(newYear);
+  };
+
   useEffect(() => {
-    loadOptions();
+    loadOptions(selectedYear);
+
+    const handleGlobalYear = (e: any) => {
+      if (e.detail?.year && e.detail.year !== selectedYear) {
+        setSelectedYear(e.detail.year);
+        setBillDate(getInitialDateStr(e.detail.year));
+        loadOptions(e.detail.year);
+      }
+    };
+    window.addEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+    return () => {
+      window.removeEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -269,6 +324,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       setCustomerAddress(opt.address || '');
       setCustomerGst(opt.gst || '');
       if (opt.idCode) setCustomerNo(opt.idCode);
+      checkPreviousHistory(opt.name, selectedYear);
     }
   };
 
@@ -358,6 +414,13 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       return;
     }
 
+    // Validate bill date matches selected year
+    if (!validateDateMatchesYear(billDate, selectedYear)) {
+      setSnackbarMessage(`Bill date (${billDate}) does not belong to the selected year ${selectedYear}. Please select a date from ${selectedYear}.`);
+      setSnackbarOpen(true);
+      return;
+    }
+
     const validRows = productRows.filter((r) => r.particular.trim() !== '');
     if (validRows.length === 0) {
       setSnackbarMessage('Please add at least one product item.');
@@ -375,6 +438,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         companyName: companyName || storeSettings.companyName || 'Sri Vignatha Traders',
         billNo: billNo || '1001',
         date: billDate,
+        year: selectedYear,
         discount: String(discountAmount),
         packing: String(packingAmount),
         transport: '0',
@@ -502,6 +566,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             py: 0.8,
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
           {/* Window Icon + Title */}
@@ -515,8 +580,45 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                 letterSpacing: '0.01em',
               }}
             >
-              Customer Factory
+              Customer Factory (Quotation / Estimate)
             </Typography>
+          </Box>
+
+          {/* Right: Year Selector */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              bgcolor: '#FFFFFF',
+              border: '1px solid #93C5FD',
+              borderRadius: '4px',
+              px: 1,
+              py: 0.2,
+            }}
+          >
+            <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF' }}>
+              Billing Year:
+            </Typography>
+            <select
+              value={selectedYear}
+              onChange={(e) => handleYearChange(Number(e.target.value))}
+              style={{
+                fontSize: '11.5px',
+                fontWeight: 800,
+                color: '#1E3A8A',
+                backgroundColor: 'transparent',
+                border: 'none',
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y} style={{ color: '#0F172A', fontWeight: 600 }}>
+                  {y}
+                </option>
+              ))}
+            </select>
           </Box>
         </Box>
 
@@ -1320,6 +1422,85 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           bill={selectedBillForPrint}
         />
       )}
+
+      {/* ========================================================= */}
+      {/* PREVIOUS YEAR BILLING FOUND WARNING DIALOG */}
+      {/* ========================================================= */}
+      <Dialog
+        open={historyAlertOpen}
+        onClose={() => setHistoryAlertOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '8px',
+              p: 1,
+              border: '2px solid #F59E0B',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.18)',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1, display: 'flex', alignItems: 'center', gap: 1, color: '#B45309', fontWeight: 800, fontSize: '15px' }}>
+          ⚠️ Previous Year Bill Found
+        </DialogTitle>
+        <DialogContent sx={{ py: 1 }}>
+          <Typography sx={{ fontSize: '13px', fontWeight: 600, color: '#0F172A', mb: 1 }}>
+            This customer has previous billing history:
+          </Typography>
+          <Box sx={{ bgcolor: '#FEF3C7', border: '1px solid #FCD34D', p: 1.5, borderRadius: '6px', mb: 2 }}>
+            {customerHistoryInfo?.previousYears.map((py) => (
+              <Box key={py.year} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
+                <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#92400E' }}>
+                  {py.year}
+                </Typography>
+                <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#78350F' }}>
+                  → {py.billCount} {py.billCount === 1 ? 'Bill' : 'Bills'}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+          <Typography sx={{ fontSize: '13px', color: '#1E293B', mb: 0.5 }}>
+            You are currently creating a new bill for <strong>{customerHistoryInfo?.currentYear || selectedYear}</strong>.
+          </Typography>
+          <Typography sx={{ fontSize: '12.5px', color: '#64748B', fontWeight: 500 }}>
+            Do you want to continue with the {customerHistoryInfo?.currentYear || selectedYear} bill?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2, pt: 1, gap: 1 }}>
+          <Button
+            onClick={() => {
+              setHistoryAlertOpen(false);
+              handleExitReset();
+            }}
+            variant="outlined"
+            sx={{
+              color: '#64748B',
+              borderColor: '#CBD5E1',
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: '12.5px',
+              '&:hover': { bgcolor: '#F1F5F9' },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => setHistoryAlertOpen(false)}
+            variant="contained"
+            sx={{
+              bgcolor: '#1E40AF',
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: '12.5px',
+              '&:hover': { bgcolor: '#1E3A8A' },
+            }}
+          >
+            Continue - Create {customerHistoryInfo?.currentYear || selectedYear} Bill
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Snackbar Feedback */}
       <Snackbar

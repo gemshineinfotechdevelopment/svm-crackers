@@ -20,6 +20,10 @@ import {
   Chip,
   Snackbar,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
@@ -45,6 +49,13 @@ import { GstBillPrintModal } from './GstBillPrintModal';
 import type { GstBillPrintData, GstProductItem } from './GstBillPrintTemplate';
 import { numberToIndianWords } from '../utils/numberToWords';
 import { printGstBillDirectly } from '../utils/printUtils';
+import {
+  getActiveBillingYear,
+  setActiveBillingYear,
+  getStandardYearOptions,
+  validateDateMatchesYear,
+  YEAR_CHANGE_EVENT,
+} from '../utils/yearContext';
 
 export const INDIAN_STATES = [
   { code: '33', name: 'Tamil Nadu' },
@@ -68,9 +79,9 @@ export const INDIAN_STATES = [
 
 const GST_LOCAL_HISTORY_KEY = 'apsara_gst_bills_history';
 
-export const getTodayDateString = () => {
+export const getTodayDateString = (targetYear?: number) => {
   const today = new Date();
-  const yyyy = today.getFullYear();
+  const yyyy = targetYear || today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const dd = String(today.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
@@ -89,13 +100,25 @@ export const GstBillPage: FC = () => {
   const [storeSettings, setStoreSettings] = useState(() => getStoredSettings());
   const [activeSubTab, setActiveSubTab] = useState<'create' | 'history'>('create');
 
+  // Year state
+  const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
+  const yearOptions = useMemo(() => getStandardYearOptions(), []);
+
+  // Previous year billing history modal
+  const [historyAlertOpen, setHistoryAlertOpen] = useState(false);
+  const [customerHistoryInfo, setCustomerHistoryInfo] = useState<{
+    customerName: string;
+    currentYear: number;
+    previousYears: { year: number; billCount: number }[];
+  } | null>(null);
+
   // Dropdown options
   const [customerOptions, setCustomerOptions] = useState<any[]>([]);
   const [productOptions, setProductOptions] = useState<any[]>([]);
 
   // Invoice Form State
   const [billNo, setBillNo] = useState<string>('0001');
-  const [billDate, setBillDate] = useState<string>(() => getTodayDateString());
+  const [billDate, setBillDate] = useState<string>(() => getTodayDateString(selectedYear));
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [customerAddress, setCustomerAddress] = useState<string>('');
@@ -193,13 +216,31 @@ export const GstBillPage: FC = () => {
     };
   }, [productRows, discountPercent, packingPercent, currentTurnover]);
 
-  // Load Dropdown Options
-  const loadOptions = async () => {
+  // Customer previous history check
+  const checkPreviousHistory = async (name: string, targetYear: number = selectedYear) => {
+    if (!name || !name.trim()) return;
+    try {
+      const res = await ParticularsApi.getCustomerHistory(name.trim(), targetYear);
+      if (res && res.hasPreviousBills && Array.isArray(res.previousYears) && res.previousYears.length > 0) {
+        setCustomerHistoryInfo({
+          customerName: name.trim(),
+          currentYear: res.currentYear || targetYear,
+          previousYears: res.previousYears,
+        });
+        setHistoryAlertOpen(true);
+      }
+    } catch (err) {
+      console.error('Error checking customer billing history in GST bill:', err);
+    }
+  };
+
+  // Load Dropdown Options for target year
+  const loadOptions = async (targetYear: number = selectedYear) => {
     try {
       const [custRes, prodRes, priceRes] = await Promise.all([
         CustomersApi.getAll().catch(() => []),
-        ProductsApi.getAll().catch(() => []),
-        PriceListsApi.getAll().catch(() => []),
+        ProductsApi.getAll(targetYear).catch(() => []),
+        PriceListsApi.getAll({ year: targetYear }).catch(() => []),
       ]);
 
       if (Array.isArray(custRes)) {
@@ -248,7 +289,7 @@ export const GstBillPage: FC = () => {
     }
   };
 
-  const handleResetForm = () => {
+  const handleResetForm = (targetYear: number = selectedYear) => {
     setCustomerName('');
     setCustomerPhone('');
     setCustomerAddress('');
@@ -267,13 +308,13 @@ export const GstBillPage: FC = () => {
     setUnit('Case');
     setRate('0');
     setProductRows([]);
-    setBillDate(getTodayDateString());
-    fetchNextGstBillNo();
+    setBillDate(getTodayDateString(targetYear));
+    fetchNextGstBillNo(targetYear);
   };
 
-  const fetchNextGstBillNo = async () => {
+  const fetchNextGstBillNo = async (targetYear: number = selectedYear) => {
     try {
-      const res = await ParticularsApi.getNextBillNo('GST');
+      const res = await ParticularsApi.getNextBillNo('GST', targetYear);
       const rawNo = (res && typeof res === 'object' && 'nextBillNo' in res) ? res.nextBillNo : res;
       if (typeof rawNo === 'string' && rawNo.trim()) {
         const cleanNo = rawNo.replace(/^GST[-_ ]*/i, '');
@@ -286,12 +327,12 @@ export const GstBillPage: FC = () => {
     }
   };
 
-  const fetchGstHistory = async () => {
+  const fetchGstHistory = async (targetYear: number = selectedYear) => {
     setLoadingHistory(true);
     try {
       let remoteBills: any[] = [];
       try {
-        const res = await ParticularsApi.getAll(undefined, 'GST');
+        const res = await ParticularsApi.getAll(undefined, 'GST', targetYear);
         if (Array.isArray(res)) {
           remoteBills = res.filter((b: any) => b.billType === 'GST' || (b.billNo && String(b.billNo).toUpperCase().startsWith('GST')));
         }
@@ -304,6 +345,15 @@ export const GstBillPage: FC = () => {
     } finally {
       setLoadingHistory(false);
     }
+  };
+
+  const handleYearChange = (newYear: number) => {
+    setSelectedYear(newYear);
+    setActiveBillingYear(newYear);
+    setBillDate(getTodayDateString(newYear));
+    loadOptions(newYear);
+    fetchNextGstBillNo(newYear);
+    fetchGstHistory(newYear);
   };
 
   const handleSaveTurnoverBaseline = async () => {
@@ -326,9 +376,24 @@ export const GstBillPage: FC = () => {
   };
 
   useEffect(() => {
-    loadOptions();
-    fetchNextGstBillNo();
-    fetchGstHistory();
+    loadOptions(selectedYear);
+    fetchNextGstBillNo(selectedYear);
+    fetchGstHistory(selectedYear);
+
+    const handleGlobalYear = (e: any) => {
+      if (e.detail?.year && e.detail.year !== selectedYear) {
+        setSelectedYear(e.detail.year);
+        setBillDate(getTodayDateString(e.detail.year));
+        loadOptions(e.detail.year);
+        fetchNextGstBillNo(e.detail.year);
+        fetchGstHistory(e.detail.year);
+      }
+    };
+    window.addEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+    return () => {
+      window.removeEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -366,6 +431,7 @@ export const GstBillPage: FC = () => {
         } else {
           setCustomerGst('');
         }
+        checkPreviousHistory(matched.name, selectedYear);
       } else {
         setCustomerPhone('');
         setCustomerAddress('');
@@ -388,6 +454,7 @@ export const GstBillPage: FC = () => {
       } else {
         setCustomerGst('');
       }
+      checkPreviousHistory(value.name, selectedYear);
     } else {
       setCustomerName('');
       setCustomerPhone('');
@@ -551,6 +618,13 @@ export const GstBillPage: FC = () => {
       alert('Please specify a customer name');
       return;
     }
+
+    // Validate bill date against selected year
+    if (!validateDateMatchesYear(billDate, selectedYear)) {
+      alert(`Bill date (${billDate}) does not belong to the selected year ${selectedYear}. Please select a date from ${selectedYear}.`);
+      return;
+    }
+
     if (productRows.length === 0) {
       alert('Please add at least one product item to the invoice');
       return;
@@ -563,6 +637,7 @@ export const GstBillPage: FC = () => {
       const payload = {
         billNo: billData.billNo,
         date: billData.date,
+        year: selectedYear,
         customerName: billData.customerName,
         customerPhone: billData.customerPhone,
         customerAddress: billData.customerAddress,
@@ -766,8 +841,45 @@ export const GstBillPage: FC = () => {
             />
           </Box>
 
-          {/* Subtabs Switcher */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+          {/* Right: Year Selector & Subtabs Switcher */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {/* Year Selector */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                bgcolor: '#FFFFFF',
+                border: '1px solid #93C5FD',
+                borderRadius: '4px',
+                px: 1,
+                py: 0.2,
+              }}
+            >
+              <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF' }}>
+                Year:
+              </Typography>
+              <select
+                value={selectedYear}
+                onChange={(e) => handleYearChange(Number(e.target.value))}
+                style={{
+                  fontSize: '11.5px',
+                  fontWeight: 800,
+                  color: '#1E3A8A',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {yearOptions.map((y) => (
+                  <option key={y} value={y} style={{ color: '#0F172A', fontWeight: 600 }}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </Box>
+
             <Button
               size="small"
               onClick={() => setActiveSubTab('create')}
@@ -1669,6 +1781,85 @@ export const GstBillPage: FC = () => {
         onClose={() => setPrintModalOpen(false)}
         bill={selectedBillForPrint}
       />
+
+      {/* ========================================================= */}
+      {/* PREVIOUS YEAR BILLING FOUND WARNING DIALOG */}
+      {/* ========================================================= */}
+      <Dialog
+        open={historyAlertOpen}
+        onClose={() => setHistoryAlertOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '8px',
+              p: 1,
+              border: '2px solid #F59E0B',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.18)',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1, display: 'flex', alignItems: 'center', gap: 1, color: '#B45309', fontWeight: 800, fontSize: '15px' }}>
+          ⚠️ Previous Year Bill Found
+        </DialogTitle>
+        <DialogContent sx={{ py: 1 }}>
+          <Typography sx={{ fontSize: '13px', fontWeight: 600, color: '#0F172A', mb: 1 }}>
+            This customer has previous billing history:
+          </Typography>
+          <Box sx={{ bgcolor: '#FEF3C7', border: '1px solid #FCD34D', p: 1.5, borderRadius: '6px', mb: 2 }}>
+            {customerHistoryInfo?.previousYears.map((py) => (
+              <Box key={py.year} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
+                <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#92400E' }}>
+                  {py.year}
+                </Typography>
+                <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#78350F' }}>
+                  → {py.billCount} {py.billCount === 1 ? 'Bill' : 'Bills'}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+          <Typography sx={{ fontSize: '13px', color: '#1E293B', mb: 0.5 }}>
+            You are currently creating a new bill for <strong>{customerHistoryInfo?.currentYear || selectedYear}</strong>.
+          </Typography>
+          <Typography sx={{ fontSize: '12.5px', color: '#64748B', fontWeight: 500 }}>
+            Do you want to continue with the {customerHistoryInfo?.currentYear || selectedYear} bill?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2, pt: 1, gap: 1 }}>
+          <Button
+            onClick={() => {
+              setHistoryAlertOpen(false);
+              handleResetForm();
+            }}
+            variant="outlined"
+            sx={{
+              color: '#64748B',
+              borderColor: '#CBD5E1',
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: '12.5px',
+              '&:hover': { bgcolor: '#F1F5F9' },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => setHistoryAlertOpen(false)}
+            variant="contained"
+            sx={{
+              bgcolor: '#1E40AF',
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: '12.5px',
+              '&:hover': { bgcolor: '#1E3A8A' },
+            }}
+          >
+            Continue - Create {customerHistoryInfo?.currentYear || selectedYear} Bill
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Turnover Save Feedback Toast */}
       <Snackbar

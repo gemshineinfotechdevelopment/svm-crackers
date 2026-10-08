@@ -2,9 +2,19 @@ import type { Request, Response, NextFunction } from 'express';
 import { Product } from '../models/Product';
 import PriceList from '../models/PriceList';
 
-export const getProducts = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const products = await Product.find().lean().sort({ slNo: 1, createdAt: 1 });
+    const { year } = req.query;
+    const filter: any = {};
+
+    if (year && typeof year === 'string' && year.trim() !== '' && year.toUpperCase() !== 'ALL') {
+      const parsedYear = parseInt(year, 10);
+      if (!isNaN(parsedYear)) {
+        filter.year = parsedYear;
+      }
+    }
+
+    const products = await Product.find(filter).lean().sort({ slNo: 1, createdAt: 1 });
     res.status(200).json({ success: true, count: products.length, data: products });
   } catch (error) {
     next(error);
@@ -27,7 +37,8 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { shopStock, godownStock, stock, ...rest } = req.body;
-    const product = await Product.create(rest);
+    const targetYear = rest.year ? Number(rest.year) : new Date().getFullYear();
+    const product = await Product.create({ ...rest, year: targetYear });
 
     // Sync to PriceList
     try {
@@ -35,7 +46,10 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
       if (cleanName) {
         const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const nameRegex = new RegExp(`^${escapedName}$`, 'i');
-        const existingPriceItem = await PriceList.findOne({ itemName: { $regex: nameRegex } });
+        const existingPriceItem = await PriceList.findOne({
+          itemName: { $regex: nameRegex },
+          year: targetYear,
+        });
         if (!existingPriceItem) {
           await PriceList.create({
             slNo: product.slNo,
@@ -44,6 +58,7 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
             unit: product.unit || 'Box',
             rate: product.rate || 0,
             mrp: product.mrp || 0,
+            year: targetYear,
           });
         }
       }

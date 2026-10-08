@@ -26,6 +26,12 @@ import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { ProductsApi, CategoriesApi, PriceListsApi } from '../services/api';
 import { printProductsListDirectly } from '../utils/printUtils';
+import {
+  getActiveBillingYear,
+  setActiveBillingYear,
+  getStandardYearOptions,
+  YEAR_CHANGE_EVENT,
+} from '../utils/yearContext';
 
 export interface ProductItem {
   _id?: string;
@@ -36,6 +42,7 @@ export interface ProductItem {
   rate?: number;
   mrp?: number;
   unit?: string;
+  year?: number;
 }
 
 export const ProductsPage: FC = () => {
@@ -44,6 +51,10 @@ export const ProductsPage: FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+
+  // Year state
+  const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
+  const yearOptions = useMemo(() => getStandardYearOptions(), []);
 
   // Add / Edit Modal State
   const [openModal, setOpenModal] = useState(false);
@@ -60,13 +71,13 @@ export const ProductsPage: FC = () => {
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const fetchProductsAndPrices = async () => {
+  const fetchProductsAndPrices = async (targetYear: number = selectedYear) => {
     try {
       setLoading(true);
       const [prodsData, catsData, priceData] = await Promise.all([
-        ProductsApi.getAll().catch(() => []),
+        ProductsApi.getAll(targetYear).catch(() => []),
         CategoriesApi.getAll().catch(() => []),
-        PriceListsApi.getAll().catch(() => []),
+        PriceListsApi.getAll({ year: targetYear }).catch(() => []),
       ]);
 
       const priceMap = new Map<string, any>();
@@ -96,6 +107,7 @@ export const ProductsPage: FC = () => {
             rate: priceItem?.rate !== undefined && priceItem.rate > 0 ? priceItem.rate : (p.rate || 0),
             mrp: priceItem?.mrp !== undefined && priceItem.mrp > 0 ? priceItem.mrp : (p.mrp || 0),
             unit: priceItem?.unit || p.unit || 'Box',
+            year: p.year || targetYear,
           });
         });
       }
@@ -117,6 +129,7 @@ export const ProductsPage: FC = () => {
               rate: pItem.rate || 0,
               mrp: pItem.mrp || 0,
               unit: pItem.unit || 'Box',
+              year: pItem.year || targetYear,
             });
           }
         });
@@ -133,8 +146,26 @@ export const ProductsPage: FC = () => {
     }
   };
 
+  const handleYearChange = (newYear: number) => {
+    setSelectedYear(newYear);
+    setActiveBillingYear(newYear);
+    fetchProductsAndPrices(newYear);
+  };
+
   useEffect(() => {
-    fetchProductsAndPrices();
+    fetchProductsAndPrices(selectedYear);
+
+    const handleGlobalYear = (e: any) => {
+      if (e.detail?.year && e.detail.year !== selectedYear) {
+        setSelectedYear(e.detail.year);
+        fetchProductsAndPrices(e.detail.year);
+      }
+    };
+    window.addEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+    return () => {
+      window.removeEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredProducts = useMemo(() => {
@@ -186,6 +217,7 @@ export const ProductsPage: FC = () => {
         unit: productUnit,
         rate: Number(productRate) || 0,
         mrp: Number(productMrp) || 0,
+        year: selectedYear,
       };
 
       if (editingProduct) {
@@ -199,7 +231,7 @@ export const ProductsPage: FC = () => {
         });
       }
       setOpenModal(false);
-      fetchProductsAndPrices();
+      fetchProductsAndPrices(selectedYear);
     } catch (err) {
       console.error('Failed to save product:', err);
       alert('Error saving product');
@@ -305,9 +337,48 @@ export const ProductsPage: FC = () => {
             </Typography>
           </Box>
 
-          <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#1E3A8A' }}>
-            Total Products: {products.length} ({filteredProducts.length} shown)
-          </Typography>
+          {/* Right: Year Selector + Total */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                bgcolor: '#FFFFFF',
+                border: '1px solid #93C5FD',
+                borderRadius: '4px',
+                px: 1,
+                py: 0.2,
+              }}
+            >
+              <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF' }}>
+                Year:
+              </Typography>
+              <select
+                value={selectedYear}
+                onChange={(e) => handleYearChange(Number(e.target.value))}
+                style={{
+                  fontSize: '11.5px',
+                  fontWeight: 800,
+                  color: '#1E3A8A',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {yearOptions.map((y) => (
+                  <option key={y} value={y} style={{ color: '#0F172A', fontWeight: 600 }}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </Box>
+
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#1E3A8A' }}>
+              Total Products: {products.length} ({filteredProducts.length} shown)
+            </Typography>
+          </Box>
         </Box>
 
         {/* Inner Content Area */}
@@ -409,7 +480,7 @@ export const ProductsPage: FC = () => {
               </Button>
 
               <Button
-                onClick={fetchProductsAndPrices}
+                onClick={() => fetchProductsAndPrices(selectedYear)}
                 startIcon={<RefreshRoundedIcon sx={{ fontSize: 14 }} />}
                 size="small"
                 sx={{

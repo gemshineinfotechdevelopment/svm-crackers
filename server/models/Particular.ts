@@ -49,6 +49,7 @@ export interface IParticular extends Document {
   sgstTotal?: string;
   igstTotal?: string;
   roundOff?: string;
+  year?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -88,6 +89,7 @@ const ParticularSchema: Schema = new Schema(
     paidAmount: { type: String, default: '0.00' },
     notes: { type: String, default: '' },
     date: { type: String, required: true },
+    year: { type: Number, index: true },
     pdfData: { type: String, default: '' },
     pdfName: { type: String, default: '' },
     pdfPublicId: { type: String, default: '' },
@@ -106,6 +108,9 @@ const ParticularSchema: Schema = new Schema(
   },
   { timestamps: true }
 );
+
+ParticularSchema.index({ customerName: 1, year: 1 });
+ParticularSchema.index({ year: 1, createdAt: -1 });
 
 export const Particular = mongoose.model<IParticular>('Particular', ParticularSchema);
 
