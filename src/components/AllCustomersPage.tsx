@@ -29,6 +29,13 @@ import { DateRangePrintModal } from './DateRangePrintModal';
 import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
 import { getStoredSettings } from './SettingsPage';
+import {
+  getActiveBillingYear,
+  setActiveBillingYear,
+  getStandardYearOptions,
+  YEAR_CHANGE_EVENT,
+} from '../utils/yearContext';
+import { getSelectedBillYear } from '../utils/billYearUtils';
 
 export interface CustomerItem {
   _id?: string;
@@ -58,6 +65,10 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Year filter state
+  const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
+  const yearOptions = useMemo(() => getStandardYearOptions(), []);
 
   // Edit Customer Dialog State
   const [openEditModal, setOpenEditModal] = useState(false);
@@ -142,10 +153,11 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
     }
   };
 
-  const fetchRecentBills = async () => {
+  const fetchRecentBills = async (yearToFetch?: number | string) => {
     try {
       setLoadingRecentBills(true);
-      const bills = await ParticularsApi.getAll(undefined, 'REGULAR');
+      const targetYear = yearToFetch !== undefined ? yearToFetch : (selectedYear || getSelectedBillYear());
+      const bills = await ParticularsApi.getAll(undefined, 'REGULAR', targetYear);
       const regularBills = (Array.isArray(bills) ? bills : []).filter(
         (b: any) => b.billType !== 'GST' && !(b.billNo && String(b.billNo).toUpperCase().startsWith('GST'))
       );
@@ -159,16 +171,36 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
 
   useEffect(() => {
     fetchCustomers();
-    fetchRecentBills();
+    fetchRecentBills(selectedYear);
 
     const handleSettingsUpdate = () => {
       setStoreSettings(getStoredSettings());
     };
+    const handleYearChange = (e: any) => {
+      const year = e?.detail?.year ? Number(e.detail.year) : (typeof getSelectedBillYear === 'function' ? Number(getSelectedBillYear()) : undefined);
+      if (year) {
+        setSelectedYear(year);
+        fetchRecentBills(year);
+      } else {
+        fetchRecentBills();
+      }
+    };
+
     window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
+    window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+    window.addEventListener('apsara_bill_year_changed', handleYearChange);
     return () => {
       window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
+      window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+      window.removeEventListener('apsara_bill_year_changed', handleYearChange);
     };
   }, []);
+
+  const handleYearChangeFromDropdown = (newYear: number) => {
+    setSelectedYear(newYear);
+    setActiveBillingYear(newYear);
+    fetchRecentBills(newYear);
+  };
 
   const handleOpenEdit = (customer: CustomerItem) => {
     setEditingCustomer(customer);
@@ -835,14 +867,51 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                   )}
                 </Box>
 
-                {/* Right: Total & Refresh */}
+                {/* Right: Year Filter + Total & Refresh */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  {/* Year Filter Dropdown */}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      bgcolor: '#EFF6FF',
+                      border: '1px solid #93C5FD',
+                      borderRadius: '3px',
+                      px: 0.8,
+                      py: 0.2,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF' }}>
+                      Year:
+                    </Typography>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => handleYearChangeFromDropdown(Number(e.target.value))}
+                      style={{
+                        fontSize: '11.5px',
+                        fontWeight: 800,
+                        color: '#1E3A8A',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        outline: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {yearOptions.map((y) => (
+                        <option key={y} value={y} style={{ color: '#0F172A', fontWeight: 600 }}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </Box>
+
                   <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
                     Total Invoiced: <strong style={{ color: '#741748' }}>₹{totalBillsAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                   </Typography>
 
                   <Button
-                    onClick={fetchRecentBills}
+                    onClick={() => fetchRecentBills(selectedYear)}
                     startIcon={<RefreshRoundedIcon sx={{ fontSize: 14 }} />}
                     size="small"
                     sx={{

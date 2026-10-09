@@ -8,6 +8,15 @@ import {
   Snackbar,
   Alert,
   Switch,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
@@ -15,9 +24,26 @@ import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
+import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
+import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import CircularProgress from '@mui/material/CircularProgress';
 import defaultProjectLogo from '../assets/logo.png';
 import { SettingsApi } from '../services/api';
+import {
+  getSelectedBillYear,
+  setSelectedBillYear,
+  getAvailableBillViewYears,
+} from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
+
+const initNow = new Date();
+const initYear = initNow.getFullYear();
+const initDay = String(initNow.getDate()).padStart(2, '0');
+const initMonth = String(initNow.getMonth() + 1).padStart(2, '0');
 
 export interface CompanySettings {
   companyName: string;
@@ -37,6 +63,12 @@ export interface CompanySettings {
   defaultTaxRate?: string;
   gstTurnoverBaseline?: string;
   gstTurnoverCurrent?: string;
+  systemDate?: string;
+  systemYear?: number | string;
+  billingYear?: number | string;
+  billingStartDate?: string;
+  billingEndDate?: string;
+  billingStatus?: string;
 }
 
 export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
@@ -57,6 +89,12 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   defaultTaxRate: '18',
   gstTurnoverBaseline: '726900.00',
   gstTurnoverCurrent: '726900.00',
+  systemDate: `${initDay}-${initMonth}-${initYear}`,
+  systemYear: initYear,
+  billingYear: initYear,
+  billingStartDate: `01-01-${initYear}`,
+  billingEndDate: `31-12-${initYear}`,
+  billingStatus: 'Active',
 };
 
 export const removeWhiteBackgroundFromDataUrl = (
@@ -131,9 +169,40 @@ export const removeWhiteBackgroundFromDataUrl = (
   });
 };
 
+export const formatDisplayDate = (dateVal: string | Date | undefined, style: 'dmy' | 'long' = 'dmy'): string => {
+  if (!dateVal) return '-';
+  try {
+    let d: Date;
+    if (typeof dateVal === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(dateVal)) {
+      const [dd, mm, yyyy] = dateVal.split('-');
+      d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    } else {
+      d = new Date(dateVal);
+    }
+    if (isNaN(d.getTime())) return String(dateVal);
+
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+
+    if (style === 'long') {
+      const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December',
+      ];
+      return `${day} ${monthNames[d.getMonth()]} ${year}`;
+    }
+
+    return `${day}-${month}-${year}`;
+  } catch {
+    return String(dateVal);
+  }
+};
+
 export const getStoredSettings = (): CompanySettings => {
   try {
     const saved = localStorage.getItem('apsara_app_settings') || localStorage.getItem('varun_app_settings') || localStorage.getItem('dheeksha_app_settings');
+    const currentYear = new Date().getFullYear();
     if (saved) {
       const parsed = JSON.parse(saved);
       if (!parsed.companyName || parsed.companyName.toLowerCase().includes('varun') || parsed.companyName.toLowerCase().includes('dheeksha') || parsed.companyName.toLowerCase().includes('apsara') || parsed.companyName.toLowerCase().includes('svm')) {
@@ -157,7 +226,14 @@ export const getStoredSettings = (): CompanySettings => {
       if (!parsed.state) {
         parsed.state = 'Tamil Nadu';
       }
-      return { ...DEFAULT_COMPANY_SETTINGS, ...parsed };
+      return {
+        ...DEFAULT_COMPANY_SETTINGS,
+        ...parsed,
+        billingYear: parsed.billingYear || currentYear,
+        billingStartDate: parsed.billingStartDate || `01-01-${currentYear}`,
+        billingEndDate: parsed.billingEndDate || `31-12-${currentYear}`,
+        billingStatus: parsed.billingStatus || 'Active',
+      };
     }
   } catch (err) {
     console.error('Failed to parse settings from localStorage:', err);
@@ -171,6 +247,44 @@ export const SettingsPage: React.FC = () => {
   const [isProcessingLogo, setIsProcessingLogo] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Authoritative server-synchronized billing state
+  const [serverSystemYear, setServerSystemYear] = useState<number>(() => Number(settings.billingYear) || new Date().getFullYear());
+  const [serverSystemDate, setServerSystemDate] = useState<string>(() => settings.systemDate || new Date().toISOString());
+  const [selectedBillingYear, setSelectedBillingYear] = useState<number>(() => Number(settings.billingYear) || new Date().getFullYear());
+  const [yearAlertOpen, setYearAlertOpen] = useState<boolean>(false);
+  const [attemptedYear, setAttemptedYear] = useState<number | null>(null);
+
+  // Bill View Year Selector state & menu anchor
+  const [selectedBillYear, setSelectedBillYearState] = useState<string>(() =>
+    getSelectedBillYear(settings.systemYear ? String(settings.systemYear) : undefined)
+  );
+  const [billYearAnchorEl, setBillYearAnchorEl] = useState<null | HTMLElement>(null);
+
+  const handleSelectBillViewYear = (year: string, isFuture: boolean) => {
+    setBillYearAnchorEl(null);
+    if (isFuture) {
+      const sysYear = settings.systemYear ? String(settings.systemYear) : new Date().getFullYear().toString();
+      triggerYearRestrictionDialog({ selectedYear: year, currentSystemYear: sysYear, isFutureYear: true });
+      return;
+    }
+
+    const res = setSelectedBillYear(year, settings.systemYear ? String(settings.systemYear) : undefined);
+    if (res.success) {
+      setSelectedBillYearState(res.year);
+      setToast({
+        open: true,
+        message: `📅 Bill View Filter set to ${year}. Showing ${year} bills.`,
+        severity: 'success',
+      });
+    } else {
+      setToast({
+        open: true,
+        message: res.message,
+        severity: 'error',
+      });
+    }
+  };
 
   const [toast, setToast] = useState<{ open: boolean; message: string; severity: 'success' | 'info' | 'error' }>({
     open: false,
@@ -204,6 +318,13 @@ export const SettingsPage: React.FC = () => {
             ? '8778429299'
             : data.whatsapp;
 
+          const sysYear = Number(data.systemYear) || (data.systemDate ? new Date(data.systemDate).getFullYear() : new Date().getFullYear());
+          const sysDate = data.systemDate || new Date().toISOString();
+
+          setServerSystemYear(sysYear);
+          setServerSystemDate(sysDate);
+          setSelectedBillingYear(sysYear);
+
           const remoteSettings: CompanySettings = {
             companyName: compName,
             tagline: data.tagline || DEFAULT_COMPANY_SETTINGS.tagline,
@@ -220,6 +341,12 @@ export const SettingsPage: React.FC = () => {
             logoUrl: logo,
             enableTax: Boolean(data.enableTax),
             defaultTaxRate: data.defaultTaxRate || '18',
+            billingYear: data.billingYear || sysYear,
+            billingStartDate: data.billingStartDate || `01-01-${sysYear}`,
+            billingEndDate: data.billingEndDate || `31-12-${sysYear}`,
+            billingStatus: data.billingStatus || 'Active',
+            systemDate: sysDate,
+            systemYear: sysYear,
           };
           setSettings(remoteSettings);
           localStorage.setItem('apsara_app_settings', JSON.stringify(remoteSettings));
@@ -233,6 +360,13 @@ export const SettingsPage: React.FC = () => {
   }, []);
 
   const handleChange = <K extends keyof CompanySettings>(field: K, value: CompanySettings[K]) => {
+    if (field === 'billingYear') {
+      const selectedYear = Number(value);
+      if (!isNaN(selectedYear)) {
+        handleBillingYearChange(selectedYear);
+        return;
+      }
+    }
     setSettings((prev) => ({
       ...prev,
       [field]: value,
@@ -330,15 +464,63 @@ export const SettingsPage: React.FC = () => {
     setSettings((prev) => ({ ...prev, logoUrl: '' }));
   };
 
+  const handleBillingYearChange = (newYear: number) => {
+    setAttemptedYear(newYear);
+    setSelectedBillingYear(newYear);
+
+    if (newYear !== serverSystemYear) {
+      setYearAlertOpen(true);
+      setToast({
+        open: true,
+        message: 'Invalid Billing Year: The selected billing year does not match the current system year.',
+        severity: 'error',
+      });
+    } else {
+      setSettings((prev) => ({
+        ...prev,
+        billingYear: newYear,
+        billingStartDate: `01-01-${newYear}`,
+        billingEndDate: `31-12-${newYear}`,
+        billingStatus: 'Active',
+      }));
+    }
+  };
+
   const handleSave = async () => {
+    // Frontend Restriction Validation
+    if (selectedBillingYear !== serverSystemYear) {
+      setAttemptedYear(selectedBillingYear);
+      setYearAlertOpen(true);
+      setToast({
+        open: true,
+        message: 'Billing year cannot be changed manually. The billing year must remain synchronized with the current system date.',
+        severity: 'error',
+      });
+      return;
+    }
+
     try {
       setIsSaving(true);
-      localStorage.setItem('apsara_app_settings', JSON.stringify(settings));
+      const savePayload: CompanySettings = {
+        ...settings,
+        billingYear: serverSystemYear,
+        billingStartDate: `01-01-${serverSystemYear}`,
+        billingEndDate: `31-12-${serverSystemYear}`,
+        billingStatus: 'Active',
+      };
+
+      localStorage.setItem('apsara_app_settings', JSON.stringify(savePayload));
       window.dispatchEvent(new Event('apsara_settings_updated'));
 
-      const saveRes = await SettingsApi.update(settings);
+      const saveRes = await SettingsApi.update(savePayload);
       const data = (saveRes && typeof saveRes === 'object' && 'data' in saveRes && saveRes.data) ? saveRes.data : saveRes;
       if (data && typeof data === 'object' && (data.companyName !== undefined || data._id)) {
+        const syncedSysYear = Number(data.systemYear) || serverSystemYear;
+        const syncedSysDate = data.systemDate || serverSystemDate;
+        setServerSystemYear(syncedSysYear);
+        setServerSystemDate(syncedSysDate);
+        setSelectedBillingYear(syncedSysYear);
+
         const syncedSettings: CompanySettings = {
           companyName: data.companyName ?? settings.companyName,
           tagline: data.tagline ?? settings.tagline,
@@ -355,6 +537,12 @@ export const SettingsPage: React.FC = () => {
           logoUrl: data.logoUrl ?? settings.logoUrl,
           enableTax: Boolean(data.enableTax ?? settings.enableTax),
           defaultTaxRate: data.defaultTaxRate ?? settings.defaultTaxRate ?? '18',
+          billingYear: data.billingYear || syncedSysYear,
+          billingStartDate: data.billingStartDate || `01-01-${syncedSysYear}`,
+          billingEndDate: data.billingEndDate || `31-12-${syncedSysYear}`,
+          billingStatus: data.billingStatus || 'Active',
+          systemDate: syncedSysDate,
+          systemYear: syncedSysYear,
         };
         setSettings(syncedSettings);
         localStorage.setItem('apsara_app_settings', JSON.stringify(syncedSettings));
@@ -363,15 +551,15 @@ export const SettingsPage: React.FC = () => {
 
       setToast({
         open: true,
-        message: 'Company profile & settings saved successfully!',
+        message: 'Company profile & billing settings saved successfully!',
         severity: 'success',
       });
     } catch (err: any) {
       console.error('Failed to save settings to server:', err);
       setToast({
         open: true,
-        message: 'Profile saved locally!',
-        severity: 'success',
+        message: err?.message || 'Failed to save settings. Please try again.',
+        severity: 'error',
       });
     } finally {
       setIsSaving(false);
@@ -380,11 +568,21 @@ export const SettingsPage: React.FC = () => {
 
   const handleResetToDefault = async () => {
     if (window.confirm('Reset company profile details to default values?')) {
-      setSettings(DEFAULT_COMPANY_SETTINGS);
-      localStorage.setItem('apsara_app_settings', JSON.stringify(DEFAULT_COMPANY_SETTINGS));
+      setSelectedBillingYear(serverSystemYear);
+      const resetSettings: CompanySettings = {
+        ...DEFAULT_COMPANY_SETTINGS,
+        billingYear: serverSystemYear,
+        billingStartDate: `01-01-${serverSystemYear}`,
+        billingEndDate: `31-12-${serverSystemYear}`,
+        billingStatus: 'Active',
+        systemDate: serverSystemDate,
+        systemYear: serverSystemYear,
+      };
+      setSettings(resetSettings);
+      localStorage.setItem('apsara_app_settings', JSON.stringify(resetSettings));
       window.dispatchEvent(new Event('apsara_settings_updated'));
       try {
-        await SettingsApi.update(DEFAULT_COMPANY_SETTINGS);
+        await SettingsApi.update(resetSettings);
       } catch (e) {
         console.error(e);
       }
@@ -448,7 +646,98 @@ export const SettingsPage: React.FC = () => {
             </Typography>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            {/* Interactive Bill Year View Switcher Button */}
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={(e) => setBillYearAnchorEl(e.currentTarget)}
+              startIcon={<CalendarMonthRoundedIcon sx={{ fontSize: 16, color: '#1E40AF' }} />}
+              endIcon={<ArrowDropDownRoundedIcon sx={{ fontSize: 18, color: '#1E40AF' }} />}
+              sx={{
+                color: '#1E40AF',
+                backgroundColor: '#EFF6FF',
+                borderColor: '#93C5FD',
+                borderRadius: '4px',
+                fontSize: '11.5px',
+                fontWeight: 800,
+                textTransform: 'none',
+                px: 1.2,
+                height: '26px',
+                '&:hover': {
+                  borderColor: '#2563EB',
+                  backgroundColor: '#DBEAFE',
+                },
+              }}
+            >
+              📅 Bill Year: <span style={{ color: '#1E40AF', marginLeft: '4px' }}>{selectedBillYear}</span>
+            </Button>
+
+            {/* Dropdown Menu for Bill View Year */}
+            <Menu
+              anchorEl={billYearAnchorEl}
+              open={Boolean(billYearAnchorEl)}
+              onClose={() => setBillYearAnchorEl(null)}
+              slotProps={{
+                paper: {
+                  elevation: 6,
+                  sx: {
+                    borderRadius: '10px',
+                    minWidth: '210px',
+                    mt: 1,
+                    border: '1.5px solid #E2E8F0',
+                  },
+                },
+              }}
+            >
+              <Box sx={{ px: 2, py: 1, borderBottom: '1px solid #F1F5F9', backgroundColor: '#F8FAFC' }}>
+                <Typography sx={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>
+                  Bill View Year
+                </Typography>
+                <Typography sx={{ fontSize: '11px', color: '#94A3B8' }}>
+                  Select year to view/filter bills
+                </Typography>
+              </Box>
+
+              {getAvailableBillViewYears(settings.systemYear ? String(settings.systemYear) : undefined).map((opt) => (
+                <MenuItem
+                  key={opt.year}
+                  selected={opt.year === selectedBillYear}
+                  onClick={() => handleSelectBillViewYear(opt.year, opt.isFuture)}
+                  sx={{
+                    py: 1,
+                    px: 2,
+                    opacity: opt.isFuture ? 0.6 : 1,
+                    backgroundColor: opt.year === selectedBillYear ? '#EFF6FF' : 'transparent',
+                    '&:hover': {
+                      backgroundColor: opt.isFuture ? '#FEF2F2' : '#F1F5F9',
+                    },
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: '30px' }}>
+                    {opt.year === selectedBillYear ? (
+                      <CheckRoundedIcon sx={{ fontSize: 18, color: '#2563EB' }} />
+                    ) : opt.isFuture ? (
+                      <LockOutlinedIcon sx={{ fontSize: 16, color: '#EF4444' }} />
+                    ) : (
+                      <HistoryRoundedIcon sx={{ fontSize: 16, color: '#64748B' }} />
+                    )}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={opt.label}
+                    slotProps={{
+                      primary: {
+                        sx: {
+                          fontSize: '13px',
+                          fontWeight: opt.year === selectedBillYear ? 800 : 600,
+                          color: opt.isFuture ? '#94A3B8' : opt.year === selectedBillYear ? '#1E40AF' : '#1E293B',
+                        },
+                      },
+                    }}
+                  />
+                </MenuItem>
+              ))}
+            </Menu>
             <Button
               size="small"
               onClick={handleResetToDefault}
@@ -463,6 +752,7 @@ export const SettingsPage: React.FC = () => {
                 borderRadius: '3px',
                 px: 1.2,
                 py: 0.3,
+                height: '26px',
                 '&:hover': { bgcolor: '#E2E8F0' },
               }}
             >
@@ -483,6 +773,7 @@ export const SettingsPage: React.FC = () => {
                 borderRadius: '3px',
                 px: 1.8,
                 py: 0.4,
+                height: '26px',
                 '&:hover': { bgcolor: '#580e34' },
               }}
             >
@@ -864,9 +1155,264 @@ export const SettingsPage: React.FC = () => {
                 </Grid>
               </Grid>
             </fieldset>
+
+            {/* Section 5: Annual Billing Restriction & Billing Period */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2.5,
+                borderRadius: '12px',
+                border: String(settings.billingYear) !== String(settings.systemYear || new Date().getFullYear())
+                  ? '1.5px solid #EF4444'
+                  : '1px solid #E2E8F0',
+                backgroundColor: '#FFFFFF',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CalendarMonthRoundedIcon sx={{ color: '#7C3AED', fontSize: 20 }} />
+                  <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#5B21B6' }}>
+                    Annual Billing & Billing Period
+                  </Typography>
+                </Box>
+
+                <Chip
+                  label={`Billing Status: ${settings.billingStatus || 'Active'}`}
+                  size="small"
+                  sx={{
+                    backgroundColor: '#DCFCE7',
+                    color: '#15803D',
+                    fontWeight: 800,
+                    fontSize: '12px',
+                    border: '1px solid #86EFAC',
+                  }}
+                />
+              </Box>
+
+              <Typography sx={{ fontSize: '12px', color: '#64748B', mb: 2 }}>
+                The billing year and annual billing dates are automatically synchronized with the authoritative system date.
+              </Typography>
+
+              {String(settings.billingYear) !== String(settings.systemYear || new Date().getFullYear()) && (
+                <Alert
+                  severity="error"
+                  sx={{ mb: 2, fontWeight: 700, borderRadius: '8px' }}
+                >
+                  Billing year cannot be changed manually. The billing year must remain synchronized with the current system date ({settings.systemYear || new Date().getFullYear()}).
+                </Alert>
+              )}
+
+              <Grid container spacing={1.2}>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    System Date
+                  </Typography>
+                  <input
+                    type="text"
+                    readOnly
+                    className="erp-input"
+                    value={settings.systemDate || `${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`}
+                    style={{ width: '100%', backgroundColor: '#F1F5F9' }}
+                  />
+                  <Typography sx={{ fontSize: '10.5px', color: '#64748B', mt: 0.3 }}>
+                    Authoritative server system date
+                  </Typography>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Current Billing Year *
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
+                    value={settings.billingYear || ''}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleChange('billingYear', e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                  <Typography sx={{ fontSize: '10.5px', color: '#64748B', mt: 0.3 }}>
+                    Synchronized with system date
+                  </Typography>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Billing Start Date
+                  </Typography>
+                  <input
+                    type="text"
+                    readOnly
+                    className="erp-input"
+                    value={settings.billingStartDate || `01-01-${new Date().getFullYear()}`}
+                    style={{ width: '100%', backgroundColor: '#F1F5F9' }}
+                  />
+                  <Typography sx={{ fontSize: '10.5px', color: '#64748B', mt: 0.3 }}>
+                    January 1 of current billing year
+                  </Typography>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    Billing End Date
+                  </Typography>
+                  <input
+                    type="text"
+                    readOnly
+                    className="erp-input"
+                    value={settings.billingEndDate || `31-12-${new Date().getFullYear()}`}
+                    style={{ width: '100%', backgroundColor: '#F1F5F9' }}
+                  />
+                  <Typography sx={{ fontSize: '10.5px', color: '#64748B', mt: 0.3 }}>
+                    December 31 of current billing year
+                  </Typography>
+                </Grid>
+              </Grid>
+
+              {/* Bill View Year Switcher Subsection */}
+              <Box
+                sx={{
+                  mt: 2.5,
+                  pt: 2,
+                  borderTop: '1px dashed #CBD5E1',
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <HistoryRoundedIcon sx={{ color: '#2563EB', fontSize: 18 }} />
+                    <Typography sx={{ fontSize: '14px', fontWeight: 800, color: '#1E40AF' }}>
+                      Bill View Year Switcher (Filter)
+                    </Typography>
+                  </Box>
+
+                  <Chip
+                    label={`Viewing: ${selectedBillYear} Bills`}
+                    color={selectedBillYear === (settings.systemYear || new Date().getFullYear().toString()) ? 'primary' : 'warning'}
+                    size="small"
+                    sx={{ fontWeight: 800, fontSize: '11.5px' }}
+                  />
+                </Box>
+
+                <Typography sx={{ fontSize: '11.5px', color: '#64748B', mb: 1.5 }}>
+                  Select a year below to view historical bills. Switching view year filters bill records without altering the system date or existing invoices.
+                </Typography>
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                  {getAvailableBillViewYears(settings.systemYear ? String(settings.systemYear) : undefined).map((opt) => {
+                    const isSelected = opt.year === selectedBillYear;
+                    return (
+                      <Button
+                        key={opt.year}
+                        variant={isSelected ? 'contained' : 'outlined'}
+                        size="small"
+                        onClick={() => handleSelectBillViewYear(opt.year, opt.isFuture)}
+                        startIcon={
+                          isSelected ? (
+                            <CheckRoundedIcon sx={{ fontSize: 16 }} />
+                          ) : opt.isFuture ? (
+                            <LockOutlinedIcon sx={{ fontSize: 15 }} />
+                          ) : (
+                            <HistoryRoundedIcon sx={{ fontSize: 15 }} />
+                          )
+                        }
+                        sx={{
+                          borderRadius: '8px',
+                          textTransform: 'none',
+                          fontWeight: isSelected ? 800 : 700,
+                          fontSize: '12.5px',
+                          px: 1.8,
+                          height: '34px',
+                          ...(isSelected && {
+                            backgroundColor: '#2563EB',
+                            color: '#FFFFFF',
+                          }),
+                          ...(!isSelected && !opt.isFuture && {
+                            borderColor: '#CBD5E1',
+                            color: '#334155',
+                            '&:hover': { backgroundColor: '#F1F5F9', borderColor: '#94A3B8' },
+                          }),
+                          ...(opt.isFuture && {
+                            borderColor: '#FCA5A5',
+                            color: '#9CA3AF',
+                            backgroundColor: '#FEF2F2',
+                          }),
+                        }}
+                      >
+                        {opt.year} {opt.year === (settings.systemYear || new Date().getFullYear().toString()) ? '(Current)' : ''}
+                      </Button>
+                    );
+                  })}
+                </Box>
+
+                {selectedBillYear !== (settings.systemYear || new Date().getFullYear().toString()) && (
+                  <Alert severity="info" sx={{ mt: 1.5, fontSize: '12px', fontWeight: 600, py: 0.5, borderRadius: '8px' }}>
+                    ℹ️ You are currently viewing historical bills generated in <strong>{selectedBillYear}</strong>. Authoritative system year remains <strong>{settings.systemYear || new Date().getFullYear()}</strong>.
+                  </Alert>
+                )}
+              </Box>
+            </Paper>
           </Box>
         </Box>
       </Paper>
+
+      {/* Billing Year Validation Alert Dialog */}
+      <Dialog
+        open={yearAlertOpen}
+        onClose={() => {
+          setYearAlertOpen(false);
+          setSelectedBillingYear(serverSystemYear);
+        }}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '4px',
+              border: '1px solid #DC2626',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#FEF2F2', py: 1.2, px: 2, borderBottom: '1px solid #FECACA' }}>
+          <WarningAmberRoundedIcon sx={{ color: '#DC2626', fontSize: 22 }} />
+          <Typography sx={{ fontWeight: 800, fontSize: '13.5px', color: '#991B1B' }}>
+            Invalid Billing Year
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2, pt: 2.5 }}>
+          <Typography sx={{ fontSize: '12px', color: '#334155', lineHeight: 1.5, mb: 1.5 }}>
+            Billing year cannot be changed manually. The billing year must remain synchronized with the current system date.
+          </Typography>
+          <Box sx={{ bgcolor: '#F8FAFC', border: '1px solid #E2E8F0', p: 1.2, borderRadius: '3px', fontSize: '11.5px', color: '#475569' }}>
+            <div>• <b>Current System Year:</b> {serverSystemYear}</div>
+            {attemptedYear !== null && <div>• <b>Selected Year:</b> {attemptedYear}</div>}
+            <div style={{ marginTop: '4px' }}>
+              • <b>Rule:</b> The annual billing period is automatically managed from <b>01 January {serverSystemYear}</b> to <b>31 December {serverSystemYear}</b>.
+            </div>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1, bgcolor: '#F8FAFC', borderTop: '1px solid #E2E8F0' }}>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => {
+              setYearAlertOpen(false);
+              setSelectedBillingYear(serverSystemYear);
+            }}
+            sx={{
+              bgcolor: '#DC2626',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '11.5px',
+              textTransform: 'none',
+              '&:hover': { bgcolor: '#B91C1C' },
+            }}
+          >
+            Acknowledge & Sync
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Floating Feedback Toast */}
       <Snackbar

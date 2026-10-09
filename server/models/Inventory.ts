@@ -13,6 +13,7 @@ export interface IInventory extends Document {
   mrp?: number;
   costPrice?: number;
   minStockAlert?: number;
+  year?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -31,6 +32,7 @@ const InventorySchema: Schema = new Schema(
     mrp: { type: Number, default: 0 },
     costPrice: { type: Number, default: 0 },
     minStockAlert: { type: Number, default: 0 },
+    year: { type: Number, default: () => new Date().getFullYear(), index: true },
   },
   {
     timestamps: true,
@@ -41,6 +43,7 @@ const InventorySchema: Schema = new Schema(
 
 InventorySchema.index({ productName: 1 });
 InventorySchema.index({ sku: 1 });
+InventorySchema.index({ year: 1 });
 
 export const Inventory = mongoose.model<IInventory>('Inventory', InventorySchema, 'inventories');
 export default Inventory;

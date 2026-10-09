@@ -47,49 +47,43 @@ const syncCategoriesAndProducts = async (items: any[]) => {
 
     // 2. Sync Products
     const existingProducts = await Product.find({});
-    const existingProdMap = new Map<string, any>();
-    existingProducts.forEach((p) => {
-      existingProdMap.set((p.name || '').toLowerCase().trim(), p);
-      existingProdMap.set(normalizeName(p.name || ''), p);
-    });
-
     let maxSlNo = existingProducts.length > 0 ? Math.max(...existingProducts.map((p) => p.slNo || 0)) : 0;
 
     for (const item of items) {
       const cleanName = cleanToEnglish(String(item.itemName || '')).trim();
       if (!cleanName) continue;
 
-      const nameKey = cleanName.toLowerCase();
-      if (!nameKey) continue;
-
       const rateVal = Number(item.rate || item.price || 0);
       const mrpVal = Number(item.mrp || 0);
       const unitVal = cleanToEnglish(String(item.unit || 'Box')) || 'Box';
       const catVal = cleanToEnglish(String(item.category || 'General')) || 'General';
+      const itemYear = Number(item.year) || new Date().getFullYear();
 
-      if (existingProdMap.has(nameKey)) {
-        // Update product rate/category
-        const existing = existingProdMap.get(nameKey);
-        if (existing) {
-          await Product.findByIdAndUpdate(existing._id, {
-            category: catVal,
-            rate: rateVal,
-            mrp: mrpVal,
-            unit: unitVal,
-          });
-        }
+      const existing = await Product.findOne({
+        name: { $regex: new RegExp(`^${cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        year: itemYear,
+      });
+
+      if (existing) {
+        // Update product rate/category for that specific year
+        await Product.findByIdAndUpdate(existing._id, {
+          category: catVal,
+          rate: rateVal,
+          mrp: mrpVal,
+          unit: unitVal,
+        });
       } else {
-        // Insert new product
+        // Insert new product for that year
         maxSlNo += 1;
-        const created = await Product.create({
+        await Product.create({
           slNo: maxSlNo,
           name: cleanName,
           category: catVal,
           rate: rateVal,
           mrp: mrpVal,
           unit: unitVal,
+          year: itemYear,
         });
-        existingProdMap.set(nameKey, created);
       }
     }
   } catch (syncErr) {
@@ -99,19 +93,40 @@ const syncCategoriesAndProducts = async (items: any[]) => {
 
 export const getPriceList = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { category, search } = req.query;
+    const { category, search, year } = req.query;
     const filter: any = {};
+
+    if (year && typeof year === 'string' && year.trim() !== '' && year.toLowerCase() !== 'all') {
+      const yearStr = year.trim();
+      const yearNum = parseInt(yearStr, 10);
+      if (!isNaN(yearNum)) {
+        const startOfYear = new Date(Date.UTC(yearNum, 0, 1, 0, 0, 0));
+        const endOfYear = new Date(Date.UTC(yearNum, 11, 31, 23, 59, 59, 999));
+        filter.$or = [
+          { year: yearNum },
+          { year: yearStr },
+          { createdAt: { $gte: startOfYear, $lte: endOfYear } },
+          { effectiveDate: { $regex: new RegExp(yearStr) } },
+        ];
+      }
+    }
 
     if (category && category !== 'ALL') {
       filter.category = category;
     }
 
     if (search) {
-      filter.$or = [
+      const searchFilter = [
         { itemName: { $regex: String(search), $options: 'i' } },
         { category: { $regex: String(search), $options: 'i' } },
         { batchName: { $regex: String(search), $options: 'i' } },
       ];
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: searchFilter }];
+        delete filter.$or;
+      } else {
+        filter.$or = searchFilter;
+      }
     }
 
     const items = await PriceList.find(filter).lean().sort({ slNo: 1, createdAt: -1 });
@@ -131,7 +146,19 @@ export const getPriceList = async (req: Request, res: Response): Promise<void> =
 
 export const createPriceListItem = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { itemName, category, unit, mrp, discountPercent, rate, effectiveDate, batchName, slNo } = req.body;
+    const currentSystemYear = new Date().getFullYear();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    if (selectedViewYear && Number(selectedViewYear) !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New products can only be added to the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before adding a new product.`,
+        error: 'Product creation is only allowed in the current system year.',
+      });
+      return;
+    }
+
+    const { itemName, category, unit, mrp, discountPercent, rate, effectiveDate, batchName, slNo, year } = req.body;
 
     if (!itemName || !itemName.trim()) {
       res.status(400).json({ success: false, error: 'Item name is required' });
@@ -139,6 +166,7 @@ export const createPriceListItem = async (req: Request, res: Response): Promise<
     }
 
     const nextSlNo = slNo || (await PriceList.countDocuments()) + 1;
+    const targetYear = year ? Number(year) : currentSystemYear;
 
     const item = await PriceList.create({
       slNo: nextSlNo,
@@ -150,6 +178,7 @@ export const createPriceListItem = async (req: Request, res: Response): Promise<
       rate: Number(rate) || 0,
       effectiveDate: effectiveDate || new Date().toISOString().split('T')[0],
       batchName: batchName || 'Manual Entry',
+      year: targetYear,
     });
 
     // Auto-sync category and product
@@ -163,19 +192,33 @@ export const createPriceListItem = async (req: Request, res: Response): Promise<
 
 export const bulkImportPriceList = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { items, batchName, replaceExisting } = req.body;
+    const currentSystemYear = new Date().getFullYear();
+    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
+
+    if (selectedViewYear && Number(selectedViewYear) !== currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New products can only be added to the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before adding a new product.`,
+        error: 'Product creation is only allowed in the current system year.',
+      });
+      return;
+    }
+
+    const { items, batchName, replaceExisting, year } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       res.status(400).json({ success: false, error: 'No items provided for import' });
       return;
     }
 
+    const targetYear = year ? Number(year) : currentSystemYear;
+
     if (replaceExisting) {
-      await PriceList.deleteMany({});
-      await Product.deleteMany({});
+      await PriceList.deleteMany({ $or: [{ year: targetYear }, { year: String(targetYear) }] });
+      await Product.deleteMany({ $or: [{ year: targetYear }, { year: String(targetYear) }] });
     }
 
-    const currentCount = replaceExisting ? 0 : await PriceList.countDocuments();
+    const currentCount = replaceExisting ? 0 : await PriceList.countDocuments({ $or: [{ year: targetYear }, { year: String(targetYear) }] });
     const batchTitle = batchName || `Upload-${new Date().toLocaleDateString('en-GB')}`;
 
     const formattedItems = items.map((item: any, idx: number) => {
@@ -189,6 +232,7 @@ export const bulkImportPriceList = async (req: Request, res: Response): Promise<
         rate: Number(item.rate || item.price || item.Rate || item['Net Rate'] || item['Selling Price'] || 0),
         effectiveDate: item.effectiveDate || new Date().toISOString().split('T')[0],
         batchName: batchTitle,
+        year: targetYear,
       };
     }).filter((i: any) => Boolean(i.itemName));
 
@@ -204,7 +248,7 @@ export const bulkImportPriceList = async (req: Request, res: Response): Promise<
 
     res.status(201).json({
       success: true,
-      message: `Successfully imported ${inserted.length} price list items, and synced Categories & Products!`,
+      message: `Successfully imported ${inserted.length} price list items for ${targetYear}, and synced Categories & Products!`,
       count: inserted.length,
       data: inserted,
     });

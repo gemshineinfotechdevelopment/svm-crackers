@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC, type MouseEvent } from 'react';
+import { useState, useEffect, useMemo, type FC, type MouseEvent } from 'react';
 import {
   Box,
   Typography,
@@ -29,6 +29,12 @@ import RequestQuoteRoundedIcon from '@mui/icons-material/RequestQuoteRounded';
 import defaultApsaraLogo from '../assets/logo.png';
 import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { HealthApi, API_BASE_URL } from '../services/api';
+import {
+  getActiveBillingYear,
+  setActiveBillingYear,
+  getStandardYearOptions,
+  YEAR_CHANGE_EVENT,
+} from '../utils/yearContext';
 
 export type NavTab = 'All Customers' | 'Quotation' | 'GST Bill' | 'Categories' | 'Price List' | 'Product' | 'Settings';
 
@@ -54,6 +60,8 @@ export const Navbar: FC<NavbarProps> = ({
   const [companySettings, setCompanySettings] = useState<CompanySettings>(getStoredSettings);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [backendUrl, setBackendUrl] = useState<string>(API_BASE_URL);
+  const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
+  const yearOptions = useMemo(() => getStandardYearOptions(), []);
 
   const checkBackendHealth = async () => {
     try {
@@ -80,6 +88,23 @@ export const Navbar: FC<NavbarProps> = ({
       window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
     };
   }, []);
+
+  useEffect(() => {
+    const handleYearChange = (e: any) => {
+      if (e.detail?.year) {
+        setSelectedYear(e.detail.year);
+      }
+    };
+    window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+    return () => {
+      window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+    };
+  }, []);
+
+  const handleYearSelect = (year: number) => {
+    setSelectedYear(year);
+    setActiveBillingYear(year);
+  };
 
   const handleTabClick = (tab: NavTab) => {
     if (onSelectTab) {
@@ -117,7 +142,6 @@ export const Navbar: FC<NavbarProps> = ({
   ];
 
   const firmName = (companySettings.companyName || 'MANJULA CRACKERS').toUpperCase();
-  const currentYear = new Date().getFullYear();
 
   return (
     <Box component="header" sx={{ width: '100%', userSelect: 'none' }}>
@@ -157,12 +181,56 @@ export const Navbar: FC<NavbarProps> = ({
               textTransform: 'uppercase',
             }}
           >
-            {firmName} - {currentYear}
+            {firmName} - {selectedYear}
           </Typography>
         </Box>
 
-        {/* Right: Window Control Buttons (_ □ X) + Profile */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        {/* Right: Year Selector + Backend Connection Status + Profile */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {/* Global Financial / Calendar Year Selector */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              py: 0.15,
+              px: 0.8,
+              borderRadius: '4px',
+              backgroundColor: '#EFF6FF',
+              border: '1px solid #93C5FD',
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: '#1E40AF',
+                display: { xs: 'none', sm: 'inline' },
+              }}
+            >
+              Year:
+            </Typography>
+            <select
+              value={selectedYear}
+              onChange={(e) => handleYearSelect(Number(e.target.value))}
+              style={{
+                fontSize: '11.5px',
+                fontWeight: 800,
+                color: '#1E3A8A',
+                backgroundColor: 'transparent',
+                border: 'none',
+                outline: 'none',
+                cursor: 'pointer',
+                padding: '1px 2px',
+              }}
+            >
+              {yearOptions.map((y: number) => (
+                <option key={y} value={y} style={{ color: '#0F172A', fontWeight: 600 }}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </Box>
           {/* Backend Connection Status Badge */}
           <Tooltip
             title={

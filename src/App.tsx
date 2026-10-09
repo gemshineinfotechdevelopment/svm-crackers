@@ -12,6 +12,7 @@ import { ParticularsPage } from './components/ParticularsPage';
 import { GstBillPage } from './components/GstBillPage';
 import { SettingsPage, getStoredSettings, DEFAULT_COMPANY_SETTINGS } from './components/SettingsPage';
 import { SettingsApi } from './services/api';
+import { YearRestrictionDialog } from './components/YearRestrictionDialog';
 
 const ACTIVE_TAB_KEY = 'apsara_active_tab';
 const CUSTOMER_SUBVIEW_KEY = 'apsara_customer_subview';
@@ -194,6 +195,8 @@ function App() {
           {/* Settings Tab */}
           {activeTab === 'Settings' && <SettingsPage />}
         </Box>
+        {/* Global Custom Year Restriction Modal Dialog */}
+        <YearRestrictionDialog />
       </Box>
     </ThemeProvider>
   );

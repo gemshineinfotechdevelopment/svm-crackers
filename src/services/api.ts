@@ -100,14 +100,44 @@ export const CompaniesApi = {
   delete: (id: string) => request<any>(`/companies/${id}`, { method: 'DELETE' }),
 };
 
-// Products API
 export const ProductsApi = {
-  getAll: () => request<any[]>('/products'),
+  getAll: (searchOrYear?: string | number, yearParam?: string | number, typeParam?: string) => {
+    const query = new URLSearchParams();
+    let search: string | undefined;
+    let year: string | number | undefined;
+    let type: string | undefined = typeParam;
+
+    if (typeof searchOrYear === 'number' || (typeof searchOrYear === 'string' && /^\d{4}$/.test(searchOrYear.trim()))) {
+      year = searchOrYear;
+    } else if (typeof searchOrYear === 'string') {
+      if (['Retail', 'Wholesale', 'Both', 'ALL'].includes(searchOrYear.trim())) {
+        type = searchOrYear.trim();
+        year = yearParam;
+      } else {
+        search = searchOrYear;
+        year = yearParam;
+      }
+    } else {
+      year = yearParam;
+    }
+
+    if (search && search.trim() !== '') query.append('search', search.trim());
+    if (year !== undefined && year !== null && String(year).toUpperCase() !== 'ALL') {
+      query.append('year', String(year));
+    }
+    if (type && type !== 'ALL') {
+      query.append('type', type);
+    }
+    const qs = query.toString();
+    return request<any[]>(`/products${qs ? `?${qs}` : ''}`);
+  },
   getById: (id: string) => request<any>(`/products/${id}`),
   create: (data: any) => request<any>('/products', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => request<any>(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) => request<any>(`/products/${id}`, { method: 'DELETE' }),
   bulkDelete: (ids: string[]) => request<any>('/products/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
+  bulkImport: (data: { items: any[]; defaultType?: string; replaceExisting?: boolean }) =>
+    request<any>('/products/bulk-import', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Categories API
@@ -122,15 +152,18 @@ export const CategoriesApi = {
 
 // Price Lists API
 export const PriceListsApi = {
-  getAll: (params?: { category?: string; search?: string }) => {
+  getAll: (params?: { category?: string; search?: string; year?: number | string }) => {
     const query = new URLSearchParams();
     if (params?.category && params.category !== 'ALL') query.append('category', params.category);
     if (params?.search) query.append('search', params.search);
+    if (params?.year !== undefined && params?.year !== null && String(params.year).toUpperCase() !== 'ALL') {
+      query.append('year', String(params.year));
+    }
     const queryString = query.toString();
     return request<any[]>(`/pricelists${queryString ? `?${queryString}` : ''}`);
   },
   create: (data: any) => request<any>('/pricelists', { method: 'POST', body: JSON.stringify(data) }),
-  bulkImport: (data: { items: any[]; batchName?: string; replaceExisting?: boolean }) =>
+  bulkImport: (data: { items: any[]; batchName?: string; replaceExisting?: boolean; year?: number }) =>
     request<any>('/pricelists/bulk', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => request<any>(`/pricelists/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) => request<any>(`/pricelists/${id}`, { method: 'DELETE' }),
@@ -140,15 +173,31 @@ export const PriceListsApi = {
 
 // Particulars API
 export const ParticularsApi = {
-  getAll: (customerName?: string, billType?: 'REGULAR' | 'GST' | 'ALL') => {
+  getAll: (customerName?: string, billType?: 'REGULAR' | 'GST' | 'ALL', year?: number | string) => {
     const params = new URLSearchParams();
     if (customerName && customerName !== 'ALL') params.append('customerName', customerName);
     if (billType && billType !== 'ALL') params.append('billType', billType);
+    if (year !== undefined && year !== null && String(year).toUpperCase() !== 'ALL') params.append('year', String(year));
     const qs = params.toString();
     return request<any[]>(`/particulars${qs ? `?${qs}` : ''}`);
   },
-  getNextBillNo: (type?: string) =>
-    request<{ nextBillNo: string }>(`/particulars/next-bill-no${type ? `?type=${encodeURIComponent(type)}` : ''}`),
+  getNextBillNo: (type?: string, year?: number | string) => {
+    const params = new URLSearchParams();
+    if (type) params.append('type', type);
+    if (year !== undefined && year !== null && year !== 'ALL') params.append('year', String(year));
+    const qs = params.toString();
+    return request<{ nextBillNo: string }>(`/particulars/next-bill-no${qs ? `?${qs}` : ''}`);
+  },
+  getCustomerHistory: (customerName: string, currentYear?: number) => {
+    const params = new URLSearchParams();
+    if (currentYear) params.append('currentYear', String(currentYear));
+    const qs = params.toString();
+    return request<{
+      hasPreviousBills: boolean;
+      currentYear: number;
+      previousYears: { year: number; billCount: number }[];
+    }>(`/particulars/customer/${encodeURIComponent(customerName)}/history${qs ? `?${qs}` : ''}`);
+  },
   getById: (id: string) => request<any>(`/particulars/${id}`),
   create: (data: any) => request<any>('/particulars', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => request<any>(`/particulars/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
