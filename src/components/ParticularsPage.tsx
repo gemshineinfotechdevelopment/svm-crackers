@@ -297,7 +297,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       setBillDate(editBillData.date || getInitialDateStr());
       setDiscountRs(String(editBillData.discount ?? '0'));
       setPackingRs(String(editBillData.packing ?? ''));
-      setCompanyName(editBillData.companyName || storeSettings.companyName || 'Sri Vignatha Traders');
+      setCompanyName(editBillData.companyName || storeSettings.companyName || 'Manjula Crackers');
       setPaymentMode(editBillData.paymentMode || 'Cash');
       if (editBillData.notes) setRemarks(editBillData.notes);
 
@@ -444,7 +444,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         customerPhone: customerMobile.trim(),
         customerAddress: customerAddress.trim(),
         customerGst: customerGst.trim(),
-        companyName: companyName || storeSettings.companyName || 'Sri Vignatha Traders',
+        companyName: companyName || storeSettings.companyName || 'Manjula Crackers',
         billNo: billNo || '1001',
         date: billDate,
         year: selectedYear,
@@ -486,7 +486,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         customerPhone: customerMobile.trim(),
         customerAddress: customerAddress.trim(),
         customerGst: customerGst.trim(),
-        companyName: companyName || storeSettings.companyName || 'Sri Vignatha Traders',
+        companyName: companyName || storeSettings.companyName || 'Manjula Crackers',
         subtotal: subtotal,
         discount: discountAmount,
         packing: packingAmount,
@@ -522,7 +522,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       customerPhone: customerMobile,
       customerAddress: customerAddress,
       customerGst: customerGst,
-      companyName: companyName || storeSettings.companyName || 'Sri Vignatha Traders',
+      companyName: companyName || storeSettings.companyName || 'Manjula Crackers',
       subtotal: subtotal,
       discount: discountAmount,
       packing: packingAmount,
