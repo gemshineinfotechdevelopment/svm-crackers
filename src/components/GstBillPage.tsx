@@ -2021,6 +2021,17 @@ export const GstBillPage: FC = () => {
                                       companyWhatsapp: b.companyWhatsapp || storeSettings.whatsapp,
                                       gstin: b.gstin || storeSettings.gstin || '33ABFFA6758B1ZP',
                                       products: b.products || [],
+                                      subtotal: b.subTotal || b.subtotal || b.amount || 0,
+                                      taxType: b.taxType || (parseFloat(String(b.igstTotal || 0)) > 0 ? 'IGST' : 'CGST_SGST'),
+                                      taxPercent: b.taxPercent,
+                                      cgstPercent: b.cgstPercent,
+                                      cgstTotal: b.cgstTotal,
+                                      sgstPercent: b.sgstPercent,
+                                      sgstTotal: b.sgstTotal,
+                                      igstPercent: b.igstPercent,
+                                      igstTotal: b.igstTotal,
+                                      roundOff: b.roundOff,
+                                      netAmount: b.netAmount || b.total || 0,
                                       total: b.netAmount || b.total || 0,
                                     });
                                     setPrintModalOpen(true);

@@ -680,12 +680,35 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
     }
   }
 
-  const valueOfGoods = Math.max(0, subtotal - discountAmount + packingAmount);
-  const rawTotalNum = parseFloat(String(bill.total || 0).replace(/,/g, '')) || 0;
-  const grandTotalNum = rawTotalNum > 0 ? rawTotalNum : Math.round(valueOfGoods);
+  // Tax calculations (CGST/SGST vs IGST) based strictly on form input
+  const taxType = bill.taxType || (parseFloat(String(bill.igstTotal || 0)) > 0 ? 'IGST' : 'CGST_SGST');
+  const isIgst = taxType === 'IGST' || (parseFloat(String(bill.igstTotal || 0)) > 0 && parseFloat(String(bill.cgstTotal || 0)) === 0);
+  const isCgstSgst = taxType === 'CGST_SGST' || parseFloat(String(bill.cgstTotal || 0)) > 0 || parseFloat(String(bill.sgstTotal || 0)) > 0;
+
+  const cgstPct = bill.cgstPercent !== undefined && bill.cgstPercent !== null && bill.cgstPercent !== ''
+    ? String(bill.cgstPercent)
+    : (bill.taxPercent ? (parseFloat(String(bill.taxPercent)) / 2).toString() : '9');
+  const cgstAmt = parseFloat(String(bill.cgstTotal !== undefined ? bill.cgstTotal : 0)) || (isCgstSgst && subtotal > 0 ? (subtotal * parseFloat(cgstPct)) / 100 : 0);
+
+  const sgstPct = bill.sgstPercent !== undefined && bill.sgstPercent !== null && bill.sgstPercent !== ''
+    ? String(bill.sgstPercent)
+    : (bill.taxPercent ? (parseFloat(String(bill.taxPercent)) / 2).toString() : '9');
+  const sgstAmt = parseFloat(String(bill.sgstTotal !== undefined ? bill.sgstTotal : 0)) || (isCgstSgst && subtotal > 0 ? (subtotal * parseFloat(sgstPct)) / 100 : 0);
+
+  const igstPct = bill.igstPercent !== undefined && bill.igstPercent !== null && bill.igstPercent !== ''
+    ? String(bill.igstPercent)
+    : (bill.taxPercent ? String(bill.taxPercent) : '18');
+  const igstAmt = parseFloat(String(bill.igstTotal !== undefined ? bill.igstTotal : 0)) || (isIgst && subtotal > 0 ? (subtotal * parseFloat(igstPct)) / 100 : 0);
+
+  const totalTaxAmount = isIgst ? igstAmt : (cgstAmt + sgstAmt);
+  const taxableBase = Math.max(0, subtotal - discountAmount + packingAmount);
+  const netAmountExact = taxableBase + totalTaxAmount;
+
+  const rawTotalNum = parseFloat(String(bill.netAmount || bill.total || 0).replace(/,/g, '')) || 0;
+  const grandTotalNum = rawTotalNum > 0 ? rawTotalNum : Math.round(netAmountExact);
   const roundOffNum = bill.roundOff !== undefined && bill.roundOff !== null && bill.roundOff !== ''
     ? (parseFloat(String(bill.roundOff)) || 0)
-    : (grandTotalNum - valueOfGoods);
+    : (grandTotalNum - netAmountExact);
 
   const totalQtyComputed = products.reduce((acc, p) => acc + (parseFloat(String(p.quantity || 0)) || 0), 0);
   const primaryUnit = products[0]?.unit || products[0]?.per || 'Case';
@@ -957,22 +980,37 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
                         ${formatCur(discountAmount)}
                       </td>
                     </tr>
+                    ${discountAmount > 0 ? `
+                    <tr>
+                      <td style="padding: 2.5px 8px; font-weight: 500;">Less : Discount</td>
+                      <td style="padding: 2.5px 4px; text-align: center;">: ${discountPercent} %</td>
+                      <td style="padding: 2.5px 8px; text-align: right;">${formatCur(discountAmount)}</td>
+                    </tr>` : ''}
+                    ${packingAmount > 0 ? `
                     <tr>
                       <td style="padding: 2.5px 8px; font-weight: 500;">ADD : P &amp; F CHGS</td>
-                      <td style="padding: 2.5px 4px; text-align: center;">
-                        : ${packingPercent} %
-                      </td>
-                      <td style="padding: 2.5px 8px; text-align: right;">
-                        ${formatCur(packingAmount)}
-                      </td>
+                      <td style="padding: 2.5px 4px; text-align: center;">: ${packingPercent} %</td>
+                      <td style="padding: 2.5px 8px; text-align: right;">${formatCur(packingAmount)}</td>
+                    </tr>` : ''}
+
+                    <!-- Dynamic Tax Rows: CGST & SGST OR IGST based on input -->
+                    ${isIgst ? `
+                    <tr>
+                      <td style="padding: 2.5px 8px; font-weight: 600;">ADD : IGST</td>
+                      <td style="padding: 2.5px 4px; text-align: center;">: ${igstPct} %</td>
+                      <td style="padding: 2.5px 8px; text-align: right; font-weight: 600;">${formatCur(igstAmt)}</td>
+                    </tr>` : `
+                    <tr>
+                      <td style="padding: 2.5px 8px; font-weight: 600;">ADD : CGST</td>
+                      <td style="padding: 2.5px 4px; text-align: center;">: ${cgstPct} %</td>
+                      <td style="padding: 2.5px 8px; text-align: right; font-weight: 600;">${formatCur(cgstAmt)}</td>
                     </tr>
                     <tr>
-                      <td style="padding: 2.5px 8px; font-weight: 600;">Value of Goods</td>
-                      <td style="padding: 2.5px 4px; text-align: center;">:</td>
-                      <td style="padding: 2.5px 8px; text-align: right; font-weight: 600;">
-                        ${formatCur(valueOfGoods)}
-                      </td>
-                    </tr>
+                      <td style="padding: 2.5px 8px; font-weight: 600;">ADD : SGST</td>
+                      <td style="padding: 2.5px 4px; text-align: center;">: ${sgstPct} %</td>
+                      <td style="padding: 2.5px 8px; text-align: right; font-weight: 600;">${formatCur(sgstAmt)}</td>
+                    </tr>`}
+
                     <tr>
                       <td style="padding: 2.5px 8px; font-weight: 500;">Round Off</td>
                       <td style="padding: 2.5px 4px; text-align: center;">:</td>
@@ -981,7 +1019,7 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
                       </td>
                     </tr>
                     <tr style="border-top: 1px solid #000000;">
-                      <td style="padding: 4px 8px; font-weight: 800; font-size: 12px;">Grand Total</td>
+                      <td style="padding: 4px 8px; font-weight: 800; font-size: 12px;">Net Amount</td>
                       <td style="padding: 4px 4px; text-align: center; font-weight: 800;">:</td>
                       <td style="padding: 4px 8px; text-align: right; font-weight: 800; font-size: 12px;">
                         ${formatCur(grandTotalNum)}
