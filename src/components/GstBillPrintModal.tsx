@@ -240,7 +240,7 @@ export const GstBillPrintModal: React.FC<GstBillPrintModalProps> = ({ open, onCl
               Print Output:
             </Typography>
             <Typography sx={{ fontSize: '12px', color: '#7F1D1D', fontWeight: 500 }}>
-              Single Copy (ORIGINAL) • Exact Composition Scheme Format
+              Single Copy (ORIGINAL) • GST Tax Invoice Format
             </Typography>
           </Box>
           <Chip

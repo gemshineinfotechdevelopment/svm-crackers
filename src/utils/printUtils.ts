@@ -65,6 +65,27 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
       ? 'MANJULA CRACKERS'
       : rawComp.toUpperCase();
 
+  const companyAddress = (bill.companyAddress || storeSettings.address || '').trim() ||
+    '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+  const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
+  const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
+  const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
+
+  let cityLine = companyCity.toUpperCase();
+  if (companyPincode) {
+    cityLine += ` - ${companyPincode}`;
+  }
+  if (companyState && !cityLine.toLowerCase().includes(companyState.toLowerCase())) {
+    cityLine += `, ${companyState.toUpperCase()}`;
+  }
+
+  const primaryPhone = (bill.companyPhone || bill.phone || storeSettings.phone || '').trim();
+  const whatsappPhone = (bill.companyWhatsapp || storeSettings.whatsapp || '').trim();
+  const phoneNumbersList: string[] = [];
+  if (primaryPhone) phoneNumbersList.push(primaryPhone);
+  if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
+  const companyPhoneDisplay = phoneNumbersList.join(', ');
+
   const formatCur = (val: string | number | undefined | null) => {
     if (val === undefined || val === null || val === '') return '0.00';
     const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, '')) || 0;
@@ -244,11 +265,12 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
               (ALL KINDS OF CRACKERS AND FANCY VARIETIES AVAILABLE)
             </div>
             <div style="font-size: 11.5px; color: #000000; margin-bottom: 1px;">
-              #67-H-E, Rajiv gandhi Nagar,Near Ramji Polypack Sivakasi bus stand Backside
+              ${companyAddress}
             </div>
             <div style="font-size: 12.5px; font-weight: 800; color: #000000;">
-              SIVAKASI - 626 123
+              ${cityLine}
             </div>
+            ${companyPhoneDisplay ? `<div style="font-size: 11px; font-weight: 700; color: #000000; margin-top: 1px;">Cell : ${companyPhoneDisplay}</div>` : ''}
           </div>
 
           <div style="width: 85px; text-align: center; flex-shrink: 0;">
@@ -585,17 +607,33 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
 
   const gstinNo = bill.gstin || storeSettings.gstin || '33ABFFA6758B1ZP';
 
+  const companyAddress = (bill.companyAddress || storeSettings.address || '').trim() ||
+    '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+  const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
+  const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
+  const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
+
+  let cityLine = companyCity.toUpperCase();
+  if (companyPincode) {
+    cityLine += ` - ${companyPincode}`;
+  }
+  if (companyState && !cityLine.toLowerCase().includes(companyState.toLowerCase())) {
+    cityLine += `, ${companyState.toUpperCase()}`;
+  }
+
+  const primaryPhone = (bill.companyPhone || storeSettings.phone || '').trim();
+  const whatsappPhone = (bill.companyWhatsapp || storeSettings.whatsapp || '').trim();
+  const phoneNumbersList: string[] = [];
+  if (primaryPhone) phoneNumbersList.push(primaryPhone);
+  if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
+  const companyPhoneDisplay = phoneNumbersList.join(', ');
+
   const formatCur = (val: string | number | undefined | null) => {
     if (val === undefined || val === null || val === '') return '0.00';
     const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, '')) || 0;
     return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const formatTurn = (val: string | number | undefined | null) => {
-    if (val === undefined || val === null || val === '') return '0.00';
-    const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, '')) || 0;
-    return num.toFixed(2);
-  };
 
   const products = bill.products || [];
   const prodSubtotal = products.reduce((acc, p) => {
@@ -660,14 +698,18 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
   const customerAddressFormatted = bill.customerAddress && bill.customerAddress !== 'N/A' && bill.customerAddress !== '-'
     ? bill.customerAddress
     : '';
-  const customerAadharOrPan = (bill.customerAadhar || bill.customerPan || bill.customerGst || '').trim();
+  const customerGst = (bill.customerGst && bill.customerGst !== 'N/A' && bill.customerGst !== '-') ? bill.customerGst.trim() : '';
+  const customerAadhar = (bill.customerAadhar && bill.customerAadhar !== 'N/A' && bill.customerAadhar !== '-') ? bill.customerAadhar.trim() : '';
+  const customerPhone = (bill.customerPhone && bill.customerPhone !== 'N/A' && bill.customerPhone !== '-') ? bill.customerPhone.trim() : '';
 
   const rawDeliveryName = (bill.deliveryName || bill.customerName || '').trim();
   const deliveryDisplayName = rawDeliveryName ? (rawDeliveryName.toLowerCase().startsWith('m/s') ? rawDeliveryName : `M/s. ${rawDeliveryName}`) : '';
   const deliveryAddressFormatted = bill.deliveryAddress && bill.deliveryAddress !== 'N/A' && bill.deliveryAddress !== '-'
     ? bill.deliveryAddress
-    : customerAddressFormatted;
-  const deliveryAadharOrPan = (bill.deliveryAadhar || customerAadharOrPan || '').trim();
+    : (bill.despatchTo || bill.dispatchTo || customerAddressFormatted);
+  const deliveryGst = (bill.deliveryGst || customerGst || '').trim();
+  const deliveryAadhar = (bill.deliveryAadhar || customerAadhar || '').trim();
+  const deliveryPhone = (bill.deliveryPhone || customerPhone || '').trim();
 
   const dispatchFrom = bill.dispatchFrom || bill.despatchFrom || '';
   const dispatchTo = bill.dispatchTo || bill.despatchTo || '';
@@ -677,9 +719,7 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
   const transportGstin = bill.transportGstin || '';
   const hsnNo = bill.hsnNo || products[0]?.hsnCode || '3604';
 
-  const prevTurnoverNum = parseFloat(String(bill.previousTurnover || 0)) || 0;
-  const thisBillTurnoverNum = parseFloat(String(bill.thisBillTurnover || grandTotalNum)) || grandTotalNum;
-  const totalTurnoverNum = parseFloat(String(bill.totalTurnover || (prevTurnoverNum + thisBillTurnoverNum))) || (prevTurnoverNum + thisBillTurnoverNum);
+
 
   const rawWords = numberToIndianWords(grandTotalNum);
   const wordsClean = rawWords
@@ -692,7 +732,6 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const ganeshaImgUrl = `${origin}/ganesha.jpg`;
-  const apsaraImgUrl = `${origin}/apsara_logo.jpg`;
 
   const copyLabels = ['ORIGINAL', 'DUPLICATE', 'TRIPLICATE', 'EXTRA COPY'];
 
@@ -767,16 +806,15 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
               (ALL KINDS OF CRACKERS AND FANCY VARIETIES AVAILABLE)
             </div>
             <div style="font-size: 11.5px; color: #000000; margin-bottom: 1px;">
-              #67-H-E, Rajiv gandhi Nagar,Near Ramji Polypack Sivakasi bus stand Backside
+              ${companyAddress}
             </div>
             <div style="font-size: 12.5px; font-weight: 800; color: #000000;">
-              SIVAKASI - 626 123
+              ${cityLine}
             </div>
+            ${companyPhoneDisplay ? `<div style="font-size: 11px; font-weight: 700; color: #000000; margin-top: 1px;">Cell : ${companyPhoneDisplay}</div>` : ''}
           </div>
 
-          <div style="width: 85px; text-align: center; flex-shrink: 0;">
-            <img src="${apsaraImgUrl}" alt="SVM Crackers" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />
-          </div>
+          <div style="width: 75px; flex-shrink: 0;"></div>
         </div>
 
         <!-- 3-Column Section: To | Delivery To | Tax Invoice Meta -->
@@ -788,7 +826,9 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
                 <div style="font-weight: 700; margin-bottom: 2px;">To :</div>
                 ${customerDisplayName ? `<div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${customerDisplayName}</div>` : ''}
                 ${customerAddressFormatted ? `<div style="margin-bottom: 2px;">${customerAddressFormatted}</div>` : ''}
-                ${customerAadharOrPan ? `<div style="margin-top: 4px; font-weight: 600;">AADHAR/PAN No : ${customerAadharOrPan}</div>` : ''}
+                ${customerPhone ? `<div style="margin-bottom: 2px; font-weight: 500;">Cell : ${customerPhone}</div>` : ''}
+                ${customerGst ? `<div style="margin-top: 2px; font-weight: 600;">GSTIN : ${customerGst}</div>` : ''}
+                ${customerAadhar ? `<div style="margin-top: 2px; font-weight: 600;">AADHAR No : ${customerAadhar}</div>` : ''}
               </td>
 
               <!-- Column 2: Delivery To Details -->
@@ -796,7 +836,9 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
                 <div style="font-weight: 600; margin-bottom: 2px;">Delivery To Details:</div>
                 ${deliveryDisplayName ? `<div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${deliveryDisplayName}</div>` : ''}
                 ${deliveryAddressFormatted ? `<div style="margin-bottom: 2px;">${deliveryAddressFormatted}</div>` : ''}
-                ${deliveryAadharOrPan ? `<div style="margin-top: 4px; font-weight: 600;">AADHAR/PAN No : ${deliveryAadharOrPan}</div>` : ''}
+                ${deliveryPhone ? `<div style="margin-bottom: 2px; font-weight: 500;">Cell : ${deliveryPhone}</div>` : ''}
+                ${deliveryGst ? `<div style="margin-top: 2px; font-weight: 600;">GSTIN : ${deliveryGst}</div>` : ''}
+                ${deliveryAadhar ? `<div style="margin-top: 2px; font-weight: 600;">AADHAR No : ${deliveryAadhar}</div>` : ''}
               </td>
 
               <!-- Column 3: Tax Invoice, Bill No, Date -->
@@ -840,45 +882,10 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
           <tbody>
             ${productRowsHtml}
 
-            <!-- Spacer Row with Sales Turnover Block in Column 2 -->
+            <!-- Continuous Vertical Lines Spacer to fill the A4 page -->
             <tr style="height: ${spacerMinHeight}px;">
               <td style="border-right: 1px solid #000000;">&nbsp;</td>
-              <td style="border-right: 1px solid #000000; vertical-align: bottom; padding: 8px 12px 14px 12px;">
-                <div style="font-size: 11px; color: #000000; max-width: 320px;">
-                  <div style="font-weight: 800; text-decoration: underline; margin-bottom: 6px; font-size: 11.5px;">
-                    Sales Turnover
-                  </div>
-                  <table style="width: 100%; font-size: 11px; border-collapse: collapse; margin-bottom: 8px;">
-                    <tbody>
-                      <tr>
-                        <td style="padding: 1.5px 0; font-weight: 500;">Upto Previous Bill</td>
-                        <td style="padding: 1.5px 4px; text-align: right; font-weight: 600;">Rs. :</td>
-                        <td style="padding: 1.5px 0; text-align: right; font-weight: 600; width: 85px;">
-                          ${formatTurn(prevTurnoverNum)}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 1.5px 0; font-weight: 500;">This Bill</td>
-                        <td style="padding: 1.5px 4px; text-align: right; font-weight: 600;">Rs. :</td>
-                        <td style="padding: 1.5px 0; text-align: right; font-weight: 600; border-bottom: 1px solid #000000; width: 85px;">
-                          ${formatTurn(thisBillTurnoverNum)}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 3px 0 1px 0; font-weight: 700;">Total</td>
-                        <td style="padding: 3px 4px 1px 4px; text-align: right; font-weight: 700;">Rs. :</td>
-                        <td style="padding: 3px 0 1px 0; text-align: right; font-weight: 700; width: 85px;">
-                          ${formatTurn(totalTurnoverNum)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div style="font-size: 10px; font-weight: 700; line-height: 1.3;">
-                    we are liable to pay Composition Tax Under<br />
-                    section 10 of GST Act 2017
-                  </div>
-                </div>
-              </td>
+              <td style="border-right: 1px solid #000000;">&nbsp;</td>
               <td style="border-right: 1px solid #000000;">&nbsp;</td>
               <td style="border-right: 1px solid #000000;">&nbsp;</td>
               <td style="border-right: 1px solid #000000;">&nbsp;</td>
@@ -921,6 +928,11 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
                         Total &nbsp;: &nbsp;<strong>${totalQuantityWithUnit}</strong>
                       </td>
                     </tr>
+                    ${(bill.lrNo || bill.caseCount) ? `
+                    <tr>
+                      ${bill.lrNo ? `<td style="padding: 2px 0;">LR No &nbsp;: &nbsp;<strong>${bill.lrNo}</strong> ${bill.lrDate ? `(${bill.lrDate})` : ''}</td>` : ''}
+                      ${bill.caseCount && bill.caseCount !== '0' ? `<td style="padding: 2px 0;">Cases &nbsp;: &nbsp;<strong>${bill.caseCount}</strong></td>` : ''}
+                    </tr>` : ''}
                   </tbody>
                 </table>
               </td>

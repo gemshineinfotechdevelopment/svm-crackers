@@ -1,6 +1,5 @@
 import React from 'react';
 import defaultGaneshaLogo from '../assets/ganesha.jpg';
-import defaultApsaraFeatherLogo from '../assets/apsara_logo.jpg';
 import { getStoredSettings } from './SettingsPage';
 import { numberToIndianWords } from '../utils/numberToWords';
 
@@ -31,7 +30,9 @@ export interface GstBillPrintData {
   customerAadhar?: string;
   customerPan?: string;
   deliveryName?: string;
+  deliveryPhone?: string;
   deliveryAddress?: string;
+  deliveryGst?: string;
   deliveryAadhar?: string;
   customerState?: string;
   customerStateCode?: string;
@@ -50,6 +51,12 @@ export interface GstBillPrintData {
   lrDate?: string;
   caseCount?: string | number;
   companyName?: string;
+  companyAddress?: string;
+  companyCity?: string;
+  companyPincode?: string;
+  companyState?: string;
+  companyPhone?: string;
+  companyWhatsapp?: string;
   gstin?: string;
   hsnNo?: string;
   products: GstProductItem[];
@@ -121,6 +128,29 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
 
   // GSTIN
   const gstinNo = bill.gstin || storeSettings.gstin || '33ABFFA6758B1ZP';
+
+  // Company Address, City, State, Pincode from Settings / Bill
+  const companyAddress = (bill.companyAddress || storeSettings.address || '').trim() ||
+    '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+  const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
+  const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
+  const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
+
+  let cityLine = companyCity.toUpperCase();
+  if (companyPincode) {
+    cityLine += ` - ${companyPincode}`;
+  }
+  if (companyState && !cityLine.toLowerCase().includes(companyState.toLowerCase())) {
+    cityLine += `, ${companyState.toUpperCase()}`;
+  }
+
+  // Company Phone Numbers from Settings / Bill
+  const primaryPhone = (bill.companyPhone || storeSettings.phone || '').trim();
+  const whatsappPhone = (bill.companyWhatsapp || storeSettings.whatsapp || '').trim();
+  const phoneNumbersList: string[] = [];
+  if (primaryPhone) phoneNumbersList.push(primaryPhone);
+  if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
+  const companyPhoneDisplay = phoneNumbersList.join(', ');
 
   // Subtotal from products
   const products = bill.products || [];
@@ -194,16 +224,20 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
     ? bill.customerAddress
     : '';
 
-  // Customer Aadhar / PAN
-  const customerAadharOrPan = (bill.customerAadhar || bill.customerPan || bill.customerGst || '').trim();
+  // Customer Aadhar / PAN / GST / Phone
+  const customerGst = (bill.customerGst && bill.customerGst !== 'N/A' && bill.customerGst !== '-') ? bill.customerGst.trim() : '';
+  const customerAadhar = (bill.customerAadhar && bill.customerAadhar !== 'N/A' && bill.customerAadhar !== '-') ? bill.customerAadhar.trim() : '';
+  const customerPhone = (bill.customerPhone && bill.customerPhone !== 'N/A' && bill.customerPhone !== '-') ? bill.customerPhone.trim() : '';
 
   // Delivery To Details
   const rawDeliveryName = (bill.deliveryName || bill.customerName || '').trim();
   const deliveryDisplayName = rawDeliveryName ? (rawDeliveryName.toLowerCase().startsWith('m/s') ? rawDeliveryName : `M/s. ${rawDeliveryName}`) : '';
   const deliveryAddressFormatted = bill.deliveryAddress && bill.deliveryAddress !== 'N/A' && bill.deliveryAddress !== '-'
     ? bill.deliveryAddress
-    : customerAddressFormatted;
-  const deliveryAadharOrPan = (bill.deliveryAadhar || customerAadharOrPan || '').trim();
+    : (bill.despatchTo || bill.dispatchTo || customerAddressFormatted);
+  const deliveryGst = (bill.deliveryGst || customerGst || '').trim();
+  const deliveryAadhar = (bill.deliveryAadhar || customerAadhar || '').trim();
+  const deliveryPhone = (bill.deliveryPhone || customerPhone || '').trim();
 
   // Dispatch Details
   const dispatchFrom = bill.dispatchFrom || bill.despatchFrom || '';
@@ -214,10 +248,7 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
   const transportGstin = bill.transportGstin || '';
   const hsnNo = bill.hsnNo || products[0]?.hsnCode || '3604';
 
-  // Sales Turnover
-  const prevTurnoverNum = parseFloat(String(bill.previousTurnover || 0)) || 0;
-  const thisBillTurnoverNum = parseFloat(String(bill.thisBillTurnover || grandTotalNum)) || grandTotalNum;
-  const totalTurnoverNum = parseFloat(String(bill.totalTurnover || (prevTurnoverNum + thisBillTurnoverNum))) || (prevTurnoverNum + thisBillTurnoverNum);
+
 
   // Amount in Words
   const rawWords = numberToIndianWords(grandTotalNum);
@@ -348,27 +379,20 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
               (ALL KINDS OF CRACKERS AND FANCY VARIETIES AVAILABLE)
             </div>
             <div style={{ fontSize: '11.5px', color: '#000000', marginBottom: '1px' }}>
-              #67-H-E, Rajiv gandhi Nagar,Near Ramji Polypack Sivakasi bus stand Backside
+              {companyAddress}
             </div>
             <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#000000' }}>
-              SIVAKASI - 626 123
+              {cityLine}
             </div>
+            {companyPhoneDisplay ? (
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#000000', marginTop: '1px' }}>
+                Cell : {companyPhoneDisplay}
+              </div>
+            ) : null}
           </div>
 
-          {/* Right: SVM Crackers Logo */}
-          <div style={{ width: '85px', textAlign: 'center', flexShrink: 0 }}>
-            <img
-              src={defaultApsaraFeatherLogo}
-              alt="SVM Crackers"
-              style={{
-                maxHeight: '68px',
-                maxWidth: '85px',
-                objectFit: 'contain',
-                display: 'block',
-                margin: '0 auto',
-              }}
-            />
-          </div>
+          {/* Right: Empty spacer so center title & details remain balanced */}
+          <div style={{ width: '75px', flexShrink: 0 }} />
         </div>
 
         {/* 3-Column Section: To (Left) | Delivery To Details (Middle) | TAX INVOICE Meta (Right) */}
@@ -401,9 +425,19 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                 {customerAddressFormatted ? (
                   <div style={{ marginBottom: '2px' }}>{customerAddressFormatted}</div>
                 ) : null}
-                {customerAadharOrPan ? (
-                  <div style={{ marginTop: '4px', fontWeight: 600 }}>
-                    AADHAR/PAN No : {customerAadharOrPan}
+                {customerPhone ? (
+                  <div style={{ marginBottom: '2px', fontWeight: 500 }}>
+                    Cell : {customerPhone}
+                  </div>
+                ) : null}
+                {customerGst ? (
+                  <div style={{ marginTop: '2px', fontWeight: 600 }}>
+                    GSTIN : {customerGst}
+                  </div>
+                ) : null}
+                {customerAadhar ? (
+                  <div style={{ marginTop: '2px', fontWeight: 600 }}>
+                    AADHAR No : {customerAadhar}
                   </div>
                 ) : null}
               </td>
@@ -427,9 +461,19 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                 {deliveryAddressFormatted ? (
                   <div style={{ marginBottom: '2px' }}>{deliveryAddressFormatted}</div>
                 ) : null}
-                {deliveryAadharOrPan ? (
-                  <div style={{ marginTop: '4px', fontWeight: 600 }}>
-                    AADHAR/PAN No : {deliveryAadharOrPan}
+                {deliveryPhone ? (
+                  <div style={{ marginBottom: '2px', fontWeight: 500 }}>
+                    Cell : {deliveryPhone}
+                  </div>
+                ) : null}
+                {deliveryGst ? (
+                  <div style={{ marginTop: '2px', fontWeight: 600 }}>
+                    GSTIN : {deliveryGst}
+                  </div>
+                ) : null}
+                {deliveryAadhar ? (
+                  <div style={{ marginTop: '2px', fontWeight: 600 }}>
+                    AADHAR No : {deliveryAadhar}
                   </div>
                 ) : null}
               </td>
@@ -649,74 +693,10 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
               })
             )}
 
-            {/* Continuous Vertical Lines & Sales Turnover in Column 2 */}
+            {/* Continuous Vertical Lines Spacer to fill the A4 page */}
             <tr style={{ height: `${spacerMinHeight}px` }}>
               <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
-              <td
-                style={{
-                  borderRight: '1px solid #000000',
-                  verticalAlign: 'bottom',
-                  padding: '8px 12px 14px 12px',
-                }}
-              >
-                <div style={{ fontSize: '11px', color: '#000000', maxWidth: '320px' }}>
-                  <div
-                    style={{
-                      fontWeight: 800,
-                      textDecoration: 'underline',
-                      marginBottom: '6px',
-                      fontSize: '11.5px',
-                    }}
-                  >
-                    Sales Turnover
-                  </div>
-                  <table
-                    style={{
-                      width: '100%',
-                      fontSize: '11px',
-                      borderCollapse: 'collapse',
-                      marginBottom: '8px',
-                    }}
-                  >
-                    <tbody>
-                      <tr>
-                        <td style={{ padding: '1.5px 0', fontWeight: 500 }}>Upto Previous Bill</td>
-                        <td style={{ padding: '1.5px 4px', textAlign: 'right', fontWeight: 600 }}>Rs. :</td>
-                        <td style={{ padding: '1.5px 0', textAlign: 'right', fontWeight: 600, width: '85px' }}>
-                          {formatTurnover(prevTurnoverNum)}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: '1.5px 0', fontWeight: 500 }}>This Bill</td>
-                        <td style={{ padding: '1.5px 4px', textAlign: 'right', fontWeight: 600 }}>Rs. :</td>
-                        <td
-                          style={{
-                            padding: '1.5px 0',
-                            textAlign: 'right',
-                            fontWeight: 600,
-                            borderBottom: '1px solid #000000',
-                            width: '85px',
-                          }}
-                        >
-                          {formatTurnover(thisBillTurnoverNum)}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: '3px 0 1px 0', fontWeight: 700 }}>Total</td>
-                        <td style={{ padding: '3px 4px 1px 4px', textAlign: 'right', fontWeight: 700 }}>Rs. :</td>
-                        <td style={{ padding: '3px 0 1px 0', textAlign: 'right', fontWeight: 700, width: '85px' }}>
-                          {formatTurnover(totalTurnoverNum)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div style={{ fontSize: '10px', fontWeight: 700, lineHeight: 1.3 }}>
-                    we are liable to pay Composition Tax Under
-                    <br />
-                    section 10 of GST Act 2017
-                  </div>
-                </div>
-              </td>
+              <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
               <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
               <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
               <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
@@ -774,6 +754,20 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                         Total &nbsp;: &nbsp;<strong>{totalQuantityWithUnit}</strong>
                       </td>
                     </tr>
+                    {(bill.lrNo || bill.caseCount) ? (
+                      <tr>
+                        {bill.lrNo ? (
+                          <td style={{ padding: '2px 0' }}>
+                            LR No &nbsp;: &nbsp;<strong>{bill.lrNo}</strong> {bill.lrDate ? `(${bill.lrDate})` : ''}
+                          </td>
+                        ) : null}
+                        {bill.caseCount && bill.caseCount !== '0' ? (
+                          <td style={{ padding: '2px 0' }}>
+                            Cases &nbsp;: &nbsp;<strong>{bill.caseCount}</strong>
+                          </td>
+                        ) : null}
+                      </tr>
+                    ) : null}
                   </tbody>
                 </table>
               </td>

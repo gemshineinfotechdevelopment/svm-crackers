@@ -36,7 +36,7 @@ import {
   PriceListsApi,
   ParticularsApi,
 } from '../services/api';
-import { getStoredSettings } from './SettingsPage';
+import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { GstBillPrintModal } from './GstBillPrintModal';
 import type { GstBillPrintData, GstProductItem } from './GstBillPrintTemplate';
 import { numberToIndianWords } from '../utils/numberToWords';
@@ -117,7 +117,18 @@ export const fromIsoDate = (isoStr: string) => {
 };
 
 export const GstBillPage: FC = () => {
-  const [storeSettings] = useState(() => getStoredSettings());
+  const [storeSettings, setStoreSettings] = useState<CompanySettings>(() => getStoredSettings());
+
+  useEffect(() => {
+    const handleSettingsUpdate = () => {
+      setStoreSettings(getStoredSettings());
+    };
+    window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
+    return () => {
+      window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
+    };
+  }, []);
+
   const [activeSubTab, setActiveSubTab] = useState<'create' | 'history'>('create');
 
   // Year state
@@ -605,6 +616,12 @@ export const GstBillPage: FC = () => {
       lrDate,
       caseCount: totalCases || String(calculations.autoCases),
       companyName: 'SVM Crackers',
+      companyAddress: storeSettings.address,
+      companyCity: storeSettings.city,
+      companyPincode: storeSettings.pincode,
+      companyState: storeSettings.state,
+      companyPhone: storeSettings.phone,
+      companyWhatsapp: storeSettings.whatsapp,
       gstin: storeSettings.gstin || '33ABFFA6758B1ZP',
       hsnNo: '3604',
       products: validRows,
@@ -2006,6 +2023,12 @@ export const GstBillPage: FC = () => {
                                     setSelectedBillForPrint({
                                       ...b,
                                       companyName: b.companyName && b.companyName.toUpperCase().includes('SVM') ? b.companyName : 'SVM Crackers',
+                                      companyAddress: b.companyAddress || storeSettings.address,
+                                      companyCity: b.companyCity || storeSettings.city,
+                                      companyPincode: b.companyPincode || storeSettings.pincode,
+                                      companyState: b.companyState || storeSettings.state,
+                                      companyPhone: b.companyPhone || storeSettings.phone,
+                                      companyWhatsapp: b.companyWhatsapp || storeSettings.whatsapp,
                                       gstin: b.gstin || storeSettings.gstin || '33ABFFA6758B1ZP',
                                       products: b.products || [],
                                       total: b.netAmount || b.total || 0,
