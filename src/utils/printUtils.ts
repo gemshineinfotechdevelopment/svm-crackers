@@ -59,11 +59,32 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
   const rawComp =
     bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
       ? bill.companyName
-      : storeSettings.companyName || 'SVM TRADERS';
+      : storeSettings.companyName || 'MANJULA CRACKERS';
   const displayCompanyName =
-    rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-      ? 'SVM TRADERS'
-      : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
+    rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA') || rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA')
+      ? 'MANJULA CRACKERS'
+      : rawComp.toUpperCase();
+
+  const companyAddress = (bill.companyAddress || storeSettings.address || '').trim() ||
+    '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+  const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
+  const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
+  const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
+
+  let cityLine = companyCity.toUpperCase();
+  if (companyPincode) {
+    cityLine += ` - ${companyPincode}`;
+  }
+  if (companyState && !cityLine.toLowerCase().includes(companyState.toLowerCase())) {
+    cityLine += `, ${companyState.toUpperCase()}`;
+  }
+
+  const primaryPhone = (bill.companyPhone || bill.phone || storeSettings.phone || '').trim();
+  const whatsappPhone = (bill.companyWhatsapp || storeSettings.whatsapp || '').trim();
+  const phoneNumbersList: string[] = [];
+  if (primaryPhone) phoneNumbersList.push(primaryPhone);
+  if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
+  const companyPhoneDisplay = phoneNumbersList.join(', ');
 
   const formatCur = (val: string | number | undefined | null) => {
     if (val === undefined || val === null || val === '') return '0.00';
@@ -244,15 +265,16 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
               (ALL KINDS OF CRACKERS AND FANCY VARIETIES AVAILABLE)
             </div>
             <div style="font-size: 11.5px; color: #000000; margin-bottom: 1px;">
-              #67-H-E, Rajiv gandhi Nagar,Near Ramji Polypack Sivakasi bus stand Backside
+              ${companyAddress}
             </div>
             <div style="font-size: 12.5px; font-weight: 800; color: #000000;">
-              SIVAKASI - 626 123
+              ${cityLine}
             </div>
+            ${companyPhoneDisplay ? `<div style="font-size: 11px; font-weight: 700; color: #000000; margin-top: 1px;">Cell : ${companyPhoneDisplay}</div>` : ''}
           </div>
 
           <div style="width: 85px; text-align: center; flex-shrink: 0;">
-            <img src="${apsaraImgUrl}" alt="Apsara Crackers" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />
+            <img src="${apsaraImgUrl}" alt="Manjula Crackers" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />
           </div>
         </div>
 
@@ -577,13 +599,34 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
   const rawComp =
     bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
       ? bill.companyName
-      : storeSettings.companyName || 'SVM TRADERS';
+      : 'SVM CRACKERS';
   const displayCompanyName =
-    rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-      ? 'SVM TRADERS'
-      : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
+    rawComp.toUpperCase().includes('SVM')
+      ? rawComp.toUpperCase()
+      : 'SVM CRACKERS';
 
   const gstinNo = bill.gstin || storeSettings.gstin || '33ABFFA6758B1ZP';
+
+  const companyAddress = (bill.companyAddress || storeSettings.address || '').trim() ||
+    '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+  const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
+  const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
+  const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
+
+  let cityLine = companyCity.toUpperCase();
+  if (companyPincode) {
+    cityLine += ` - ${companyPincode}`;
+  }
+  if (companyState && !cityLine.toLowerCase().includes(companyState.toLowerCase())) {
+    cityLine += `, ${companyState.toUpperCase()}`;
+  }
+
+  const primaryPhone = (bill.companyPhone || storeSettings.phone || '').trim();
+  const whatsappPhone = (bill.companyWhatsapp || storeSettings.whatsapp || '').trim();
+  const phoneNumbersList: string[] = [];
+  if (primaryPhone) phoneNumbersList.push(primaryPhone);
+  if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
+  const companyPhoneDisplay = phoneNumbersList.join(', ');
 
   const formatCur = (val: string | number | undefined | null) => {
     if (val === undefined || val === null || val === '') return '0.00';
@@ -692,7 +735,6 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const ganeshaImgUrl = `${origin}/ganesha.jpg`;
-  const apsaraImgUrl = `${origin}/apsara_logo.jpg`;
 
   const copyLabels = ['ORIGINAL', 'DUPLICATE', 'TRIPLICATE', 'EXTRA COPY'];
 
@@ -748,9 +790,10 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
 
       <!-- Main Bordered Container -->
       <div class="bill-box">
-        <!-- Top GSTIN Line -->
-        <div style="padding: 4px 8px 1px 8px; font-size: 11.5px; font-weight: 700; color: #000000;">
-          GSTIN No : <span>${gstinNo}</span>
+        <!-- Top GSTIN & Phone Line -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 1px 8px; font-size: 11.5px; font-weight: 700; color: #000000;">
+          <div>GSTIN No : <span>${gstinNo}</span></div>
+          ${companyPhoneDisplay ? `<div>Cell : <span>${companyPhoneDisplay}</span></div>` : ''}
         </div>
 
         <!-- Header: Ganesha (Left) | Title (Center) | Apsara Logo (Right) -->
@@ -767,16 +810,15 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
               (ALL KINDS OF CRACKERS AND FANCY VARIETIES AVAILABLE)
             </div>
             <div style="font-size: 11.5px; color: #000000; margin-bottom: 1px;">
-              #67-H-E, Rajiv gandhi Nagar,Near Ramji Polypack Sivakasi bus stand Backside
+              ${companyAddress}
             </div>
             <div style="font-size: 12.5px; font-weight: 800; color: #000000;">
-              SIVAKASI - 626 123
+              ${cityLine}
             </div>
+            ${companyPhoneDisplay ? `<div style="font-size: 11px; font-weight: 700; color: #000000; margin-top: 1px;">Cell : ${companyPhoneDisplay}</div>` : ''}
           </div>
 
-          <div style="width: 85px; text-align: center; flex-shrink: 0;">
-            <img src="${apsaraImgUrl}" alt="Apsara Crackers" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />
-          </div>
+          <div style="width: 75px; flex-shrink: 0;"></div>
         </div>
 
         <!-- 3-Column Section: To | Delivery To | Tax Invoice Meta -->
@@ -1114,7 +1156,7 @@ export const generateCustomerListPrintHtml = (
   dateRangeText?: string
 ): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'MANJULA CRACKERS').toUpperCase();
   const compSub = storeSettings.tagline || `Wholesale & Retail Trading • ${storeSettings.city || 'Sivakasi'}`;
   const phoneVal = (storeSettings.phone && !storeSettings.phone.includes('98765')) ? storeSettings.phone : '9843067073, 8778429299';
 
@@ -1446,7 +1488,7 @@ export const generateLedgerStatementHtml = (
   dateRangeText?: string
 ): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'MANJULA CRACKERS').toUpperCase();
   const compSub = storeSettings.tagline || `Wholesale & Retail Trading • ${storeSettings.city || 'Sivakasi'}`;
 
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
@@ -1550,7 +1592,7 @@ export const printLedgerStatementDirectly = (customerName: string, ledgerEntries
  */
 export const generateParticularsListPrintHtml = (particulars: any[], dateRangeText?: string): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'MANJULA CRACKERS').toUpperCase();
   const compSub = storeSettings.tagline || `Wholesale & Retail Trading • ${storeSettings.city || 'Sivakasi'}`;
 
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
@@ -1650,7 +1692,7 @@ export const printParticularsListDirectly = (particulars: any[], dateRangeText?:
  */
 export const generateCompaniesListPrintHtml = (companies: any[]): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'MANJULA CRACKERS').toUpperCase();
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
   const rowsHtml = companies.map((c, idx) => `
     <tr>
@@ -1716,7 +1758,7 @@ export const printCompaniesListDirectly = (companies: any[]) => {
  */
 export const generateProductsListPrintHtml = (products: any[], categoryTitle?: string, typeTitle?: string): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'MANJULA CRACKERS').toUpperCase();
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
   const catTitle = categoryTitle && categoryTitle !== 'ALL' ? ` - ${categoryTitle}` : '';
   const modeTitle = typeTitle && typeTitle !== 'ALL' ? ` [${typeTitle.toUpperCase()}]` : '';

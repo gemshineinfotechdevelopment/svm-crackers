@@ -32,8 +32,8 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
       .then((res) => {
         const data = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res;
         if (data && typeof data === 'object') {
-          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha'))
-            ? 'SVM Crackers'
+          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha') || data.companyName.toLowerCase().includes('apsara') || data.companyName.toLowerCase().includes('svm'))
+            ? 'Manjula Crackers'
             : (data.companyName ?? DEFAULT_COMPANY_SETTINGS.companyName);
 
           const remoteSettings = { ...DEFAULT_COMPANY_SETTINGS, ...data, companyName: compName };
@@ -135,7 +135,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
         >
           <LockOutlinedIcon sx={{ fontSize: 18, color: '#1E3A8A' }} />
           <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', letterSpacing: 0.2 }}>
-            {settings.companyName || 'SVM Crackers'} - System Login
+            {settings.companyName || 'Manjula Crackers'} - System Login
           </Typography>
         </Box>
 
@@ -144,7 +144,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <Box
             component="img"
             src={settings.logoUrl || defaultProjectLogo}
-            alt="SVM Crackers Logo"
+            alt="Manjula Crackers Logo"
             sx={{
               maxHeight: 50,
               maxWidth: 160,
@@ -260,7 +260,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
           <Box sx={{ mt: 2, pt: 1, borderTop: '1px solid #E2E8F0', textAlign: 'center' }}>
             <Typography sx={{ fontSize: '10.5px', color: '#64748B' }}>
-              {settings.companyName || 'SVM Crackers'} • Sivakasi
+              {settings.companyName || 'Manjula Crackers'} • Sivakasi
             </Typography>
           </Box>
         </Box>

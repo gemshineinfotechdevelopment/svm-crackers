@@ -1,6 +1,5 @@
 import React from 'react';
 import defaultGaneshaLogo from '../assets/ganesha.jpg';
-import defaultApsaraFeatherLogo from '../assets/apsara_logo.jpg';
 import { getStoredSettings } from './SettingsPage';
 import { numberToIndianWords } from '../utils/numberToWords';
 
@@ -50,6 +49,12 @@ export interface GstBillPrintData {
   lrDate?: string;
   caseCount?: string | number;
   companyName?: string;
+  companyAddress?: string;
+  companyCity?: string;
+  companyPincode?: string;
+  companyState?: string;
+  companyPhone?: string;
+  companyWhatsapp?: string;
   gstin?: string;
   hsnNo?: string;
   products: GstProductItem[];
@@ -111,16 +116,39 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
     };
   }, []);
 
-  // Display Company Name
+  // Display Company Name - Tax Bill strictly uses SVM Crackers
   const rawComp = bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
     ? bill.companyName
-    : storeSettings.companyName || 'SVM TRADERS';
-  const displayCompanyName = rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-    ? 'SVM TRADERS'
-    : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
+    : 'SVM Crackers';
+  const displayCompanyName = rawComp.toUpperCase().includes('SVM')
+    ? rawComp.toUpperCase()
+    : 'SVM CRACKERS';
 
   // GSTIN
   const gstinNo = bill.gstin || storeSettings.gstin || '33ABFFA6758B1ZP';
+
+  // Company Address, City, State, Pincode from Settings / Bill
+  const companyAddress = (bill.companyAddress || storeSettings.address || '').trim() ||
+    '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+  const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
+  const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
+  const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
+
+  let cityLine = companyCity.toUpperCase();
+  if (companyPincode) {
+    cityLine += ` - ${companyPincode}`;
+  }
+  if (companyState && !cityLine.toLowerCase().includes(companyState.toLowerCase())) {
+    cityLine += `, ${companyState.toUpperCase()}`;
+  }
+
+  // Company Phone Numbers from Settings / Bill
+  const primaryPhone = (bill.companyPhone || storeSettings.phone || '').trim();
+  const whatsappPhone = (bill.companyWhatsapp || storeSettings.whatsapp || '').trim();
+  const phoneNumbersList: string[] = [];
+  if (primaryPhone) phoneNumbersList.push(primaryPhone);
+  if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
+  const companyPhoneDisplay = phoneNumbersList.join(', ');
 
   // Subtotal from products
   const products = bill.products || [];
@@ -284,16 +312,26 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
           justifyContent: 'space-between',
         }}
       >
-        {/* Top GSTIN Line */}
+        {/* Top GSTIN & Phone Line */}
         <div
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             padding: '4px 8px 1px 8px',
             fontSize: '11.5px',
             fontWeight: 700,
             color: '#000000',
           }}
         >
-          GSTIN No : <span>{gstinNo}</span>
+          <div>
+            GSTIN No : <span>{gstinNo}</span>
+          </div>
+          {companyPhoneDisplay ? (
+            <div>
+              Cell : <span>{companyPhoneDisplay}</span>
+            </div>
+          ) : null}
         </div>
 
         {/* Header: Ganesha (Left) | Title & Address (Center) | Apsara Logo (Right) */}
@@ -348,27 +386,20 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
               (ALL KINDS OF CRACKERS AND FANCY VARIETIES AVAILABLE)
             </div>
             <div style={{ fontSize: '11.5px', color: '#000000', marginBottom: '1px' }}>
-              #67-H-E, Rajiv gandhi Nagar,Near Ramji Polypack Sivakasi bus stand Backside
+              {companyAddress}
             </div>
             <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#000000' }}>
-              SIVAKASI - 626 123
+              {cityLine}
             </div>
+            {companyPhoneDisplay ? (
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#000000', marginTop: '1px' }}>
+                Cell : {companyPhoneDisplay}
+              </div>
+            ) : null}
           </div>
 
-          {/* Right: Apsara Crackers Logo */}
-          <div style={{ width: '85px', textAlign: 'center', flexShrink: 0 }}>
-            <img
-              src={defaultApsaraFeatherLogo}
-              alt="Apsara Crackers"
-              style={{
-                maxHeight: '68px',
-                maxWidth: '85px',
-                objectFit: 'contain',
-                display: 'block',
-                margin: '0 auto',
-              }}
-            />
-          </div>
+          {/* Right: Empty spacer so center title & details remain balanced */}
+          <div style={{ width: '75px', flexShrink: 0 }} />
         </div>
 
         {/* 3-Column Section: To (Left) | Delivery To Details (Middle) | TAX INVOICE Meta (Right) */}

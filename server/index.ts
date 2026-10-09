@@ -94,7 +94,7 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.get('/api/health', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'OK',
-    message: 'SVM Crackers API Server is running smoothly',
+    message: 'Manjula Crackers API Server is running smoothly',
     port: PORT,
     timestamp: new Date().toISOString(),
   });
@@ -103,7 +103,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.get('/', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'OK',
-    service: 'SVM Crackers Backend API',
+    service: 'Manjula Crackers Backend API',
     health: '/api/health',
   });
 });
@@ -125,7 +125,7 @@ app.use(errorHandler);
 // Start Server
 app.listen(PORT, () => {
   console.log(`=============================================`);
-  console.log(` 🚀 SVM Crackers Server running on port ${PORT}`);
+  console.log(` 🚀 Manjula Crackers Server running on port ${PORT}`);
   console.log(` 🔗 Health check: http://localhost:${PORT}/api/health`);
   console.log(` 🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`=============================================`);

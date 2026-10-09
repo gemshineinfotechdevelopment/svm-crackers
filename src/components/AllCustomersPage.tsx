@@ -303,7 +303,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
       companyName:
         bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
           ? bill.companyName
-          : storeSettings.companyName || 'SVM Crackers',
+          : storeSettings.companyName || 'Manjula Crackers',
       transport: String(bill.transport || '0'),
       caseCount: String(bill.caseCount || '0'),
       discount: String(bill.discount || '0'),
@@ -345,7 +345,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
       customerPhone: bill.customerPhone || '',
       customerAddress: bill.customerAddress || '',
       customerGst: bill.customerGst || '',
-      companyName: bill.companyName || storeSettings.companyName || 'SVM Crackers',
+      companyName: bill.companyName || storeSettings.companyName || 'Manjula Crackers',
       caseCount: String(bill.caseCount || '0'),
       discount: String(bill.discount ?? '0'),
       transport: String(bill.transport ?? '0'),
@@ -447,7 +447,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
         customerPhone: editBillFormData.customerPhone.trim(),
         customerAddress: editBillFormData.customerAddress.trim(),
         customerGst: editBillFormData.customerGst.trim(),
-        companyName: editBillFormData.companyName.trim() || storeSettings.companyName || 'SVM Crackers',
+        companyName: editBillFormData.companyName.trim() || storeSettings.companyName || 'Manjula Crackers',
         caseCount: editBillFormData.caseCount || '0',
         discount: editBillFormData.discount || '0',
         transport: editBillFormData.transport || '0',

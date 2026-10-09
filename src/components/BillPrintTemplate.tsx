@@ -30,6 +30,12 @@ export interface BillPrintData {
   deliveryPhone?: string;
   deliveryAadhar?: string;
   companyName: string;
+  companyAddress?: string;
+  companyCity?: string;
+  companyPincode?: string;
+  companyState?: string;
+  companyPhone?: string;
+  companyWhatsapp?: string;
   preparedBy?: string;
   phone?: string;
   email?: string;
@@ -95,11 +101,32 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
   const rawComp =
     bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
       ? bill.companyName
-      : storeSettings.companyName || 'SVM TRADERS';
+      : storeSettings.companyName || 'MANJULA CRACKERS';
   const displayCompanyName =
-    rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-      ? 'SVM TRADERS'
-      : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
+    rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA') || rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA')
+      ? 'MANJULA CRACKERS'
+      : rawComp.toUpperCase();
+
+  const companyAddress = (bill.companyAddress || storeSettings.address || '').trim() ||
+    '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+  const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
+  const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
+  const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
+
+  let cityLine = companyCity.toUpperCase();
+  if (companyPincode) {
+    cityLine += ` - ${companyPincode}`;
+  }
+  if (companyState && !cityLine.toLowerCase().includes(companyState.toLowerCase())) {
+    cityLine += `, ${companyState.toUpperCase()}`;
+  }
+
+  const primaryPhone = (bill.companyPhone || bill.phone || storeSettings.phone || '').trim();
+  const whatsappPhone = (bill.companyWhatsapp || storeSettings.whatsapp || '').trim();
+  const phoneNumbersList: string[] = [];
+  if (primaryPhone) phoneNumbersList.push(primaryPhone);
+  if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
+  const companyPhoneDisplay = phoneNumbersList.join(', ');
 
   // Subtotal from products
   const products = bill.products || [];
@@ -322,18 +349,23 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
               (ALL KINDS OF CRACKERS AND FANCY VARIETIES AVAILABLE)
             </div>
             <div style={{ fontSize: '11.5px', color: '#000000', marginBottom: '1px' }}>
-              #67-H-E, Rajiv gandhi Nagar,Near Ramji Polypack Sivakasi bus stand Backside
+              {companyAddress}
             </div>
             <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#000000' }}>
-              SIVAKASI - 626 123
+              {cityLine}
             </div>
+            {companyPhoneDisplay ? (
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#000000', marginTop: '1px' }}>
+                Cell : {companyPhoneDisplay}
+              </div>
+            ) : null}
           </div>
 
-          {/* Right: Apsara Crackers Logo */}
+          {/* Right: Manjula Crackers Logo */}
           <div style={{ width: '85px', textAlign: 'center', flexShrink: 0 }}>
             <img
               src={defaultApsaraFeatherLogo}
-              alt="Apsara Crackers"
+              alt="Manjula Crackers"
               style={{
                 maxHeight: '68px',
                 maxWidth: '85px',

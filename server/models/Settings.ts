@@ -28,7 +28,7 @@ export interface ISettings extends Document {
 
 const SettingsSchema: Schema = new Schema(
   {
-    companyName: { type: String, default: 'SVM Crackers', trim: true },
+    companyName: { type: String, default: 'Manjula Crackers', trim: true },
     tagline: { type: String, default: 'Standard Fire Works & Fancy Crackers', trim: true },
     ownerName: { type: String, default: '', trim: true },
     phone: { type: String, default: '9843067073', trim: true },
