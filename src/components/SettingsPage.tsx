@@ -9,10 +9,6 @@ import {
   Alert,
   Switch,
   Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Menu,
   MenuItem,
   ListItemIcon,
@@ -24,7 +20,6 @@ import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
-import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
@@ -251,9 +246,6 @@ export const SettingsPage: React.FC = () => {
   // Authoritative server-synchronized billing state
   const [serverSystemYear, setServerSystemYear] = useState<number>(() => Number(settings.billingYear) || new Date().getFullYear());
   const [serverSystemDate, setServerSystemDate] = useState<string>(() => settings.systemDate || new Date().toISOString());
-  const [selectedBillingYear, setSelectedBillingYear] = useState<number>(() => Number(settings.billingYear) || new Date().getFullYear());
-  const [yearAlertOpen, setYearAlertOpen] = useState<boolean>(false);
-  const [attemptedYear, setAttemptedYear] = useState<number | null>(null);
 
   // Bill View Year Selector state & menu anchor
   const [selectedBillYear, setSelectedBillYearState] = useState<string>(() =>
@@ -323,7 +315,6 @@ export const SettingsPage: React.FC = () => {
 
           setServerSystemYear(sysYear);
           setServerSystemDate(sysDate);
-          setSelectedBillingYear(sysYear);
 
           const remoteSettings: CompanySettings = {
             companyName: compName,
@@ -360,13 +351,6 @@ export const SettingsPage: React.FC = () => {
   }, []);
 
   const handleChange = <K extends keyof CompanySettings>(field: K, value: CompanySettings[K]) => {
-    if (field === 'billingYear') {
-      const selectedYear = Number(value);
-      if (!isNaN(selectedYear)) {
-        handleBillingYearChange(selectedYear);
-        return;
-      }
-    }
     setSettings((prev) => ({
       ...prev,
       [field]: value,
@@ -464,41 +448,7 @@ export const SettingsPage: React.FC = () => {
     setSettings((prev) => ({ ...prev, logoUrl: '' }));
   };
 
-  const handleBillingYearChange = (newYear: number) => {
-    setAttemptedYear(newYear);
-    setSelectedBillingYear(newYear);
-
-    if (newYear !== serverSystemYear) {
-      setYearAlertOpen(true);
-      setToast({
-        open: true,
-        message: 'Invalid Billing Year: The selected billing year does not match the current system year.',
-        severity: 'error',
-      });
-    } else {
-      setSettings((prev) => ({
-        ...prev,
-        billingYear: newYear,
-        billingStartDate: `01-01-${newYear}`,
-        billingEndDate: `31-12-${newYear}`,
-        billingStatus: 'Active',
-      }));
-    }
-  };
-
   const handleSave = async () => {
-    // Frontend Restriction Validation
-    if (selectedBillingYear !== serverSystemYear) {
-      setAttemptedYear(selectedBillingYear);
-      setYearAlertOpen(true);
-      setToast({
-        open: true,
-        message: 'Billing year cannot be changed manually. The billing year must remain synchronized with the current system date.',
-        severity: 'error',
-      });
-      return;
-    }
-
     try {
       setIsSaving(true);
       const savePayload: CompanySettings = {
@@ -519,7 +469,6 @@ export const SettingsPage: React.FC = () => {
         const syncedSysDate = data.systemDate || serverSystemDate;
         setServerSystemYear(syncedSysYear);
         setServerSystemDate(syncedSysDate);
-        setSelectedBillingYear(syncedSysYear);
 
         const syncedSettings: CompanySettings = {
           companyName: data.companyName ?? settings.companyName,
@@ -568,7 +517,6 @@ export const SettingsPage: React.FC = () => {
 
   const handleResetToDefault = async () => {
     if (window.confirm('Reset company profile details to default values?')) {
-      setSelectedBillingYear(serverSystemYear);
       const resetSettings: CompanySettings = {
         ...DEFAULT_COMPANY_SETTINGS,
         billingYear: serverSystemYear,
@@ -1162,9 +1110,7 @@ export const SettingsPage: React.FC = () => {
               sx={{
                 p: 2.5,
                 borderRadius: '12px',
-                border: String(settings.billingYear) !== String(settings.systemYear || new Date().getFullYear())
-                  ? '1.5px solid #EF4444'
-                  : '1px solid #E2E8F0',
+                border: '1px solid #E2E8F0',
                 backgroundColor: '#FFFFFF',
                 transition: 'all 0.2s ease',
               }}
@@ -1194,15 +1140,6 @@ export const SettingsPage: React.FC = () => {
                 The billing year and annual billing dates are automatically synchronized with the authoritative system date.
               </Typography>
 
-              {String(settings.billingYear) !== String(settings.systemYear || new Date().getFullYear()) && (
-                <Alert
-                  severity="error"
-                  sx={{ mb: 2, fontWeight: 700, borderRadius: '8px' }}
-                >
-                  Billing year cannot be changed manually. The billing year must remain synchronized with the current system date ({settings.systemYear || new Date().getFullYear()}).
-                </Alert>
-              )}
-
               <Grid container spacing={1.2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
@@ -1222,17 +1159,17 @@ export const SettingsPage: React.FC = () => {
 
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
-                    Current Billing Year *
+                    Authoritative Billing Year
                   </Typography>
                   <input
                     type="text"
+                    readOnly
                     className="erp-input"
-                    value={settings.billingYear || ''}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleChange('billingYear', e.target.value)}
-                    style={{ width: '100%' }}
+                    value={serverSystemYear}
+                    style={{ width: '100%', backgroundColor: '#F1F5F9', fontWeight: 700 }}
                   />
                   <Typography sx={{ fontSize: '10.5px', color: '#64748B', mt: 0.3 }}>
-                    Synchronized with system date
+                    Synchronized with system year ({serverSystemYear})
                   </Typography>
                 </Grid>
 
@@ -1244,7 +1181,7 @@ export const SettingsPage: React.FC = () => {
                     type="text"
                     readOnly
                     className="erp-input"
-                    value={settings.billingStartDate || `01-01-${new Date().getFullYear()}`}
+                    value={settings.billingStartDate || `01-01-${serverSystemYear}`}
                     style={{ width: '100%', backgroundColor: '#F1F5F9' }}
                   />
                   <Typography sx={{ fontSize: '10.5px', color: '#64748B', mt: 0.3 }}>
@@ -1260,7 +1197,7 @@ export const SettingsPage: React.FC = () => {
                     type="text"
                     readOnly
                     className="erp-input"
-                    value={settings.billingEndDate || `31-12-${new Date().getFullYear()}`}
+                    value={settings.billingEndDate || `31-12-${serverSystemYear}`}
                     style={{ width: '100%', backgroundColor: '#F1F5F9' }}
                   />
                   <Typography sx={{ fontSize: '10.5px', color: '#64748B', mt: 0.3 }}>
@@ -1354,65 +1291,6 @@ export const SettingsPage: React.FC = () => {
           </Box>
         </Box>
       </Paper>
-
-      {/* Billing Year Validation Alert Dialog */}
-      <Dialog
-        open={yearAlertOpen}
-        onClose={() => {
-          setYearAlertOpen(false);
-          setSelectedBillingYear(serverSystemYear);
-        }}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: {
-              borderRadius: '4px',
-              border: '1px solid #DC2626',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
-            },
-          },
-        }}
-      >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#FEF2F2', py: 1.2, px: 2, borderBottom: '1px solid #FECACA' }}>
-          <WarningAmberRoundedIcon sx={{ color: '#DC2626', fontSize: 22 }} />
-          <Typography sx={{ fontWeight: 800, fontSize: '13.5px', color: '#991B1B' }}>
-            Invalid Billing Year
-          </Typography>
-        </DialogTitle>
-        <DialogContent sx={{ p: 2, pt: 2.5 }}>
-          <Typography sx={{ fontSize: '12px', color: '#334155', lineHeight: 1.5, mb: 1.5 }}>
-            Billing year cannot be changed manually. The billing year must remain synchronized with the current system date.
-          </Typography>
-          <Box sx={{ bgcolor: '#F8FAFC', border: '1px solid #E2E8F0', p: 1.2, borderRadius: '3px', fontSize: '11.5px', color: '#475569' }}>
-            <div>• <b>Current System Year:</b> {serverSystemYear}</div>
-            {attemptedYear !== null && <div>• <b>Selected Year:</b> {attemptedYear}</div>}
-            <div style={{ marginTop: '4px' }}>
-              • <b>Rule:</b> The annual billing period is automatically managed from <b>01 January {serverSystemYear}</b> to <b>31 December {serverSystemYear}</b>.
-            </div>
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ px: 2, py: 1, bgcolor: '#F8FAFC', borderTop: '1px solid #E2E8F0' }}>
-          <Button
-            size="small"
-            variant="contained"
-            onClick={() => {
-              setYearAlertOpen(false);
-              setSelectedBillingYear(serverSystemYear);
-            }}
-            sx={{
-              bgcolor: '#DC2626',
-              color: '#FFFFFF',
-              fontWeight: 700,
-              fontSize: '11.5px',
-              textTransform: 'none',
-              '&:hover': { bgcolor: '#B91C1C' },
-            }}
-          >
-            Acknowledge & Sync
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Floating Feedback Toast */}
       <Snackbar

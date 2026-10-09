@@ -84,7 +84,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
 // Customers API
 export const CustomersApi = {
-  getAll: () => request<any[]>('/customers'),
+  getAll: (year?: number | string) => request<any[]>(year ? `/customers?year=${year}` : '/customers'),
   getById: (id: string) => request<any>(`/customers/${id}`),
   create: (data: any) => request<any>('/customers', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => request<any>(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

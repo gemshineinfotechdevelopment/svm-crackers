@@ -3,8 +3,11 @@ import { Customer } from '../models/Customer';
 import { AccountLedger } from '../models/AccountLedger';
 import { escapeRegex } from '../utils/ledgerUtils';
 
-export const getCustomers = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getCustomers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const yearQuery = req.query.year ? Number(req.query.year) : undefined;
+    const currentYear = new Date().getFullYear();
+
     // Backfill missing idCode for existing records if any
     const missingIdCustomers = await Customer.find({
       $or: [{ idCode: { $exists: false } }, { idCode: null }, { idCode: '' }],
@@ -33,8 +36,51 @@ export const getCustomers = async (_req: Request, res: Response, next: NextFunct
       }
     }
 
-    const customers = await Customer.find().sort({ createdAt: 1 }).lean();
-    const allLedgerEntries = await AccountLedger.find({}).lean();
+    let customers: any[] = [];
+    let ledgerFilter: any = {};
+
+    if (yearQuery && !isNaN(yearQuery) && yearQuery < currentYear) {
+      // For past years: only return customers who had particulars/bills in that specific year, or were tagged for that year
+      const { Particular } = await import('../models/Particular');
+      const pastYearBills = await Particular.find({ year: yearQuery }).lean();
+      const customerNamesInYear = new Set(
+        pastYearBills.map((b) => (b.customerName || '').trim().toLowerCase()).filter(Boolean)
+      );
+
+      // Find customers explicitly assigned to that year
+      const explicitYearCustomers = await Customer.find({ year: yearQuery }).sort({ createdAt: 1 }).lean();
+      const existingIds = new Set(explicitYearCustomers.map((c) => String(c._id)));
+
+      // If there are customers who have bills in that year, include their customer record
+      if (customerNamesInYear.size > 0) {
+        const allDbCustomers = await Customer.find().lean();
+        for (const c of allDbCustomers) {
+          if (customerNamesInYear.has((c.name || '').trim().toLowerCase()) && !existingIds.has(String(c._id))) {
+            explicitYearCustomers.push(c);
+            existingIds.add(String(c._id));
+          }
+        }
+      }
+
+      customers = explicitYearCustomers;
+
+      // Filter ledger entries for that year's date range or tagged year
+      const startDate = `${yearQuery}-01-01`;
+      const endDate = `${yearQuery}-12-31T23:59:59.999Z`;
+      ledgerFilter = {
+        $or: [
+          { year: yearQuery },
+          { date: { $gte: `${yearQuery}-01-01`, $lte: `${yearQuery}-12-31` } },
+          { createdAt: { $gte: new Date(startDate), $lte: new Date(endDate) } },
+        ],
+      };
+    } else {
+      // For current year (or no year specified): show all current year active customers
+      customers = await Customer.find().sort({ createdAt: 1 }).lean();
+      ledgerFilter = {};
+    }
+
+    const allLedgerEntries = await AccountLedger.find(ledgerFilter).lean();
 
     // Group ledger by customer name (normalized lowercase)
     const statsMap = new Map<string, { totalDebit: number; totalCredit: number; lastDate: string }>();
@@ -102,7 +148,9 @@ export const getCustomerById = async (req: Request, res: Response, next: NextFun
 
 export const createCustomer = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { name, mobile, address, gst, idCode } = req.body;
+    const { name, mobile, address, gst, idCode, year } = req.body;
+    const currentYear = new Date().getFullYear();
+    const customerYear = year ? Number(year) : currentYear;
 
     let finalIdCode = idCode ? String(idCode).trim() : '';
     if (!finalIdCode) {
@@ -126,6 +174,7 @@ export const createCustomer = async (req: Request, res: Response, next: NextFunc
       address,
       gst,
       idCode: finalIdCode,
+      year: customerYear,
     });
     res.status(201).json({ success: true, data: customer });
   } catch (error) {

@@ -10,6 +10,8 @@ import {
 import DomainOutlinedIcon from '@mui/icons-material/DomainOutlined';
 import AddCircleOutlineRoundedIcon from '@mui/icons-material/AddCircleOutlineRounded';
 import { CompaniesApi } from '../services/api';
+import { getActiveBillingYear } from '../utils/yearContext';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 interface AddCompanyPageProps {
   onCancel?: () => void;
@@ -38,7 +40,7 @@ export const AddCompanyPage: FC<AddCompanyPageProps> = ({
     }));
   };
 
-  const handleSubmit = async () => {
+  const executeSubmit = async () => {
     if (!formData.companyName.trim() || !formData.registeredAddress.trim()) {
       alert('Please fill in required fields (Company Name and Registered Address)');
       return;
@@ -63,6 +65,20 @@ export const AddCompanyPage: FC<AddCompanyPageProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async () => {
+    const activeYear = getActiveBillingYear();
+    const currentSystemYear = new Date().getFullYear();
+    if (activeYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(activeYear),
+        currentSystemYear: String(currentSystemYear),
+        onProceed: () => executeSubmit(),
+      });
+      return;
+    }
+    executeSubmit();
   };
 
   return (

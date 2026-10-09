@@ -33,6 +33,9 @@ import { CustomersApi, AccountsApi, CompaniesApi } from '../services/api';
 import { printCustomerListDirectly } from '../utils/printUtils';
 import { DateRangePrintModal } from './DateRangePrintModal';
 import { getStoredSettings } from './SettingsPage';
+import { getActiveBillingYear, YEAR_CHANGE_EVENT } from '../utils/yearContext';
+import { getSelectedBillYear } from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 export interface Customer {
   _id?: string;
@@ -85,10 +88,13 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
   });
   const [paymentLoading, setPaymentLoading] = useState(false);
 
-  const fetchCustomers = async () => {
+  const [activeYear, setActiveYear] = useState<number>(getActiveBillingYear);
+
+  const fetchCustomers = async (yearToFetch?: number | string) => {
     try {
       setLoading(true);
-      const data = await CustomersApi.getAll();
+      const targetYear = yearToFetch !== undefined ? yearToFetch : (activeYear || getSelectedBillYear());
+      const data = await CustomersApi.getAll(targetYear);
       setCustomers(data || []);
     } catch (err) {
       console.error('Failed to fetch customers:', err);
@@ -110,11 +116,28 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
   };
 
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomers(activeYear);
     fetchCompanies();
+
+    const handleYearChange = (e: any) => {
+      const yr = e?.detail?.year ? Number(e.detail.year) : (typeof getSelectedBillYear === 'function' ? Number(getSelectedBillYear()) : undefined);
+      if (yr) {
+        setActiveYear(yr);
+        fetchCustomers(yr);
+      } else {
+        fetchCustomers();
+      }
+    };
+
+    window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+    window.addEventListener('apsara_bill_year_changed', handleYearChange);
+    return () => {
+      window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+      window.removeEventListener('apsara_bill_year_changed', handleYearChange);
+    };
   }, []);
 
-  const handleOpenEdit = (customer: Customer) => {
+  const openEditAction = (customer: Customer) => {
     setEditingCustomer(customer);
     setEditFormData({
       name: customer.name || '',
@@ -123,6 +146,19 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
       address: customer.address || '',
     });
     setOpenEditModal(true);
+  };
+
+  const handleOpenEdit = (customer: Customer) => {
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(activeYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(activeYear),
+        currentSystemYear: String(currentSystemYear),
+        onProceed: () => openEditAction(customer),
+      });
+      return;
+    }
+    openEditAction(customer);
   };
 
   const handleSaveEdit = async () => {
@@ -145,7 +181,7 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
         avatarLetter: editFormData.name.trim().charAt(0).toUpperCase(),
       });
       setOpenEditModal(false);
-      fetchCustomers();
+      fetchCustomers(activeYear);
     } catch (err) {
       console.error('Failed to update customer:', err);
       alert('Error updating customer');
@@ -154,7 +190,7 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const executeDelete = async (id: string) => {
     if (
       !window.confirm(
         'Are you sure you want to delete this customer? This will also delete all associated particular bills and account ledger records.'
@@ -168,12 +204,24 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
       if (deletedCust && (localStorage.getItem('apsara_active_customer') === deletedCust.name || localStorage.getItem('varun_active_customer') === deletedCust.name)) {
         localStorage.removeItem('apsara_active_customer');
         localStorage.removeItem('varun_active_customer');
-        localStorage.removeItem('dheeksha_active_customer');
       }
     } catch (err) {
       console.error('Failed to delete customer:', err);
       alert('Error deleting customer');
     }
+  };
+
+  const handleDelete = async (id: string) => {
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(activeYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(activeYear),
+        currentSystemYear: String(currentSystemYear),
+        onProceed: () => executeDelete(id),
+      });
+      return;
+    }
+    executeDelete(id);
   };
 
   const handleOpenPayment = (customer: Customer) => {

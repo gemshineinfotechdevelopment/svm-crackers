@@ -10,6 +10,7 @@ export interface ICustomer extends Document {
   mobile: string;
   gst: string;
   aadhar?: string;
+  year?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +26,7 @@ const CustomerSchema: Schema = new Schema(
     mobile: { type: String, default: '-', trim: true },
     gst: { type: String, default: 'N/A', trim: true },
     aadhar: { type: String, default: '', trim: true },
+    year: { type: Number, index: true, default: () => new Date().getFullYear() },
   },
   { timestamps: true }
 );

@@ -39,8 +39,6 @@ import { ProductsApi, CategoriesApi } from '../services/api';
 import { printProductsListDirectly } from '../utils/printUtils';
 import {
   getActiveBillingYear,
-  setActiveBillingYear,
-  getStandardYearOptions,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
 import { getSelectedBillYear } from '../utils/billYearUtils';
@@ -69,9 +67,8 @@ export const ProductsPage: FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [activeTabType, setActiveTabType] = useState<'Retail' | 'Wholesale' | 'ALL'>('Retail');
 
-  // Year state
+  // Year state synced with global Navbar/Settings
   const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
-  const yearOptions = useMemo(() => getStandardYearOptions(), []);
 
   // Add / Edit Modal State
   const [openModal, setOpenModal] = useState(false);
@@ -155,12 +152,6 @@ export const ProductsPage: FC = () => {
     return () => window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
   }, []);
 
-  const handleYearChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const yr = Number(e.target.value);
-    setSelectedYear(yr);
-    setActiveBillingYear(yr);
-  };
-
   // Helper to get next Serial Number starting from 1 independently for each product type
   const getNextSlNoForType = (type: ProductType) => {
     const typeItems = products.filter(
@@ -207,13 +198,7 @@ export const ProductsPage: FC = () => {
   }, [tabProducts, selectedCategory, searchTerm]);
 
   // Open Add Modal
-  const handleOpenAdd = () => {
-    const currentSystemYear = new Date().getFullYear();
-    if (Number(selectedYear) !== currentSystemYear) {
-      triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
-      return;
-    }
-
+  const openAddAction = () => {
     const targetType = activeTabType === 'ALL' ? 'Retail' : activeTabType;
     setEditingProduct(null);
     setProductType(targetType);
@@ -226,6 +211,18 @@ export const ProductsPage: FC = () => {
     setOpenModal(true);
   };
 
+  const handleOpenAdd = () => {
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(selectedYear),
+        onProceed: () => openAddAction(),
+      });
+      return;
+    }
+    openAddAction();
+  };
+
   // Switch type inside modal -> update S.No accordingly
   const handleSelectProductTypeInModal = (newType: ProductType) => {
     setProductType(newType);
@@ -235,13 +232,7 @@ export const ProductsPage: FC = () => {
   };
 
   // Open Edit Modal
-  const handleOpenEdit = (product: ProductItem) => {
-    const currentSystemYear = new Date().getFullYear();
-    if (Number(selectedYear) !== currentSystemYear) {
-      triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
-      return;
-    }
-
+  const openEditAction = (product: ProductItem) => {
     setEditingProduct(product);
     setProductType((product.productType as ProductType) || 'Retail');
     setProductSlNo(product.slNo || 1);
@@ -251,6 +242,18 @@ export const ProductsPage: FC = () => {
     setProductRate(String(product.rate || 0));
     setProductMrp(String(product.mrp || 0));
     setOpenModal(true);
+  };
+
+  const handleOpenEdit = (product: ProductItem) => {
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(selectedYear),
+        onProceed: () => openEditAction(product),
+      });
+      return;
+    }
+    openEditAction(product);
   };
 
   // Save Single Product
@@ -322,14 +325,7 @@ export const ProductsPage: FC = () => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
   };
 
-  const handleConfirmBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
-    const currentSystemYear = new Date().getFullYear();
-    if (Number(selectedYear) !== currentSystemYear) {
-      triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
-      return;
-    }
-
+  const executeBulkDelete = async () => {
     try {
       setBulkDeleting(true);
       await ProductsApi.bulkDelete(selectedIds);
@@ -349,13 +345,20 @@ export const ProductsPage: FC = () => {
     }
   };
 
-  const handleDeleteProduct = async (product: ProductItem) => {
+  const handleConfirmBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
     const currentSystemYear = new Date().getFullYear();
     if (Number(selectedYear) !== currentSystemYear) {
-      triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
+      triggerYearRestrictionDialog({
+        selectedYear: String(selectedYear),
+        onProceed: () => executeBulkDelete(),
+      });
       return;
     }
+    executeBulkDelete();
+  };
 
+  const executeDeleteProduct = async (product: ProductItem) => {
     const id = product._id || product.id || '';
     if (!id) return;
     if (!window.confirm(`Delete product "${product.name}"?`)) return;
@@ -373,6 +376,18 @@ export const ProductsPage: FC = () => {
       console.error('Failed to delete product:', err);
       alert('Error deleting product');
     }
+  };
+
+  const handleDeleteProduct = async (product: ProductItem) => {
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(selectedYear),
+        onProceed: () => executeDeleteProduct(product),
+      });
+      return;
+    }
+    executeDeleteProduct(product);
   };
 
   // Bulk Upload File Processing
@@ -514,14 +529,7 @@ export const ProductsPage: FC = () => {
     reader.readAsArrayBuffer(file);
   };
 
-  const handleConfirmBulkImport = async () => {
-    if (previewItems.length === 0) return;
-    const currentSystemYear = new Date().getFullYear();
-    if (Number(selectedYear) !== currentSystemYear) {
-      triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
-      return;
-    }
-
+  const executeBulkImport = async () => {
     try {
       setUploading(true);
       const itemsToImport = previewItems.map((item) => ({
@@ -551,6 +559,19 @@ export const ProductsPage: FC = () => {
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleConfirmBulkImport = async () => {
+    if (previewItems.length === 0) return;
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(selectedYear),
+        onProceed: () => executeBulkImport(),
+      });
+      return;
+    }
+    executeBulkImport();
   };
 
   // Download Sample Template with S.No starting from 1
@@ -667,34 +688,6 @@ export const ProductsPage: FC = () => {
                   height: '22px',
                 }}
               />
-            </Box>
-
-            {/* Year Selector */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#0F172A' }}>
-                Year:
-              </Typography>
-              <select
-                value={selectedYear}
-                onChange={handleYearChange}
-                style={{
-                  height: '22px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  color: '#0B4DB7',
-                  border: '1px solid #0B4DB7',
-                  borderRadius: '3px',
-                  padding: '0 4px',
-                  background: '#F0F5FA',
-                  cursor: 'pointer',
-                }}
-              >
-                {yearOptions.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
             </Box>
           </Box>
         </Box>
@@ -823,15 +816,22 @@ export const ProductsPage: FC = () => {
               {/* Bulk Upload Button */}
               <Button
                 onClick={() => {
+                  const openBulkUploadModal = () => {
+                    setBulkUploadType(activeTabType === 'ALL' ? 'Retail' : activeTabType);
+                    setPreviewItems([]);
+                    setUploadFileName('');
+                    setBulkUploadOpen(true);
+                  };
+
                   const currentSystemYear = new Date().getFullYear();
                   if (Number(selectedYear) !== currentSystemYear) {
-                    triggerYearRestrictionDialog({ selectedYear: String(selectedYear) });
+                    triggerYearRestrictionDialog({
+                      selectedYear: String(selectedYear),
+                      onProceed: () => openBulkUploadModal(),
+                    });
                     return;
                   }
-                  setBulkUploadType(activeTabType === 'ALL' ? 'Retail' : activeTabType);
-                  setPreviewItems([]);
-                  setUploadFileName('');
-                  setBulkUploadOpen(true);
+                  openBulkUploadModal();
                 }}
                 startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 15 }} />}
                 size="small"

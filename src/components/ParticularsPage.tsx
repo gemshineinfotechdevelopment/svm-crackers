@@ -36,8 +36,6 @@ import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
 import {
   getActiveBillingYear,
-  setActiveBillingYear,
-  getStandardYearOptions,
   validateDateMatchesYear,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
@@ -93,9 +91,8 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 }) => {
   const [storeSettings] = useState(() => getStoredSettings());
 
-  // Year state
+  // Year state synced with global Navbar/Settings
   const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
-  const yearOptions = useMemo(() => getStandardYearOptions(), []);
 
   // Previous year billing history modal
   const [historyAlertOpen, setHistoryAlertOpen] = useState(false);
@@ -175,7 +172,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const loadOptions = async (targetYear: number = selectedYear) => {
     try {
       const [custRes, compRes, prodRes, priceRes, lastBillRes] = await Promise.all([
-        CustomersApi.getAll().catch(() => []),
+        CustomersApi.getAll(targetYear).catch(() => []),
         CompaniesApi.getAll().catch(() => []),
         ProductsApi.getAll(targetYear).catch(() => []),
         PriceListsApi.getAll({ year: targetYear }).catch(() => []),
@@ -262,13 +259,6 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     }
   };
 
-  const handleYearChange = (newYear: number) => {
-    setSelectedYear(newYear);
-    setActiveBillingYear(newYear);
-    setBillDate(getInitialDateStr(newYear));
-    loadOptions(newYear);
-  };
-
   useEffect(() => {
     loadOptions(selectedYear);
 
@@ -325,7 +315,19 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       setCustomerAddress(opt.address || '');
       setCustomerGst(opt.gst || '');
       if (opt.idCode) setCustomerNo(opt.idCode);
-      checkPreviousHistory(opt.name, selectedYear);
+
+      const currentSystemYear = new Date().getFullYear();
+      if (Number(selectedYear) !== currentSystemYear) {
+        triggerYearRestrictionDialog({
+          selectedYear: String(selectedYear),
+          currentSystemYear: String(currentSystemYear),
+          onProceed: () => {
+            checkPreviousHistory(opt.name, selectedYear);
+          },
+        });
+      } else {
+        checkPreviousHistory(opt.name, selectedYear);
+      }
     }
   };
 
@@ -407,16 +409,8 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setQuickCode('');
   };
 
-  // Save Quotation / Bill
-  const handleSaveBill = async () => {
-    if (!isEditMode) {
-      const currentSystemYear = new Date().getFullYear().toString();
-      const selectedViewYear = getSelectedBillYear();
-      if (selectedViewYear !== currentSystemYear) {
-        triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
-        return;
-      }
-    }
+  // Execute Save Quotation / Bill
+  const executeSaveBill = async () => {
     if (!customerName.trim()) {
       setSnackbarMessage('Please enter or select Customer Name.');
       setSnackbarOpen(true);
@@ -510,6 +504,22 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     } finally {
       setSavingBill(false);
     }
+  };
+
+  const handleSaveBill = async () => {
+    const currentSystemYear = new Date().getFullYear();
+    const currentSystemYearStr = currentSystemYear.toString();
+    const selectedViewYear = getSelectedBillYear();
+
+    if (Number(selectedYear) !== currentSystemYear || (!isEditMode && String(selectedViewYear) !== currentSystemYearStr)) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(selectedYear || selectedViewYear),
+        currentSystemYear: currentSystemYearStr,
+        onProceed: () => executeSaveBill(),
+      });
+      return;
+    }
+    executeSaveBill();
   };
 
   // Direct Print / PDF Handler
@@ -613,43 +623,6 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             >
               Customer Factory (Quotation / Estimate)
             </Typography>
-          </Box>
-
-          {/* Right: Year Selector */}
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              bgcolor: '#FFFFFF',
-              border: '1px solid #93C5FD',
-              borderRadius: '4px',
-              px: 1,
-              py: 0.2,
-            }}
-          >
-            <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF' }}>
-              Billing Year:
-            </Typography>
-            <select
-              value={selectedYear}
-              onChange={(e) => handleYearChange(Number(e.target.value))}
-              style={{
-                fontSize: '11.5px',
-                fontWeight: 800,
-                color: '#1E3A8A',
-                backgroundColor: 'transparent',
-                border: 'none',
-                outline: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              {yearOptions.map((y) => (
-                <option key={y} value={y} style={{ color: '#0F172A', fontWeight: 600 }}>
-                  {y}
-                </option>
-              ))}
-            </select>
           </Box>
         </Box>
 

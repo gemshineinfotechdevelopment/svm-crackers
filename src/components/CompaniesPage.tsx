@@ -27,6 +27,8 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import { CompaniesApi } from '../services/api';
 import { printCompaniesListDirectly } from '../utils/printUtils';
+import { getActiveBillingYear } from '../utils/yearContext';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 export interface Company {
   _id?: string;
@@ -75,7 +77,7 @@ export const CompaniesPage: FC<CompaniesPageProps> = ({ onAddCompany }) => {
     fetchCompanies();
   }, []);
 
-  const handleOpenEdit = (company: Company) => {
+  const openEditAction = (company: Company) => {
     setEditingCompany(company);
     setEditFormData({
       name: company.name || '',
@@ -83,6 +85,20 @@ export const CompaniesPage: FC<CompaniesPageProps> = ({ onAddCompany }) => {
       address: company.address || '',
     });
     setOpenEditModal(true);
+  };
+
+  const handleOpenEdit = (company: Company) => {
+    const activeYear = getActiveBillingYear();
+    const currentSystemYear = new Date().getFullYear();
+    if (activeYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(activeYear),
+        currentSystemYear: String(currentSystemYear),
+        onProceed: () => openEditAction(company),
+      });
+      return;
+    }
+    openEditAction(company);
   };
 
   const handleSaveEdit = async () => {
@@ -113,7 +129,7 @@ export const CompaniesPage: FC<CompaniesPageProps> = ({ onAddCompany }) => {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const executeDelete = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this company? This will also delete all associated particular bills and account ledger records for this company.')) return;
     try {
       await CompaniesApi.delete(id);
@@ -122,6 +138,20 @@ export const CompaniesPage: FC<CompaniesPageProps> = ({ onAddCompany }) => {
       console.error('Failed to delete company:', err);
       alert('Error deleting company');
     }
+  };
+
+  const handleDelete = async (id: string) => {
+    const activeYear = getActiveBillingYear();
+    const currentSystemYear = new Date().getFullYear();
+    if (activeYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(activeYear),
+        currentSystemYear: String(currentSystemYear),
+        onProceed: () => executeDelete(id),
+      });
+      return;
+    }
+    executeDelete(id);
   };
 
   const filteredCompanies = companies.filter(
@@ -253,7 +283,21 @@ export const CompaniesPage: FC<CompaniesPageProps> = ({ onAddCompany }) => {
           <Button
             variant="contained"
             disableElevation
-            onClick={onAddCompany}
+            onClick={() => {
+              const activeYear = getActiveBillingYear();
+              const currentSystemYear = new Date().getFullYear();
+              if (activeYear !== currentSystemYear) {
+                triggerYearRestrictionDialog({
+                  selectedYear: String(activeYear),
+                  currentSystemYear: String(currentSystemYear),
+                  onProceed: () => {
+                    if (onAddCompany) onAddCompany();
+                  },
+                });
+                return;
+              }
+              if (onAddCompany) onAddCompany();
+            }}
             startIcon={<AddRoundedIcon sx={{ fontSize: 19 }} />}
             sx={{
               background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)',

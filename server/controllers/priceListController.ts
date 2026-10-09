@@ -193,18 +193,7 @@ export const createPriceListItem = async (req: Request, res: Response): Promise<
 export const bulkImportPriceList = async (req: Request, res: Response): Promise<void> => {
   try {
     const currentSystemYear = new Date().getFullYear();
-    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
-
-    if (selectedViewYear && Number(selectedViewYear) !== currentSystemYear) {
-      res.status(400).json({
-        success: false,
-        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New products can only be added to the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before adding a new product.`,
-        error: 'Product creation is only allowed in the current system year.',
-      });
-      return;
-    }
-
-    const { items, batchName, replaceExisting, year } = req.body;
+    const { items, batchName, replaceExisting, year, selectedViewYear } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       res.status(400).json({ success: false, error: 'No items provided for import' });

@@ -55,8 +55,6 @@ import { PriceListsApi, CategoriesApi } from '../services/api';
 import { getStoredSettings } from './SettingsPage';
 import {
   getActiveBillingYear,
-  setActiveBillingYear,
-  getStandardYearOptions,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
 import { getSelectedBillYear } from '../utils/billYearUtils';
@@ -97,9 +95,8 @@ export const PriceListPage: FC = () => {
   const [activeViewMode, setActiveViewMode] = useState<'table' | 'documents'>('table');
   const [showUploadZone, setShowUploadZone] = useState<boolean>(false);
 
-  // Year state
+  // Year state synced with global Navbar/Settings
   const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
-  const yearOptions = useMemo(() => getStandardYearOptions(), []);
 
   // File Upload & Preview States
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -207,12 +204,6 @@ export const PriceListPage: FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleYearChange = (newYear: number) => {
-    setSelectedYear(newYear);
-    setActiveBillingYear(newYear);
-    fetchData(newYear);
   };
 
   useEffect(() => {
@@ -1260,14 +1251,7 @@ export const PriceListPage: FC = () => {
     printWindow.document.close();
   };
 
-  const handleOpenAdd = () => {
-    const currentSystemYear = new Date().getFullYear().toString();
-    const selectedViewYear = getSelectedBillYear();
-    if (selectedViewYear !== currentSystemYear) {
-      triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
-      return;
-    }
-
+  const openAddAction = () => {
     setEditingItem(null);
     setFormSlNo(items.length > 0 ? Math.max(...items.map((i) => i.slNo || 0)) + 1 : 1);
     setFormName('');
@@ -1277,6 +1261,20 @@ export const PriceListPage: FC = () => {
     setFormDiscount('0');
     setFormRate('0');
     setItemModalOpen(true);
+  };
+
+  const handleOpenAdd = () => {
+    const currentSystemYear = new Date().getFullYear().toString();
+    const selectedViewYear = getSelectedBillYear();
+    if (selectedViewYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: selectedViewYear,
+        currentSystemYear,
+        onProceed: () => openAddAction(),
+      });
+      return;
+    }
+    openAddAction();
   };
 
   const handleOpenEdit = (item: PriceItem) => {
@@ -1300,15 +1298,6 @@ export const PriceListPage: FC = () => {
     if (isNaN(rateNum) || rateNum < 0) {
       alert('Please enter a valid rate/price');
       return;
-    }
-
-    if (!editingItem) {
-      const currentSystemYear = new Date().getFullYear().toString();
-      const selectedViewYear = getSelectedBillYear();
-      if (selectedViewYear !== currentSystemYear) {
-        triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
-        return;
-      }
     }
 
     try {
@@ -1466,45 +1455,8 @@ export const PriceListPage: FC = () => {
             />
           </Box>
 
-          {/* Right: Year Selector & Subtabs */}
+          {/* Right: Subtabs */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {/* Year Selector */}
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.5,
-                bgcolor: '#FFFFFF',
-                border: '1px solid #93C5FD',
-                borderRadius: '4px',
-                px: 1,
-                py: 0.2,
-              }}
-            >
-              <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF' }}>
-                Year:
-              </Typography>
-              <select
-                value={selectedYear}
-                onChange={(e) => handleYearChange(Number(e.target.value))}
-                style={{
-                  fontSize: '11.5px',
-                  fontWeight: 800,
-                  color: '#1E3A8A',
-                  backgroundColor: 'transparent',
-                  border: 'none',
-                  outline: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {yearOptions.map((y) => (
-                  <option key={y} value={y} style={{ color: '#0F172A', fontWeight: 600 }}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </Box>
-
             <Button
               size="small"
               onClick={() => setActiveViewMode('table')}

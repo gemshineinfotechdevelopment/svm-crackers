@@ -8,6 +8,8 @@ import {
 import PersonAddAlt1RoundedIcon from '@mui/icons-material/PersonAddAlt1Rounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import { CustomersApi } from '../services/api';
+import { getActiveBillingYear } from '../utils/yearContext';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 interface AddCustomerPageProps {
   onCancel?: () => void;
@@ -35,7 +37,7 @@ export const AddCustomerPage: FC<AddCustomerPageProps> = ({
     }));
   };
 
-  const handleSubmit = async () => {
+  const executeSubmit = async (targetYear: number) => {
     if (!formData.fullName.trim() || !formData.billingAddress.trim()) {
       alert('Please fill in required fields (Full Name and Address)');
       return;
@@ -51,6 +53,7 @@ export const AddCustomerPage: FC<AddCustomerPageProps> = ({
         avatarLetter: formData.fullName.trim().charAt(0).toUpperCase(),
         avatarBg: '#F1F5F9',
         avatarColor: '#1E3A8A',
+        year: targetYear,
       });
       if (onSubmitSuccess) {
         onSubmitSuccess();
@@ -61,6 +64,21 @@ export const AddCustomerPage: FC<AddCustomerPageProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async () => {
+    const activeYear = getActiveBillingYear();
+    const currentSystemYear = new Date().getFullYear();
+    if (activeYear < currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(activeYear),
+        currentSystemYear: String(currentSystemYear),
+        onProceed: () => executeSubmit(activeYear),
+        onSwitch: () => executeSubmit(currentSystemYear),
+      });
+      return;
+    }
+    executeSubmit(currentSystemYear);
   };
 
   return (

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
+  DialogTitle,
+  DialogContent,
   DialogActions,
   Button,
   Typography,
@@ -11,7 +13,6 @@ import CalendarTodayRoundedIcon from '@mui/icons-material/CalendarTodayRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import LockRoundedIcon from '@mui/icons-material/LockRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
-import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import { getSelectedBillYear, setSelectedBillYear } from '../utils/billYearUtils';
 
 export interface YearRestrictionDialogDetail {
@@ -20,6 +21,8 @@ export interface YearRestrictionDialogDetail {
   isFutureYear?: boolean;
   message?: string;
   title?: string;
+  onProceed?: () => void;
+  onSwitch?: () => void;
 }
 
 export const triggerYearRestrictionDialog = (options: YearRestrictionDialogDetail = {}) => {
@@ -33,12 +36,14 @@ export const triggerYearRestrictionDialog = (options: YearRestrictionDialogDetai
         selectedYear: selYear,
         currentSystemYear: currentSysYear,
         isFutureYear: isFuture,
-        title: options.title || (isFuture ? 'Future Year Restricted' : 'Previous Year Selected'),
+        title: options.title || (isFuture ? 'Future Year Restricted' : 'Previous Year Notice'),
         message: options.message || (
           isFuture
             ? `${selYear} is not available yet. Please wait until the system year changes to ${selYear}.`
-            : `You are currently viewing ${selYear} data. New bills and products can only be created in the current system year (${currentSysYear}). Please switch to ${currentSysYear} before creating.`
+            : `You are currently viewing ${selYear} records. You can switch to current year (${currentSysYear}) or continue in ${selYear}.`
         ),
+        onProceed: options.onProceed,
+        onSwitch: options.onSwitch,
       },
     })
   );
@@ -50,7 +55,7 @@ export const YearRestrictionDialog: React.FC = () => {
     selectedYear: '2025',
     currentSystemYear: new Date().getFullYear().toString(),
     isFutureYear: false,
-    title: 'Previous Year Selected',
+    title: 'Previous Year Notice',
     message: '',
   });
 
@@ -58,10 +63,7 @@ export const YearRestrictionDialog: React.FC = () => {
     const handleShowDialog = (e: Event) => {
       const customEvent = e as CustomEvent<YearRestrictionDialogDetail>;
       if (customEvent.detail) {
-        setDialogData((prev) => ({
-          ...prev,
-          ...customEvent.detail,
-        }));
+        setDialogData(customEvent.detail);
         setOpen(true);
       }
     };
@@ -76,10 +78,22 @@ export const YearRestrictionDialog: React.FC = () => {
     setOpen(false);
   };
 
+  const handleStay = () => {
+    setOpen(false);
+    if (dialogData.onProceed) {
+      dialogData.onProceed();
+    }
+  };
+
   const handleSwitchToCurrentYear = () => {
     const sysYear = dialogData.currentSystemYear || new Date().getFullYear().toString();
     setSelectedBillYear(sysYear);
     setOpen(false);
+    if (dialogData.onSwitch) {
+      dialogData.onSwitch();
+    } else if (dialogData.onProceed) {
+      dialogData.onProceed();
+    }
   };
 
   const currentSysYear = dialogData.currentSystemYear || new Date().getFullYear().toString();
@@ -90,133 +104,164 @@ export const YearRestrictionDialog: React.FC = () => {
     <Dialog
       open={open}
       onClose={handleClose}
-      maxWidth="xs"
+      maxWidth="sm"
       fullWidth
       slotProps={{
         paper: {
           sx: {
-            borderRadius: '20px',
-            p: 1.5,
-            boxShadow: '0 24px 48px rgba(0, 0, 0, 0.22), 0 8px 16px rgba(0, 0, 0, 0.08)',
-            border: isFuture ? '1px solid rgba(217, 119, 6, 0.2)' : '1px solid rgba(220, 38, 38, 0.2)',
-            background: '#FFFFFF',
+            borderRadius: '4px',
+            border: '1px solid #B0C4DE',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+            bgcolor: '#FFFFFF',
             overflow: 'hidden',
           },
         },
       }}
     >
-      {/* Header Close Icon */}
-      <Box sx={{ position: 'relative', pt: 1.5, px: 2, pb: 1, textAlign: 'center' }}>
+      {/* Title Header Bar (ERP Window Style) */}
+      <DialogTitle
+        sx={{
+          background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+          borderBottom: '1px solid #A8C2DC',
+          px: 2,
+          py: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {isFuture ? (
+            <LockRoundedIcon sx={{ fontSize: 18, color: '#D97706' }} />
+          ) : (
+            <WarningAmberRoundedIcon sx={{ fontSize: 19, color: '#B91C1C' }} />
+          )}
+          <Typography sx={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', letterSpacing: '0.01em' }}>
+            {dialogData.title || (isFuture ? 'Future Year Restricted' : 'Previous Year Notice')}
+          </Typography>
+        </Box>
         <IconButton
+          size="small"
           onClick={handleClose}
           sx={{
-            position: 'absolute',
-            right: 8,
-            top: 8,
-            color: '#9CA3AF',
-            '&:hover': { color: '#374151', backgroundColor: '#F3F4F6' },
+            color: '#64748B',
+            p: 0.5,
+            '&:hover': { color: '#0F172A', bgcolor: 'rgba(0,0,0,0.06)' },
           }}
         >
-          <CloseRoundedIcon fontSize="small" />
+          <CloseRoundedIcon sx={{ fontSize: 16 }} />
         </IconButton>
+      </DialogTitle>
 
-        {/* Circular Accent Badge */}
+      {/* Dialog Body Content */}
+      <DialogContent sx={{ p: 2, bgcolor: '#FFFFFF' }}>
         <Box
           sx={{
-            width: 64,
-            height: 64,
-            borderRadius: '50%',
-            backgroundColor: isFuture ? '#FEF3C7' : '#FEE2E2',
-            color: isFuture ? '#D97706' : '#DC2626',
+            p: 1.5,
+            bgcolor: isFuture ? '#FFFBEB' : '#FEF2F2',
+            border: isFuture ? '1px solid #FDE68A' : '1px solid #FECACA',
+            borderRadius: '3px',
+            mb: 1.5,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            mx: 'auto',
-            mb: 2,
-            boxShadow: isFuture ? '0 0 0 8px rgba(254, 243, 199, 0.4)' : '0 0 0 8px rgba(254, 226, 226, 0.4)',
+            alignItems: 'flex-start',
+            gap: 1.2,
           }}
         >
-          {isFuture ? (
-            <LockRoundedIcon sx={{ fontSize: 34 }} />
-          ) : (
-            <WarningAmberRoundedIcon sx={{ fontSize: 36 }} />
-          )}
+          <CalendarTodayRoundedIcon
+            sx={{
+              fontSize: 18,
+              color: isFuture ? '#D97706' : '#DC2626',
+              mt: 0.2,
+              flexShrink: 0,
+            }}
+          />
+          <Typography sx={{ fontSize: '12.5px', color: '#1E293B', lineHeight: 1.5, fontWeight: 500 }}>
+            {dialogData.message}
+          </Typography>
         </Box>
 
-        {/* Dialog Title */}
-        <Typography
-          variant="h6"
-          sx={{
-            fontWeight: 800,
-            color: '#111827',
-            fontSize: '1.2rem',
-            letterSpacing: '-0.015em',
-            mb: 1,
-          }}
-        >
-          {dialogData.title || (isFuture ? 'Future Year Restricted' : 'Previous Year Selected')}
-        </Typography>
+        {!isFuture && (
+          <Typography sx={{ fontSize: '12px', color: '#64748B', px: 0.5 }}>
+            Do you want to switch to the current year <b>({currentSysYear})</b> or proceed in <b>{selYear}</b>?
+          </Typography>
+        )}
+      </DialogContent>
 
-        {/* Dialog Content Message */}
-        <Typography
-          variant="body2"
-          sx={{
-            color: '#4B5563',
-            lineHeight: 1.6,
-            fontSize: '0.935rem',
-            px: 1,
-          }}
-        >
-          {dialogData.message}
-        </Typography>
-      </Box>
-
-      {/* Action Buttons */}
-      <DialogActions sx={{ px: 2, pb: 1.5, pt: 2, flexDirection: 'column', gap: 1 }}>
+      {/* Action Buttons (Sales Page Style: [Switch to Current Year] [Stay in Year] [Exit]) */}
+      <DialogActions
+        sx={{
+          bgcolor: '#F8FAFC',
+          borderTop: '1px solid #E2E8F0',
+          px: 2,
+          py: 1.2,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          gap: 1,
+        }}
+      >
+        {/* Switch to Current Year (Burgundy Button - like Sales Save Button) */}
         {!isFuture && (
           <Button
-            fullWidth
-            variant="contained"
             onClick={handleSwitchToCurrentYear}
-            startIcon={<CalendarTodayRoundedIcon />}
-            endIcon={<ArrowForwardRoundedIcon />}
+            variant="contained"
             sx={{
-              backgroundColor: '#DC2626',
+              bgcolor: '#741748',
               color: '#FFFFFF',
               fontWeight: 700,
+              fontSize: '12px',
+              px: 2,
+              py: 0.5,
+              borderRadius: '3px',
               textTransform: 'none',
-              py: 1.2,
-              borderRadius: '12px',
-              fontSize: '0.95rem',
-              boxShadow: '0 4px 14px rgba(220, 38, 38, 0.35)',
-              '&:hover': {
-                backgroundColor: '#B91C1C',
-                boxShadow: '0 6px 18px rgba(220, 38, 38, 0.45)',
-              },
+              boxShadow: 'none',
+              '&:hover': { bgcolor: '#580e34', boxShadow: 'none' },
             }}
           >
-            Switch to Current Year ({currentSysYear})
+            Switch to {currentSysYear}
           </Button>
         )}
+
+        {/* Stay in Year & Proceed (Grey Button - like Sales Print/Grid Buttons) */}
+        {!isFuture && (
+          <Button
+            onClick={handleStay}
+            variant="outlined"
+            sx={{
+              bgcolor: '#E5ECF4',
+              borderColor: '#94A3B8',
+              color: '#0F172A',
+              fontWeight: 700,
+              fontSize: '12px',
+              px: 2,
+              py: 0.5,
+              borderRadius: '3px',
+              textTransform: 'none',
+              '&:hover': { bgcolor: '#D9E4F2' },
+            }}
+          >
+            Stay in {selYear}
+          </Button>
+        )}
+
+        {/* Exit / Close Button (Clean Outlined) */}
         <Button
-          fullWidth
-          variant="outlined"
           onClick={handleClose}
+          variant="outlined"
           sx={{
-            color: '#4B5563',
-            borderColor: '#D1D5DB',
+            bgcolor: '#FFFFFF',
+            borderColor: '#CBD5E1',
+            color: '#475569',
             fontWeight: 600,
+            fontSize: '12px',
+            px: 1.5,
+            py: 0.5,
+            borderRadius: '3px',
             textTransform: 'none',
-            py: 1,
-            borderRadius: '12px',
-            fontSize: '0.9rem',
-            '&:hover': {
-              borderColor: '#9CA3AF',
-              backgroundColor: '#F9FAFB',
-            },
+            '&:hover': { bgcolor: '#F1F5F9', borderColor: '#94A3B8' },
           }}
         >
-          {isFuture ? 'Close' : `Stay in ${selYear} View`}
+          {isFuture ? 'Close' : 'Cancel'}
         </Button>
       </DialogActions>
     </Dialog>

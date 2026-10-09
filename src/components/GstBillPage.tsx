@@ -41,8 +41,6 @@ import type { GstBillPrintData, GstProductItem } from './GstBillPrintTemplate';
 import { numberToIndianWords } from '../utils/numberToWords';
 import {
   getActiveBillingYear,
-  setActiveBillingYear,
-  getStandardYearOptions,
   validateDateMatchesYear,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
@@ -100,9 +98,8 @@ export const GstBillPage: FC = () => {
   const [storeSettings] = useState(() => getStoredSettings());
   const [activeSubTab, setActiveSubTab] = useState<'create' | 'history'>('create');
 
-  // Year state
+  // Year state synced with global Navbar/Settings
   const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
-  const yearOptions = useMemo(() => getStandardYearOptions(), []);
 
   // Previous year billing history modal
   const [historyAlertOpen, setHistoryAlertOpen] = useState(false);
@@ -262,7 +259,7 @@ export const GstBillPage: FC = () => {
     try {
       const effectiveYear = targetYear || getSelectedBillYear();
       const [custRes, prodRes, priceRes] = await Promise.all([
-        CustomersApi.getAll().catch(() => []),
+        CustomersApi.getAll(effectiveYear).catch(() => []),
         ProductsApi.getAll(undefined, effectiveYear).catch(() => []),
         PriceListsApi.getAll({ year: effectiveYear }).catch(() => []),
       ]);
@@ -371,13 +368,6 @@ export const GstBillPage: FC = () => {
     }
   };
 
-  const handleYearChange = (newYear: number) => {
-    setSelectedYear(newYear);
-    setActiveBillingYear(newYear);
-    loadInitialData(newYear);
-    fetchGstHistory(newYear);
-  };
-
   // Reset form to fresh blank invoice
   const handleResetForm = (targetYear: number | string = selectedYear) => {
     setSelectedCustomer(null);
@@ -439,7 +429,19 @@ export const GstBillPage: FC = () => {
       if (!despatchedTo.trim() && opt.address) {
         setDespatchedTo(opt.address);
       }
-      checkPreviousHistory(opt.name, selectedYear);
+
+      const currentSystemYear = new Date().getFullYear();
+      if (Number(selectedYear) !== currentSystemYear) {
+        triggerYearRestrictionDialog({
+          selectedYear: String(selectedYear),
+          currentSystemYear: String(currentSystemYear),
+          onProceed: () => {
+            checkPreviousHistory(opt.name, selectedYear);
+          },
+        });
+      } else {
+        checkPreviousHistory(opt.name, selectedYear);
+      }
     } else {
       setCustomerName('');
       setCustomerPhone('');
@@ -605,17 +607,12 @@ export const GstBillPage: FC = () => {
     };
   };
 
-  // Save Bill
-  const handleSaveBill = async () => {
-    const currentSystemYear = new Date().getFullYear().toString();
-    const selectedViewYear = getSelectedBillYear();
-    if (selectedViewYear !== currentSystemYear) {
-      triggerYearRestrictionDialog({ selectedYear: selectedViewYear, currentSystemYear });
-      return;
-    }
+  // Execute Save Bill
+  const executeSaveBill = async () => {
     // Validate bill date against selected year
     if (!validateDateMatchesYear(billDate, selectedYear)) {
-      alert(`Bill date (${billDate}) does not belong to the selected year ${selectedYear}. Please select a date from ${selectedYear}.`);
+      setSnackbarMessage(`Bill date (${billDate}) does not belong to the selected year ${selectedYear}. Please select a date from ${selectedYear}.`);
+      setSnackbarOpen(true);
       return;
     }
 
@@ -712,6 +709,22 @@ export const GstBillPage: FC = () => {
     }
   };
 
+  const handleSaveBill = async () => {
+    const currentSystemYear = new Date().getFullYear();
+    const currentSystemYearStr = currentSystemYear.toString();
+    const selectedViewYear = getSelectedBillYear();
+
+    if (Number(selectedYear) !== currentSystemYear || String(selectedViewYear) !== currentSystemYearStr) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(selectedYear || selectedViewYear),
+        currentSystemYear: currentSystemYearStr,
+        onProceed: () => executeSaveBill(),
+      });
+      return;
+    }
+    executeSaveBill();
+  };
+
   // Print Current Form
   const handlePrintCurrent = () => {
     const billData = buildCurrentGstBillData();
@@ -757,49 +770,26 @@ export const GstBillPage: FC = () => {
             </Typography>
           </Box>
 
-          {/* Right: Year Selector & Subtabs Switcher */}
+          {/* Right: Subtabs Switcher */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {/* Year Selector */}
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.5,
-                bgcolor: '#FFFFFF',
-                border: '1px solid #93C5FD',
-                borderRadius: '4px',
-                px: 1,
-                py: 0.2,
-              }}
-            >
-              <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF' }}>
-                Year:
-              </Typography>
-              <select
-                value={selectedYear}
-                onChange={(e) => handleYearChange(Number(e.target.value))}
-                style={{
-                  fontSize: '11.5px',
-                  fontWeight: 800,
-                  color: '#1E3A8A',
-                  backgroundColor: 'transparent',
-                  border: 'none',
-                  outline: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {yearOptions.map((y) => (
-                  <option key={y} value={y} style={{ color: '#0F172A', fontWeight: 600 }}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </Box>
             <Button
               size="small"
               onClick={() => {
-                handleResetForm();
-                setActiveSubTab('create');
+                const openCreateTab = () => {
+                  handleResetForm();
+                  setActiveSubTab('create');
+                };
+
+                const currentSystemYear = new Date().getFullYear();
+                if (Number(selectedYear) !== currentSystemYear) {
+                  triggerYearRestrictionDialog({
+                    selectedYear: String(selectedYear),
+                    currentSystemYear: String(currentSystemYear),
+                    onProceed: () => openCreateTab(),
+                  });
+                  return;
+                }
+                openCreateTab();
               }}
               startIcon={<AddRoundedIcon sx={{ fontSize: 14 }} />}
               sx={{

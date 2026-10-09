@@ -66,20 +66,8 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const currentSystemYear = new Date().getFullYear();
-    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
-
-    // Security Restriction: Product creation ONLY allowed in current system year
-    if (selectedViewYear && Number(selectedViewYear) !== currentSystemYear) {
-      res.status(400).json({
-        success: false,
-        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New products can only be added to the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before adding a new product.`,
-        error: 'Product creation is only allowed in the current system year.',
-      });
-      return;
-    }
-
     const { shopStock, godownStock, stock, selectedViewYear: _v, viewYear: _vy, ...rest } = req.body;
-    rest.year = rest.year ? Number(rest.year) : currentSystemYear;
+    rest.year = rest.year ? Number(rest.year) : (_v ? Number(_v) : currentSystemYear);
     const targetType = rest.productType || 'Retail';
 
     if (!rest.slNo || Number(rest.slNo) <= 0) {

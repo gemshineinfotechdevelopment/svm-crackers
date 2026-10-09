@@ -31,11 +31,10 @@ import type { BillPrintData } from './BillPrintTemplate';
 import { getStoredSettings } from './SettingsPage';
 import {
   getActiveBillingYear,
-  setActiveBillingYear,
-  getStandardYearOptions,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
 import { getSelectedBillYear } from '../utils/billYearUtils';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 export interface CustomerItem {
   _id?: string;
@@ -66,9 +65,8 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Year filter state
+  // Year filter state synced with global Navbar/Settings
   const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
-  const yearOptions = useMemo(() => getStandardYearOptions(), []);
 
   // Edit Customer Dialog State
   const [openEditModal, setOpenEditModal] = useState(false);
@@ -141,10 +139,11 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
     }, 0);
   }, [recentBills]);
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (yearToFetch?: number | string) => {
     try {
       setLoading(true);
-      const data = await CustomersApi.getAll();
+      const targetYear = yearToFetch !== undefined ? yearToFetch : (selectedYear || getSelectedBillYear());
+      const data = await CustomersApi.getAll(targetYear);
       setCustomers(data || []);
     } catch (err) {
       console.error('Failed to fetch customers:', err);
@@ -170,7 +169,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
   };
 
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomers(selectedYear);
     fetchRecentBills(selectedYear);
 
     const handleSettingsUpdate = () => {
@@ -180,8 +179,10 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
       const year = e?.detail?.year ? Number(e.detail.year) : (typeof getSelectedBillYear === 'function' ? Number(getSelectedBillYear()) : undefined);
       if (year) {
         setSelectedYear(year);
+        fetchCustomers(year);
         fetchRecentBills(year);
       } else {
+        fetchCustomers();
         fetchRecentBills();
       }
     };
@@ -196,13 +197,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
     };
   }, []);
 
-  const handleYearChangeFromDropdown = (newYear: number) => {
-    setSelectedYear(newYear);
-    setActiveBillingYear(newYear);
-    fetchRecentBills(newYear);
-  };
-
-  const handleOpenEdit = (customer: CustomerItem) => {
+  const openEditAction = (customer: CustomerItem) => {
     setEditingCustomer(customer);
     setEditFormData({
       name: customer.name || '',
@@ -211,6 +206,19 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
       address: customer.address || '',
     });
     setOpenEditModal(true);
+  };
+
+  const handleOpenEdit = (customer: CustomerItem) => {
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(selectedYear),
+        currentSystemYear: String(currentSystemYear),
+        onProceed: () => openEditAction(customer),
+      });
+      return;
+    }
+    openEditAction(customer);
   };
 
   const handleSaveEdit = async () => {
@@ -233,7 +241,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
         avatarLetter: editFormData.name.trim().charAt(0).toUpperCase(),
       });
       setOpenEditModal(false);
-      await fetchCustomers();
+      await fetchCustomers(selectedYear);
     } catch (err: any) {
       console.error('Failed to update customer:', err);
       alert(err.message || 'Error updating customer');
@@ -242,17 +250,30 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
+  const executeDelete = async (id: string, name: string) => {
     if (!window.confirm(`Are you sure you want to delete customer "${name}"? This will delete all associated records.`)) return;
 
     try {
       await CustomersApi.delete(id);
       setCustomers((prev) => prev.filter((c) => (c._id || c.id) !== id));
-      fetchRecentBills();
+      fetchRecentBills(selectedYear);
     } catch (err: any) {
       console.error('Failed to delete customer:', err);
-      alert(err.message || 'Error deleting customer');
+      alert('Error deleting customer');
     }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(selectedYear),
+        currentSystemYear: String(currentSystemYear),
+        onProceed: () => executeDelete(id, name),
+      });
+      return;
+    }
+    executeDelete(id, name);
   };
 
   // Delete Recent Bill
@@ -643,7 +664,18 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                   {/* Add Customer Button */}
                   {onAddNewCustomer && (
                     <Button
-                      onClick={onAddNewCustomer}
+                      onClick={() => {
+                        const currentSystemYear = new Date().getFullYear();
+                        if (Number(selectedYear) !== currentSystemYear) {
+                          triggerYearRestrictionDialog({
+                            selectedYear: String(selectedYear),
+                            currentSystemYear: String(currentSystemYear),
+                            onProceed: () => onAddNewCustomer(),
+                          });
+                          return;
+                        }
+                        onAddNewCustomer();
+                      }}
                       startIcon={<AddRoundedIcon sx={{ fontSize: 15 }} />}
                       size="small"
                       sx={{
@@ -762,7 +794,18 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                                   {/* Statement / Bill */}
                                   <Button
                                     size="small"
-                                    onClick={() => onSelectCustomerForParticular?.(customer.name, 'Create Particular')}
+                                    onClick={() => {
+                                      const currentSystemYear = new Date().getFullYear();
+                                      if (Number(selectedYear) !== currentSystemYear) {
+                                        triggerYearRestrictionDialog({
+                                          selectedYear: String(selectedYear),
+                                          currentSystemYear: String(currentSystemYear),
+                                          onProceed: () => onSelectCustomerForParticular?.(customer.name, 'Create Particular'),
+                                        });
+                                        return;
+                                      }
+                                      onSelectCustomerForParticular?.(customer.name, 'Create Particular');
+                                    }}
                                     sx={{
                                       height: '24px',
                                       px: 1,
@@ -867,45 +910,8 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                   )}
                 </Box>
 
-                {/* Right: Year Filter + Total & Refresh */}
+                {/* Right: Total & Refresh */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  {/* Year Filter Dropdown */}
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 0.5,
-                      bgcolor: '#EFF6FF',
-                      border: '1px solid #93C5FD',
-                      borderRadius: '3px',
-                      px: 0.8,
-                      py: 0.2,
-                    }}
-                  >
-                    <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF' }}>
-                      Year:
-                    </Typography>
-                    <select
-                      value={selectedYear}
-                      onChange={(e) => handleYearChangeFromDropdown(Number(e.target.value))}
-                      style={{
-                        fontSize: '11.5px',
-                        fontWeight: 800,
-                        color: '#1E3A8A',
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        outline: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {yearOptions.map((y) => (
-                        <option key={y} value={y} style={{ color: '#0F172A', fontWeight: 600 }}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
-                  </Box>
-
                   <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
                     Total Invoiced: <strong style={{ color: '#741748' }}>₹{totalBillsAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                   </Typography>
@@ -1011,7 +1017,24 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                                   {/* Edit Bill */}
                                   <Button
                                     size="small"
-                                    onClick={() => onEditBill ? onEditBill(bill) : handleOpenEditBill(bill)}
+                                    onClick={() => {
+                                      const openBillEdit = () => {
+                                        onEditBill ? onEditBill(bill) : handleOpenEditBill(bill);
+                                      };
+
+                                      const currentSystemYear = new Date().getFullYear();
+                                      const billYr = Number(bill.year) || currentSystemYear;
+                                      if (billYr < currentSystemYear || Number(selectedYear) < currentSystemYear) {
+                                        triggerYearRestrictionDialog({
+                                          selectedYear: String(billYr || selectedYear),
+                                          currentSystemYear: String(currentSystemYear),
+                                          title: 'Previous Year Bill',
+                                          onProceed: () => openBillEdit(),
+                                        });
+                                        return;
+                                      }
+                                      openBillEdit();
+                                    }}
                                     sx={{
                                       height: '24px',
                                       px: 1,

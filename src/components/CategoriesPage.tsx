@@ -24,6 +24,8 @@ import CategoryRoundedIcon from '@mui/icons-material/CategoryRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import { CategoriesApi } from '../services/api';
+import { getActiveBillingYear } from '../utils/yearContext';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 export interface CategoryItem {
   _id?: string;
@@ -90,7 +92,7 @@ export const CategoriesPage: FC = () => {
     );
   }, [categories, searchTerm]);
 
-  const handleOpenAdd = () => {
+  const openAddAction = () => {
     setEditingCategory(null);
     setName('');
     setCode('');
@@ -100,7 +102,21 @@ export const CategoriesPage: FC = () => {
     setOpenModal(true);
   };
 
-  const handleOpenEdit = (cat: CategoryItem) => {
+  const handleOpenAdd = () => {
+    const activeYear = getActiveBillingYear();
+    const currentSystemYear = new Date().getFullYear();
+    if (activeYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(activeYear),
+        currentSystemYear: String(currentSystemYear),
+        onProceed: () => openAddAction(),
+      });
+      return;
+    }
+    openAddAction();
+  };
+
+  const openEditAction = (cat: CategoryItem) => {
     setEditingCategory(cat);
     setName(cat.name || '');
     setCode(cat.code || '');
@@ -108,6 +124,20 @@ export const CategoriesPage: FC = () => {
     setColor(cat.color || '#1E40AF');
     setIsActive(cat.isActive !== false);
     setOpenModal(true);
+  };
+
+  const handleOpenEdit = (cat: CategoryItem) => {
+    const activeYear = getActiveBillingYear();
+    const currentSystemYear = new Date().getFullYear();
+    if (activeYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(activeYear),
+        currentSystemYear: String(currentSystemYear),
+        onProceed: () => openEditAction(cat),
+      });
+      return;
+    }
+    openEditAction(cat);
   };
 
   const handleSave = async () => {
@@ -147,7 +177,7 @@ export const CategoriesPage: FC = () => {
     }
   };
 
-  const handleDelete = async (cat: CategoryItem) => {
+  const executeDelete = async (cat: CategoryItem) => {
     const id = cat._id || cat.id || '';
     if (!id) return;
     if (!window.confirm(`Are you sure you want to delete category "${cat.name}"?`)) return;
@@ -159,6 +189,20 @@ export const CategoriesPage: FC = () => {
       console.error('Failed to delete category:', err);
       alert(err.message || 'Error deleting category');
     }
+  };
+
+  const handleDelete = async (cat: CategoryItem) => {
+    const activeYear = getActiveBillingYear();
+    const currentSystemYear = new Date().getFullYear();
+    if (activeYear !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(activeYear),
+        currentSystemYear: String(currentSystemYear),
+        onProceed: () => executeDelete(cat),
+      });
+      return;
+    }
+    executeDelete(cat);
   };
 
   return (

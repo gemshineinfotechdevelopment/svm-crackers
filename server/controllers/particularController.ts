@@ -173,18 +173,7 @@ export const getNextBillNo = async (req: Request, res: Response, next: NextFunct
 
 export const createParticular = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const currentSystemYear = new Date().getFullYear().toString();
-    const selectedViewYear = req.body.selectedViewYear || req.body.viewYear || req.query.viewYear;
-
-    // Backend Security Restriction: Bill creation ONLY allowed in current system year
-    if (selectedViewYear && String(selectedViewYear).trim() !== currentSystemYear) {
-      res.status(400).json({
-        success: false,
-        message: `Previous Year Selected: You are currently viewing ${selectedViewYear} data. New bills can only be created in the current system year (${currentSystemYear}). Please switch to ${currentSystemYear} before creating a new bill.`,
-        error: 'Bill creation is only allowed in the current system year.',
-      });
-      return;
-    }
+    const currentSystemYear = new Date().getFullYear();
     const {
       customerName,
       customerPhone,
@@ -299,6 +288,7 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
             avatarBg: colorPair.bg,
             avatarColor: colorPair.color,
             idCode: `#${(maxId + 1).toString().padStart(4, '0')}`,
+            year: currentSystemYear,
           });
           console.log(`[Auto Customer Created]: ${trimmedCustName}`);
         } else if (customerPhone || customerAddress || customerGst || customerAadhar) {
@@ -443,6 +433,17 @@ export const updateParticular = async (req: Request, res: Response, next: NextFu
     const existing = await Particular.findById(id);
     if (!existing) {
       res.status(404).json({ success: false, error: 'Particular bill not found' });
+      return;
+    }
+
+    const currentSystemYear = new Date().getFullYear();
+    const billYear = Number(existing.year) || extractYearFromDate(existing.date, currentSystemYear);
+    if (billYear < currentSystemYear) {
+      res.status(400).json({
+        success: false,
+        message: `Previous Year Bill Locked: Bill #${existing.billNo} belongs to past year ${billYear}. Editing bills from previous years is not permitted.`,
+        error: 'Editing previous year bills is restricted.',
+      });
       return;
     }
 
