@@ -100,18 +100,23 @@ export const CompaniesApi = {
   delete: (id: string) => request<any>(`/companies/${id}`, { method: 'DELETE' }),
 };
 
-// Products API
 export const ProductsApi = {
-  getAll: (searchOrYear?: string | number, yearParam?: string | number) => {
+  getAll: (searchOrYear?: string | number, yearParam?: string | number, typeParam?: string) => {
     const query = new URLSearchParams();
     let search: string | undefined;
     let year: string | number | undefined;
+    let type: string | undefined = typeParam;
 
     if (typeof searchOrYear === 'number' || (typeof searchOrYear === 'string' && /^\d{4}$/.test(searchOrYear.trim()))) {
       year = searchOrYear;
     } else if (typeof searchOrYear === 'string') {
-      search = searchOrYear;
-      year = yearParam;
+      if (['Retail', 'Wholesale', 'Both', 'ALL'].includes(searchOrYear.trim())) {
+        type = searchOrYear.trim();
+        year = yearParam;
+      } else {
+        search = searchOrYear;
+        year = yearParam;
+      }
     } else {
       year = yearParam;
     }
@@ -119,6 +124,9 @@ export const ProductsApi = {
     if (search && search.trim() !== '') query.append('search', search.trim());
     if (year !== undefined && year !== null && String(year).toUpperCase() !== 'ALL') {
       query.append('year', String(year));
+    }
+    if (type && type !== 'ALL') {
+      query.append('type', type);
     }
     const qs = query.toString();
     return request<any[]>(`/products${qs ? `?${qs}` : ''}`);
@@ -128,6 +136,8 @@ export const ProductsApi = {
   update: (id: string, data: any) => request<any>(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) => request<any>(`/products/${id}`, { method: 'DELETE' }),
   bulkDelete: (ids: string[]) => request<any>('/products/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
+  bulkImport: (data: { items: any[]; defaultType?: string; replaceExisting?: boolean }) =>
+    request<any>('/products/bulk-import', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Categories API

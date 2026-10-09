@@ -1714,17 +1714,22 @@ export const printCompaniesListDirectly = (companies: any[]) => {
 /**
  * Print Products List (A4 Standard)
  */
-export const generateProductsListPrintHtml = (products: any[], categoryTitle?: string): string => {
+export const generateProductsListPrintHtml = (products: any[], categoryTitle?: string, typeTitle?: string): string => {
   const storeSettings = getStoredSettings();
   const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
-  const catTitle = categoryTitle && categoryTitle !== 'ALL' ? ` (${categoryTitle})` : '';
+  const catTitle = categoryTitle && categoryTitle !== 'ALL' ? ` - ${categoryTitle}` : '';
+  const modeTitle = typeTitle && typeTitle !== 'ALL' ? ` [${typeTitle.toUpperCase()}]` : '';
+  
   const rowsHtml = products.map((p, idx) => `
     <tr>
-      <td class="text-center" style="width:40px;">${idx + 1}</td>
+      <td class="text-center" style="width:35px;">${typeTitle === 'ALL' ? idx + 1 : (p.slNo || idx + 1)}</td>
       <td style="font-weight:700; color:#0F172A;">${p.name}</td>
-      <td class="text-center" style="color:#64748B;">${p.hsnCode || '-'}</td>
-      <td style="text-align:right; font-weight:700; color:#0B4DB7;">₹ ${(parseFloat(p.rate) || 0).toFixed(2)}</td>
+      <td style="color:#1E40AF; font-weight:600;">${p.category || 'General'}</td>
+      <td class="text-center" style="color:#475569;">${p.unit || 'Box'}</td>
+      <td class="text-center" style="font-weight:600; font-size:10.5px; color:#4338CA;">${p.productType || 'Retail'}</td>
+      <td style="text-align:right; color:#64748B;">${p.mrp ? '₹' + Number(p.mrp).toFixed(2) : '-'}</td>
+      <td style="text-align:right; font-weight:700; color:#0F172A;">₹${(parseFloat(p.rate) || 0).toFixed(2)}</td>
     </tr>
   `).join('');
 
@@ -1733,24 +1738,24 @@ export const generateProductsListPrintHtml = (products: any[], categoryTitle?: s
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Products Catalog - ${compName} - ${currentDate}</title>
+  <title>Products Catalog${modeTitle} - ${compName} - ${currentDate}</title>
   <style>
     @page { size: A4 portrait; margin: 8mm 10mm; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin:0; padding:10px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin:0; padding:10px; color:#0F172A; }
     .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
-    .table { width: 100%; border-collapse: collapse; font-size: 11.5px; border: 1px solid #000; }
-    .table th { background: #F1F5F9; border: 1px solid #94A3B8; padding: 7px; font-weight: 800; }
-    .table td { border: 1px solid #CBD5E1; padding: 6px; }
+    .table { width: 100%; border-collapse: collapse; font-size: 11px; border: 1px solid #94A3B8; }
+    .table th { background: #F1F5F9; border: 1px solid #94A3B8; padding: 6px; font-weight: 800; font-size:11px; }
+    .table td { border: 1px solid #CBD5E1; padding: 5px 6px; }
     .text-center { text-align: center; }
   </style>
 </head>
 <body>
   <div class="header">
     <div>
-      <div style="font-size:24px; font-weight:900; color:#0B4DB7;">${compName}</div>
-      <h2 style="font-size:15px;">PRODUCTS PRICE CATALOG${catTitle}</h2>
+      <div style="font-size:22px; font-weight:900; color:#0B4DB7; letter-spacing:0.02em;">${compName}</div>
+      <h2 style="font-size:14px; margin:3px 0 0 0; color:#1E293B;">PRODUCT MASTER CATALOG${modeTitle}${catTitle}</h2>
     </div>
-    <div style="text-align:right; font-size:11.5px;">
+    <div style="text-align:right; font-size:11px; color:#334155;">
       <div>Date: <b>${currentDate}</b></div>
       <div>Total Products: <b>${products.length}</b></div>
     </div>
@@ -1758,14 +1763,17 @@ export const generateProductsListPrintHtml = (products: any[], categoryTitle?: s
   <table class="table">
     <thead>
       <tr>
-        <th class="text-center">#</th>
-        <th>Product Name</th>
-        <th class="text-center">HSN Code</th>
-        <th style="text-align:right;">Default Rate</th>
+        <th class="text-center" style="width:35px;">S.No</th>
+        <th style="text-align:left;">Product Name</th>
+        <th style="text-align:left; width:130px;">Category</th>
+        <th class="text-center" style="width:60px;">Unit</th>
+        <th class="text-center" style="width:75px;">Type</th>
+        <th style="text-align:right; width:80px;">MRP</th>
+        <th style="text-align:right; width:90px;">Rate</th>
       </tr>
     </thead>
     <tbody>
-      ${rowsHtml || '<tr><td colspan="4" class="text-center">No products found.</td></tr>'}
+      ${rowsHtml || '<tr><td colspan="7" class="text-center" style="padding:15px; color:#64748B;">No products found.</td></tr>'}
     </tbody>
   </table>
 </body>
@@ -1773,8 +1781,8 @@ export const generateProductsListPrintHtml = (products: any[], categoryTitle?: s
   `;
 };
 
-export const printProductsListDirectly = (products: any[], categoryTitle?: string) => {
-  const htmlContent = generateProductsListPrintHtml(products, categoryTitle);
+export const printProductsListDirectly = (products: any[], categoryTitle?: string, typeTitle?: string) => {
+  const htmlContent = generateProductsListPrintHtml(products, categoryTitle, typeTitle);
   triggerBrowserPrint(htmlContent);
 };
 
