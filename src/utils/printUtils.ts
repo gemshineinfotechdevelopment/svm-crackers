@@ -65,6 +65,27 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
       ? 'MANJULA CRACKERS'
       : rawComp.toUpperCase();
 
+  const companyAddress = (bill.companyAddress || storeSettings.address || '').trim() ||
+    '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+  const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
+  const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
+  const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
+
+  let cityLine = companyCity.toUpperCase();
+  if (companyPincode) {
+    cityLine += ` - ${companyPincode}`;
+  }
+  if (companyState && !cityLine.toLowerCase().includes(companyState.toLowerCase())) {
+    cityLine += `, ${companyState.toUpperCase()}`;
+  }
+
+  const primaryPhone = (bill.companyPhone || bill.phone || storeSettings.phone || '').trim();
+  const whatsappPhone = (bill.companyWhatsapp || storeSettings.whatsapp || '').trim();
+  const phoneNumbersList: string[] = [];
+  if (primaryPhone) phoneNumbersList.push(primaryPhone);
+  if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
+  const companyPhoneDisplay = phoneNumbersList.join(', ');
+
   const formatCur = (val: string | number | undefined | null) => {
     if (val === undefined || val === null || val === '') return '0.00';
     const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, '')) || 0;
@@ -244,11 +265,12 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
               (ALL KINDS OF CRACKERS AND FANCY VARIETIES AVAILABLE)
             </div>
             <div style="font-size: 11.5px; color: #000000; margin-bottom: 1px;">
-              #67-H-E, Rajiv gandhi Nagar,Near Ramji Polypack Sivakasi bus stand Backside
+              ${companyAddress}
             </div>
             <div style="font-size: 12.5px; font-weight: 800; color: #000000;">
-              SIVAKASI - 626 123
+              ${cityLine}
             </div>
+            ${companyPhoneDisplay ? `<div style="font-size: 11px; font-weight: 700; color: #000000; margin-top: 1px;">Cell : ${companyPhoneDisplay}</div>` : ''}
           </div>
 
           <div style="width: 85px; text-align: center; flex-shrink: 0;">
@@ -585,6 +607,27 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
 
   const gstinNo = bill.gstin || storeSettings.gstin || '33ABFFA6758B1ZP';
 
+  const companyAddress = (bill.companyAddress || storeSettings.address || '').trim() ||
+    '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+  const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
+  const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
+  const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
+
+  let cityLine = companyCity.toUpperCase();
+  if (companyPincode) {
+    cityLine += ` - ${companyPincode}`;
+  }
+  if (companyState && !cityLine.toLowerCase().includes(companyState.toLowerCase())) {
+    cityLine += `, ${companyState.toUpperCase()}`;
+  }
+
+  const primaryPhone = (bill.companyPhone || storeSettings.phone || '').trim();
+  const whatsappPhone = (bill.companyWhatsapp || storeSettings.whatsapp || '').trim();
+  const phoneNumbersList: string[] = [];
+  if (primaryPhone) phoneNumbersList.push(primaryPhone);
+  if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
+  const companyPhoneDisplay = phoneNumbersList.join(', ');
+
   const formatCur = (val: string | number | undefined | null) => {
     if (val === undefined || val === null || val === '') return '0.00';
     const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, '')) || 0;
@@ -748,9 +791,10 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
 
       <!-- Main Bordered Container -->
       <div class="bill-box">
-        <!-- Top GSTIN Line -->
-        <div style="padding: 4px 8px 1px 8px; font-size: 11.5px; font-weight: 700; color: #000000;">
-          GSTIN No : <span>${gstinNo}</span>
+        <!-- Top GSTIN & Phone Line -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 1px 8px; font-size: 11.5px; font-weight: 700; color: #000000;">
+          <div>GSTIN No : <span>${gstinNo}</span></div>
+          ${companyPhoneDisplay ? `<div>Cell : <span>${companyPhoneDisplay}</span></div>` : ''}
         </div>
 
         <!-- Header: Ganesha (Left) | Title (Center) | Apsara Logo (Right) -->
@@ -767,11 +811,12 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
               (ALL KINDS OF CRACKERS AND FANCY VARIETIES AVAILABLE)
             </div>
             <div style="font-size: 11.5px; color: #000000; margin-bottom: 1px;">
-              #67-H-E, Rajiv gandhi Nagar,Near Ramji Polypack Sivakasi bus stand Backside
+              ${companyAddress}
             </div>
             <div style="font-size: 12.5px; font-weight: 800; color: #000000;">
-              SIVAKASI - 626 123
+              ${cityLine}
             </div>
+            ${companyPhoneDisplay ? `<div style="font-size: 11px; font-weight: 700; color: #000000; margin-top: 1px;">Cell : ${companyPhoneDisplay}</div>` : ''}
           </div>
 
           <div style="width: 85px; text-align: center; flex-shrink: 0;">

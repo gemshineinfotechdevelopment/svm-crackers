@@ -50,6 +50,12 @@ export interface GstBillPrintData {
   lrDate?: string;
   caseCount?: string | number;
   companyName?: string;
+  companyAddress?: string;
+  companyCity?: string;
+  companyPincode?: string;
+  companyState?: string;
+  companyPhone?: string;
+  companyWhatsapp?: string;
   gstin?: string;
   hsnNo?: string;
   products: GstProductItem[];
@@ -121,6 +127,29 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
 
   // GSTIN
   const gstinNo = bill.gstin || storeSettings.gstin || '33ABFFA6758B1ZP';
+
+  // Company Address, City, State, Pincode from Settings / Bill
+  const companyAddress = (bill.companyAddress || storeSettings.address || '').trim() ||
+    '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+  const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
+  const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
+  const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
+
+  let cityLine = companyCity.toUpperCase();
+  if (companyPincode) {
+    cityLine += ` - ${companyPincode}`;
+  }
+  if (companyState && !cityLine.toLowerCase().includes(companyState.toLowerCase())) {
+    cityLine += `, ${companyState.toUpperCase()}`;
+  }
+
+  // Company Phone Numbers from Settings / Bill
+  const primaryPhone = (bill.companyPhone || storeSettings.phone || '').trim();
+  const whatsappPhone = (bill.companyWhatsapp || storeSettings.whatsapp || '').trim();
+  const phoneNumbersList: string[] = [];
+  if (primaryPhone) phoneNumbersList.push(primaryPhone);
+  if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
+  const companyPhoneDisplay = phoneNumbersList.join(', ');
 
   // Subtotal from products
   const products = bill.products || [];
@@ -284,16 +313,26 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
           justifyContent: 'space-between',
         }}
       >
-        {/* Top GSTIN Line */}
+        {/* Top GSTIN & Phone Line */}
         <div
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             padding: '4px 8px 1px 8px',
             fontSize: '11.5px',
             fontWeight: 700,
             color: '#000000',
           }}
         >
-          GSTIN No : <span>{gstinNo}</span>
+          <div>
+            GSTIN No : <span>{gstinNo}</span>
+          </div>
+          {companyPhoneDisplay ? (
+            <div>
+              Cell : <span>{companyPhoneDisplay}</span>
+            </div>
+          ) : null}
         </div>
 
         {/* Header: Ganesha (Left) | Title & Address (Center) | Apsara Logo (Right) */}
@@ -348,18 +387,23 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
               (ALL KINDS OF CRACKERS AND FANCY VARIETIES AVAILABLE)
             </div>
             <div style={{ fontSize: '11.5px', color: '#000000', marginBottom: '1px' }}>
-              #67-H-E, Rajiv gandhi Nagar,Near Ramji Polypack Sivakasi bus stand Backside
+              {companyAddress}
             </div>
             <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#000000' }}>
-              SIVAKASI - 626 123
+              {cityLine}
             </div>
+            {companyPhoneDisplay ? (
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#000000', marginTop: '1px' }}>
+                Cell : {companyPhoneDisplay}
+              </div>
+            ) : null}
           </div>
 
-          {/* Right: SVM Crackers Logo */}
+          {/* Right: Company Logo */}
           <div style={{ width: '85px', textAlign: 'center', flexShrink: 0 }}>
             <img
-              src={defaultApsaraFeatherLogo}
-              alt="SVM Crackers"
+              src={storeSettings.logoUrl || defaultApsaraFeatherLogo}
+              alt={displayCompanyName}
               style={{
                 maxHeight: '68px',
                 maxWidth: '85px',
