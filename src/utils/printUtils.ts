@@ -790,10 +790,9 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
 
       <!-- Main Bordered Container -->
       <div class="bill-box">
-        <!-- Top GSTIN & Phone Line -->
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 1px 8px; font-size: 11.5px; font-weight: 700; color: #000000;">
-          <div>GSTIN No : <span>${gstinNo}</span></div>
-          ${companyPhoneDisplay ? `<div>Cell : <span>${companyPhoneDisplay}</span></div>` : ''}
+        <!-- Top GSTIN Line -->
+        <div style="padding: 4px 8px 1px 8px; font-size: 11.5px; font-weight: 700; color: #000000;">
+          GSTIN No : <span>${gstinNo}</span>
         </div>
 
         <!-- Header: Ganesha (Left) | Title (Center) | Apsara Logo (Right) -->

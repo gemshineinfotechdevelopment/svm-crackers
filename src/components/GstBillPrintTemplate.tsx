@@ -312,26 +312,16 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
           justifyContent: 'space-between',
         }}
       >
-        {/* Top GSTIN & Phone Line */}
+        {/* Top GSTIN Line */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
             padding: '4px 8px 1px 8px',
             fontSize: '11.5px',
             fontWeight: 700,
             color: '#000000',
           }}
         >
-          <div>
-            GSTIN No : <span>{gstinNo}</span>
-          </div>
-          {companyPhoneDisplay ? (
-            <div>
-              Cell : <span>{companyPhoneDisplay}</span>
-            </div>
-          ) : null}
+          GSTIN No : <span>{gstinNo}</span>
         </div>
 
         {/* Header: Ganesha (Left) | Title & Address (Center) | Apsara Logo (Right) */}
