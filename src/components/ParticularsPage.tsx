@@ -67,8 +67,33 @@ interface ProductCatalogOption {
   category?: string;
   rate?: number;
   mrp?: number;
+  wholesaleRate?: number;
+  retailRate?: number;
+  productType?: string;
   unit?: string;
 }
+
+const getRateForType = (prod: ProductCatalogOption | undefined | null, rType: string): number => {
+  if (!prod) return 0;
+  const mrp = Number(prod.mrp) || 0;
+  const netRate = Number(prod.rate) || 0;
+  const wholesaleRate = Number(prod.wholesaleRate) || (prod.productType === 'Wholesale' ? netRate : netRate);
+  const retailRate = Number(prod.retailRate) || (prod.productType === 'Retail' ? (netRate || mrp) : (mrp || netRate));
+
+  switch (rType) {
+    case 'Befor Rate':
+    case 'Before Rate':
+      return mrp > 0 ? mrp : netRate;
+    case 'Net Rate':
+      return netRate > 0 ? netRate : mrp;
+    case 'Wholesale Rate':
+      return wholesaleRate > 0 ? wholesaleRate : netRate;
+    case 'Retail Rate':
+      return retailRate > 0 ? retailRate : (mrp > 0 ? mrp : netRate);
+    default:
+      return netRate > 0 ? netRate : mrp;
+  }
+};
 
 interface ParticularsPageProps {
   initialCustomerName?: string;
@@ -222,13 +247,19 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         prodRes.forEach((p: any, idx: number) => {
           const key = (p.name || '').trim();
           if (key) {
+            const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
+            const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
+            const pType = p.productType || 'Retail';
             prodMap.set(key.toLowerCase(), {
               id: p._id || p.id,
               sku: p.sku || `P${100 + idx}`,
               name: key,
               category: p.category || 'General',
-              rate: typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0,
-              mrp: typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0,
+              rate: rateVal,
+              mrp: mrpVal,
+              wholesaleRate: typeof p.wholesaleRate === 'number' ? p.wholesaleRate : (pType === 'Wholesale' ? rateVal : rateVal),
+              retailRate: typeof p.retailRate === 'number' ? p.retailRate : (pType === 'Retail' ? (rateVal || mrpVal) : (mrpVal || rateVal)),
+              productType: pType,
               unit: p.unit || '1 Box',
             });
           }
@@ -239,13 +270,18 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         priceRes.forEach((p: any, idx: number) => {
           const key = (p.itemName || '').trim();
           if (key && !prodMap.has(key.toLowerCase())) {
+            const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
+            const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
             prodMap.set(key.toLowerCase(), {
               id: p._id || p.id,
               sku: `PL-${100 + idx}`,
               name: key,
               category: p.category || 'General',
-              rate: typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0,
-              mrp: typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0,
+              rate: rateVal,
+              mrp: mrpVal,
+              wholesaleRate: rateVal,
+              retailRate: mrpVal > 0 ? mrpVal : rateVal,
+              productType: 'Both',
               unit: p.unit || '1 Box',
             });
           }
@@ -285,6 +321,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       setCustomerGst(editBillData.customerGst || '');
       setBillNo(String(editBillData.billNo || ''));
       setBillDate(editBillData.date || getInitialDateStr());
+      if (editBillData.rateType) setRateType(editBillData.rateType);
       setDiscountRs(String(editBillData.discount ?? '0'));
       setPackingRs(String(editBillData.packing ?? ''));
       setCompanyName(editBillData.companyName || storeSettings.companyName || 'Manjula Crackers');
@@ -360,15 +397,50 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     return Math.max(0, subtotal - discountAmount + packingAmount);
   }, [subtotal, discountAmount, packingAmount]);
 
+  // Rate Type Change Handler - auto adjusts all table row rates
+  const handleRateTypeChange = (newType: string) => {
+    setRateType(newType);
+    setProductRows((prev) =>
+      prev.map((row) => {
+        if (!row.particular.trim()) return row;
+        const match = productOptions.find(
+          (p) => p.name.trim().toLowerCase() === row.particular.trim().toLowerCase()
+        );
+        if (match) {
+          const newRate = getRateForType(match, newType);
+          const q = parseFloat(row.quantity) || 1;
+          return {
+            ...row,
+            rate: String(newRate),
+            amount: String(Math.round(q * newRate)),
+          };
+        }
+        return row;
+      })
+    );
+  };
+
   // Row Management
   const handleRowChange = (id: string, field: keyof ProductRowItem, val: string) => {
     setProductRows((prev) =>
       prev.map((row) => {
         if (row.id !== id) return row;
         const updated = { ...row, [field]: val };
-        const q = parseFloat(field === 'quantity' ? val : row.quantity) || 0;
-        const r = parseFloat(field === 'rate' ? val : row.rate) || 0;
-        updated.amount = (q * r).toFixed(0);
+
+        if (field === 'particular') {
+          const match = productOptions.find(
+            (p) => p.name.trim().toLowerCase() === val.trim().toLowerCase()
+          );
+          if (match) {
+            const calculatedRate = getRateForType(match, rateType);
+            updated.rate = String(calculatedRate);
+            if (match.unit) updated.pktUnit = match.unit;
+          }
+        }
+
+        const q = parseFloat(field === 'quantity' ? val : updated.quantity) || 0;
+        const r = parseFloat(field === 'rate' ? val : updated.rate) || 0;
+        updated.amount = String(Math.round(q * r));
         return updated;
       })
     );
@@ -396,13 +468,14 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   // Add selected product from top product bar
   const handleAddProductFromBar = (prod: ProductCatalogOption | null) => {
     if (!prod) return;
+    const rateVal = getRateForType(prod, rateType);
     const newRow: ProductRowItem = {
       id: String(Date.now()),
       particular: prod.name,
       pktUnit: prod.unit || quickUnit || '1 Box',
-      rate: String(prod.rate || '0'),
+      rate: String(rateVal),
       quantity: '1',
-      amount: String(prod.rate || '0'),
+      amount: String(rateVal),
     };
     setProductRows((prev) => [...prev, newRow]);
     setSelectedCatalogProduct(null);
@@ -441,6 +514,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         companyName: companyName || storeSettings.companyName || 'Manjula Crackers',
         billNo: billNo || '1001',
         date: billDate,
+        rateType: rateType,
         year: selectedYear,
         discount: String(discountAmount),
         packing: String(packingAmount),
@@ -476,6 +550,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       const savedBillData: BillPrintData = {
         billNo: billNo || '1001',
         date: billDate,
+        rateType: rateType,
         customerName: customerName.trim() || 'Valued Customer',
         customerPhone: customerMobile.trim(),
         customerAddress: customerAddress.trim(),
@@ -528,6 +603,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     const billData: BillPrintData = {
       billNo: billNo || '1001',
       date: billDate,
+      rateType: rateType,
       customerName: customerName || 'Valued Customer',
       customerPhone: customerMobile,
       customerAddress: customerAddress,
@@ -697,9 +773,9 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                   </Typography>
                   <select
                     value={rateType}
-                    onChange={(e) => setRateType(e.target.value)}
+                    onChange={(e) => handleRateTypeChange(e.target.value)}
                     className="erp-input"
-                    style={{ width: '120px', fontSize: '11.5px' }}
+                    style={{ width: '120px', fontSize: '11.5px', fontWeight: 700, color: '#1E40AF' }}
                   >
                     <option value="Befor Rate">Befor Rate</option>
                     <option value="Net Rate">Net Rate</option>
@@ -878,7 +954,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               size="small"
               sx={{ flex: 1, minWidth: '220px' }}
               options={productOptions}
-              getOptionLabel={(opt) => `${opt.name} - ₹${opt.rate || 0}`}
+              getOptionLabel={(opt) => `${opt.name} - ₹${getRateForType(opt, rateType)}`}
               value={selectedCatalogProduct}
               onChange={(_, opt) => {
                 setSelectedCatalogProduct(opt);
@@ -965,16 +1041,32 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                       <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5' }}>
                         Product
                       </TableCell>
-                      <TableCell sx={{ width: '100px', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                      <TableCell sx={{ width: '90px', fontWeight: 700, bgcolor: '#DCE7F5' }}>
                         Content
                       </TableCell>
-                      <TableCell sx={{ width: '90px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5' }}>
-                        Rate
+                      <TableCell
+                        sx={{
+                          width: '125px',
+                          minWidth: '120px',
+                          whiteSpace: 'nowrap',
+                          textAlign: 'right',
+                          fontWeight: 700,
+                          bgcolor: '#DCE7F5',
+                          color: '#1E40AF',
+                        }}
+                      >
+                        {rateType === 'Befor Rate' || rateType === 'Before Rate'
+                          ? 'Before Rate'
+                          : rateType === 'Net Rate'
+                          ? 'Net Rate'
+                          : rateType === 'Wholesale Rate'
+                          ? 'Wholesale Rate'
+                          : 'Retail Rate'}
                       </TableCell>
-                      <TableCell sx={{ width: '75px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                      <TableCell sx={{ width: '70px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5' }}>
                         Qty
                       </TableCell>
-                      <TableCell sx={{ width: '100px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                      <TableCell sx={{ width: '95px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5' }}>
                         Total
                       </TableCell>
                       <TableCell sx={{ width: '35px', textAlign: 'center', bgcolor: '#DCE7F5', p: 0.5 }} />
@@ -1379,7 +1471,15 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Product Name</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Category</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Unit</TableCell>
-                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, textAlign: 'right' }}>Rate</TableCell>
+                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, textAlign: 'right', color: '#1E40AF', whiteSpace: 'nowrap', minWidth: '120px' }}>
+                    {rateType === 'Befor Rate' || rateType === 'Before Rate'
+                      ? 'Before Rate'
+                      : rateType === 'Net Rate'
+                      ? 'Net Rate'
+                      : rateType === 'Wholesale Rate'
+                      ? 'Wholesale Rate'
+                      : 'Retail Rate'}
+                  </TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, textAlign: 'center' }}>Action</TableCell>
                 </TableRow>
               </TableHead>
@@ -1390,8 +1490,8 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                     <TableCell sx={{ fontSize: '12.5px', fontWeight: 600 }}>{prod.name}</TableCell>
                     <TableCell sx={{ fontSize: '12px', color: '#475569' }}>{prod.category || 'General'}</TableCell>
                     <TableCell sx={{ fontSize: '12px' }}>{prod.unit || '1 Box'}</TableCell>
-                    <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, textAlign: 'right' }}>
-                      ₹ {prod.rate || 0}
+                    <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, textAlign: 'right', color: '#1E40AF' }}>
+                      ₹ {getRateForType(prod, rateType)}
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center' }}>
                       <Button

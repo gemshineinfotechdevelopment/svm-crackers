@@ -18,6 +18,7 @@ export interface BillPrintProduct {
 export interface BillPrintData {
   billNo: string;
   date: string;
+  rateType?: string;
   customerName: string;
   customerPhone?: string;
   customerAddress?: string;
