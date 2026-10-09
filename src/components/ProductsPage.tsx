@@ -34,6 +34,7 @@ import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import ShoppingCartRoundedIcon from '@mui/icons-material/ShoppingCartRounded';
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
+import CategoryRoundedIcon from '@mui/icons-material/CategoryRounded';
 import * as XLSX from 'xlsx';
 import { ProductsApi, CategoriesApi } from '../services/api';
 import { printProductsListDirectly } from '../utils/printUtils';
@@ -82,6 +83,12 @@ export const ProductsPage: FC = () => {
   const [productMrp, setProductMrp] = useState<string>('0');
   const [modalLoading, setModalLoading] = useState(false);
 
+  // New Category Modal State
+  const [newCategoryModalOpen, setNewCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryCode, setNewCategoryCode] = useState('');
+  const [newCategoryLoading, setNewCategoryLoading] = useState(false);
+
   // Bulk Upload Modal State
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [bulkUploadType, setBulkUploadType] = useState<ProductType>('Retail');
@@ -128,11 +135,59 @@ export const ProductsPage: FC = () => {
         setProducts(formatted);
       }
 
+      // Merge and ensure ALL categories are available without duplicates
+      const catMap = new Map<string, { name: string; color?: string }>();
+
+      // 1. Load from Categories API
       if (Array.isArray(catsData) && catsData.length > 0) {
-        setCategories(catsData.map((c) => ({ name: c.name, color: c.color })));
+        catsData.forEach((c: any) => {
+          if (c && c.name && String(c.name).trim()) {
+            const trimmed = String(c.name).trim();
+            catMap.set(trimmed.toLowerCase(), {
+              name: trimmed,
+              color: c.color || '#2563EB',
+            });
+          }
+        });
       }
+
+      // 2. Load any categories that exist across products
+      if (Array.isArray(prodsData)) {
+        prodsData.forEach((p: any) => {
+          if (p && p.category && String(p.category).trim()) {
+            const trimmed = String(p.category).trim();
+            if (!catMap.has(trimmed.toLowerCase())) {
+              catMap.set(trimmed.toLowerCase(), {
+                name: trimmed,
+                color: '#4B5563',
+              });
+            }
+          }
+        });
+      }
+
+      // 3. Defaults if empty
+      if (catMap.size === 0) {
+        const DEFAULT_CATS = [
+          'One Sound Crackers',
+          'Ground Chakkars',
+          'Flower Pots',
+          'Rockets',
+          'Sparklers',
+          'Fountains',
+          'Novelty Items',
+          'Gift Boxes',
+          'General',
+        ];
+        DEFAULT_CATS.forEach((catName) => {
+          catMap.set(catName.toLowerCase(), { name: catName, color: '#2563EB' });
+        });
+      }
+
+      const allUniqueCats = Array.from(catMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+      setCategories(allUniqueCats);
     } catch (err) {
-      console.error('Failed to fetch products:', err);
+      console.error('Failed to fetch products and categories:', err);
     } finally {
       setLoading(false);
     }
@@ -197,6 +252,75 @@ export const ProductsPage: FC = () => {
     });
   }, [tabProducts, selectedCategory, searchTerm]);
 
+  // Category Quick Add Handlers
+  const openAddCategoryAction = () => {
+    setNewCategoryName('');
+    setNewCategoryCode('');
+    setNewCategoryModalOpen(true);
+  };
+
+  const handleOpenAddCategory = () => {
+    const currentSystemYear = new Date().getFullYear();
+    if (Number(selectedYear) !== currentSystemYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(selectedYear),
+        onProceed: () => openAddCategoryAction(),
+      });
+      return;
+    }
+    openAddCategoryAction();
+  };
+
+  const handleSaveNewCategory = async () => {
+    if (!newCategoryName.trim()) {
+      setToast({ open: true, message: 'Please enter category name.', severity: 'error' });
+      return;
+    }
+
+    try {
+      setNewCategoryLoading(true);
+      const catName = newCategoryName.trim();
+      const codeVal = newCategoryCode.trim().toUpperCase() || catName.slice(0, 4).toUpperCase();
+
+      await CategoriesApi.create({
+        name: catName,
+        code: codeVal,
+        displayOrder: categories.length + 1,
+        isActive: true,
+      });
+
+      // Update state immediately
+      setCategories((prev) => {
+        if (prev.some((c) => c.name.toLowerCase() === catName.toLowerCase())) {
+          return prev;
+        }
+        return [...prev, { name: catName }].sort((a, b) => a.name.localeCompare(b.name));
+      });
+
+      // Auto select in product creation
+      setProductCategory(catName);
+
+      setToast({
+        open: true,
+        message: `Category "${catName}" created successfully!`,
+        severity: 'success',
+      });
+      setNewCategoryModalOpen(false);
+
+      // Re-sync with backend
+      fetchProductsAndCategories(selectedYear);
+    } catch (err: any) {
+      console.error('Failed to create category:', err);
+      setToast({
+        open: true,
+        message: err.message || 'Failed to create category.',
+        severity: 'error',
+      });
+    } finally {
+      setNewCategoryLoading(false);
+    }
+  };
+
   // Open Add Modal
   const openAddAction = () => {
     const targetType = activeTabType === 'ALL' ? 'Retail' : activeTabType;
@@ -204,7 +328,9 @@ export const ProductsPage: FC = () => {
     setProductType(targetType);
     setProductSlNo(getNextSlNoForType(targetType));
     setProductName('');
-    setProductCategory(categories[0]?.name || 'General');
+    setProductCategory(
+      selectedCategory && selectedCategory !== 'ALL' ? selectedCategory : (categories[0]?.name || 'General')
+    );
     setProductUnit('Box');
     setProductRate('0');
     setProductMrp('0');
@@ -763,13 +889,34 @@ export const ProductsPage: FC = () => {
                 className="erp-input"
                 style={{ fontSize: '12px', minWidth: '140px' }}
               >
-                <option value="ALL">All Categories</option>
+                <option value="ALL">All Categories ({categories.length})</option>
                 {categories.map((c) => (
                   <option key={c.name} value={c.name}>
                     {c.name}
                   </option>
                 ))}
               </select>
+
+              {/* Quick Add Category Button on Toolbar */}
+              <Button
+                onClick={handleOpenAddCategory}
+                startIcon={<AddRoundedIcon sx={{ fontSize: 13 }} />}
+                size="small"
+                sx={{
+                  height: '28px',
+                  bgcolor: '#EFF6FF',
+                  border: '1px solid #BFDBFE',
+                  color: '#1E40AF',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  px: 1.2,
+                  borderRadius: '3px',
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: '#DBEAFE' },
+                }}
+              >
+                + Category
+              </Button>
 
               <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 1 }}>
                 Search:
@@ -1216,11 +1363,33 @@ export const ProductsPage: FC = () => {
               </Box>
             </Box>
 
-            {/* Category */}
+            {/* Category with + New Category Button */}
             <Box>
-              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
-                Category:
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155' }}>
+                  Category (பிரிவு): *
+                </Typography>
+                <Button
+                  size="small"
+                  onClick={handleOpenAddCategory}
+                  startIcon={<AddRoundedIcon sx={{ fontSize: 13 }} />}
+                  sx={{
+                    fontSize: '11px',
+                    py: 0.1,
+                    px: 0.8,
+                    minHeight: '20px',
+                    color: '#1E40AF',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    bgcolor: '#EFF6FF',
+                    border: '1px solid #BFDBFE',
+                    borderRadius: '3px',
+                    '&:hover': { bgcolor: '#DBEAFE' },
+                  }}
+                >
+                  + New Category
+                </Button>
+              </Box>
               <select
                 value={productCategory}
                 onChange={(e) => setProductCategory(e.target.value)}
@@ -1315,6 +1484,95 @@ export const ProductsPage: FC = () => {
             }}
           >
             {modalLoading ? <CircularProgress size={16} color="inherit" /> : editingProduct ? 'Update Product' : 'Save Product'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* -------------------- Quick Create New Category Modal -------------------- */}
+      <Dialog
+        open={newCategoryModalOpen}
+        onClose={() => !newCategoryLoading && setNewCategoryModalOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              border: '1px solid #9BB3CC',
+              borderRadius: '4px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
+            borderBottom: '1px solid #A8C2DC',
+            py: 1,
+            px: 2,
+            fontSize: '13px',
+            fontWeight: 700,
+            color: '#0F172A',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+          }}
+        >
+          <CategoryRoundedIcon sx={{ fontSize: 18, color: '#1E40AF' }} />
+          Create New Category (புதிய பிரிவு)
+        </DialogTitle>
+        <DialogContent sx={{ p: 2, bgcolor: '#F8FAFC' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0.5 }}>
+            <Box>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                Category Name (பிரிவு பெயர்): *
+              </Typography>
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="e.g. Special Fountains, Mega Aerial Shots"
+                className="erp-input"
+                style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
+                autoFocus
+              />
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                Category Code (Optional):
+              </Typography>
+              <input
+                type="text"
+                value={newCategoryCode}
+                onChange={(e) => setNewCategoryCode(e.target.value)}
+                placeholder="e.g. SFTN, MAS"
+                className="erp-input"
+                style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
+              />
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 1.5, bgcolor: '#EDF2F7', borderTop: '1px solid #CBD5E1' }}>
+          <Button
+            size="small"
+            onClick={() => setNewCategoryModalOpen(false)}
+            disabled={newCategoryLoading}
+            sx={{ fontSize: '11.5px', color: '#64748B' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={handleSaveNewCategory}
+            disabled={newCategoryLoading || !newCategoryName.trim()}
+            sx={{
+              fontSize: '11.5px',
+              bgcolor: '#1E40AF',
+              '&:hover': { bgcolor: '#1E3A8A' },
+            }}
+          >
+            {newCategoryLoading ? <CircularProgress size={16} color="inherit" /> : 'Create Category'}
           </Button>
         </DialogActions>
       </Dialog>

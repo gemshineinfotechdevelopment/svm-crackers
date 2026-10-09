@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type FC, type ChangeEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, type FC, type ChangeEvent } from 'react';
 import {
   Box,
   Typography,
@@ -21,7 +21,6 @@ import {
   Alert,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import {
@@ -63,6 +62,7 @@ interface CustomerOptionItem {
 interface ProductCatalogOption {
   id: string;
   sku?: string;
+  slNo?: number | string;
   name: string;
   category?: string;
   rate?: number;
@@ -72,6 +72,41 @@ interface ProductCatalogOption {
   productType?: string;
   unit?: string;
 }
+
+const findProductByCode = (code: string | undefined | null, options: ProductCatalogOption[]): ProductCatalogOption | null => {
+  if (!code || !String(code).trim()) return null;
+  const raw = String(code).trim();
+  const lower = raw.toLowerCase();
+  const digits = raw.replace(/\D/g, '');
+
+  // 1. Exact match by slNo or sku
+  let found = options.find((p) => {
+    const slStr = p.slNo !== undefined && p.slNo !== null ? String(p.slNo).trim().toLowerCase() : '';
+    const skuStr = p.sku ? String(p.sku).trim().toLowerCase() : '';
+    return slStr === lower || skuStr === lower;
+  });
+  if (found) return found;
+
+  // 2. Pure digit match (e.g. user typed "1" matching S.No 1 or SKU digits)
+  if (digits) {
+    found = options.find((p) => {
+      const slStr = p.slNo !== undefined && p.slNo !== null ? String(p.slNo).trim() : '';
+      const skuDigits = p.sku ? String(p.sku).replace(/\D/g, '') : '';
+      return slStr === digits || (skuDigits && skuDigits === digits);
+    });
+    if (found) return found;
+  }
+
+  // 3. SKU starts with lower or name exact match
+  found = options.find((p) => {
+    const skuStr = p.sku ? String(p.sku).trim().toLowerCase() : '';
+    const nameStr = p.name ? String(p.name).trim().toLowerCase() : '';
+    return skuStr.startsWith(lower) || nameStr === lower;
+  });
+  if (found) return found;
+
+  return null;
+};
 
 const getRateForType = (prod: ProductCatalogOption | undefined | null, rType: string): number => {
   if (!prod) return 0;
@@ -150,8 +185,12 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const [quickCode, setQuickCode] = useState<string>('');
   const [selectedCatalogProduct, setSelectedCatalogProduct] = useState<ProductCatalogOption | null>(null);
   const [quickUnit, setQuickUnit] = useState<string>('1 Box');
+  const [quickQty, setQuickQty] = useState<string>('1');
   const [productCatalogModalOpen, setProductCatalogModalOpen] = useState<boolean>(false);
   const [catalogSearchTerm, setCatalogSearchTerm] = useState<string>('');
+
+  const codeInputRef = useRef<HTMLInputElement>(null);
+  const qtyInputRef = useRef<HTMLInputElement>(null);
 
   // 4. Products Table Rows (Starts clean with 1 empty editable row)
   const [productRows, setProductRows] = useState<ProductRowItem[]>([
@@ -250,9 +289,12 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
             const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
             const pType = p.productType || 'Retail';
+            const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : String(idx + 1);
+            const skuCode = p.sku ? String(p.sku) : slNumber;
             prodMap.set(key.toLowerCase(), {
               id: p._id || p.id,
-              sku: p.sku || `P${100 + idx}`,
+              sku: skuCode,
+              slNo: slNumber,
               name: key,
               category: p.category || 'General',
               rate: rateVal,
@@ -272,9 +314,12 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           if (key && !prodMap.has(key.toLowerCase())) {
             const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
             const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
+            const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : (p.sNo !== undefined ? String(p.sNo) : String(idx + 1));
+            const skuCode = p.sku ? String(p.sku) : (p.itemCode ? String(p.itemCode) : `PL-${100 + idx}`);
             prodMap.set(key.toLowerCase(), {
               id: p._id || p.id,
-              sku: `PL-${100 + idx}`,
+              sku: skuCode,
+              slNo: slNumber,
               name: key,
               category: p.category || 'General',
               rate: rateVal,
@@ -428,10 +473,11 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         const updated = { ...row, [field]: val };
 
         if (field === 'particular') {
-          const match = productOptions.find(
-            (p) => p.name.trim().toLowerCase() === val.trim().toLowerCase()
-          );
+          const match =
+            productOptions.find((p) => p.name.trim().toLowerCase() === val.trim().toLowerCase()) ||
+            findProductByCode(val, productOptions);
           if (match) {
+            updated.particular = match.name;
             const calculatedRate = getRateForType(match, rateType);
             updated.rate = String(calculatedRate);
             if (match.unit) updated.pktUnit = match.unit;
@@ -446,40 +492,71 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     );
   };
 
-  const handleAddRow = () => {
-    const newId = String(Date.now());
-    setProductRows((prev) => [
-      ...prev,
-      {
-        id: newId,
-        particular: '',
-        pktUnit: '1 Box',
-        rate: '0',
-        quantity: '1',
-        amount: '0',
-      },
-    ]);
-  };
-
   const handleDeleteRow = (id: string) => {
     setProductRows((prev) => prev.filter((r) => r.id !== id));
   };
 
   // Add selected product from top product bar
-  const handleAddProductFromBar = (prod: ProductCatalogOption | null) => {
+  const handleAddProductFromBar = (prod: ProductCatalogOption | null, qtyVal: string = quickQty) => {
     if (!prod) return;
     const rateVal = getRateForType(prod, rateType);
+    const q = parseFloat(qtyVal) || 1;
     const newRow: ProductRowItem = {
       id: String(Date.now()),
       particular: prod.name,
       pktUnit: prod.unit || quickUnit || '1 Box',
       rate: String(rateVal),
-      quantity: '1',
-      amount: String(rateVal),
+      quantity: String(q),
+      amount: String(Math.round(q * rateVal)),
     };
-    setProductRows((prev) => [...prev, newRow]);
+    setProductRows((prev) => {
+      if (prev.length === 1 && !prev[0].particular.trim() && (prev[0].amount === '0' || !prev[0].amount)) {
+        return [newRow];
+      }
+      return [...prev, newRow];
+    });
     setSelectedCatalogProduct(null);
     setQuickCode('');
+    setQuickQty('1');
+    setTimeout(() => {
+      codeInputRef.current?.focus();
+    }, 50);
+  };
+
+  // Code field auto-fill & Enter handler
+  const handleQuickCodeChange = (val: string) => {
+    setQuickCode(val);
+    const match = findProductByCode(val, productOptions);
+    if (match) {
+      setSelectedCatalogProduct(match);
+      if (match.unit) setQuickUnit(match.unit);
+    } else {
+      setSelectedCatalogProduct(null);
+    }
+  };
+
+  const handleQuickCodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const match = findProductByCode(quickCode, productOptions) || selectedCatalogProduct;
+      if (match) {
+        setSelectedCatalogProduct(match);
+        if (match.unit) setQuickUnit(match.unit);
+        // Move focus directly to Quantity field and select its value for rapid typing
+        qtyInputRef.current?.focus();
+        qtyInputRef.current?.select();
+      }
+    }
+  };
+
+  const handleQuickQtyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const prod = selectedCatalogProduct || findProductByCode(quickCode, productOptions);
+      if (prod) {
+        handleAddProductFromBar(prod, quickQty);
+      }
+    }
   };
 
   // Execute Save Quotation / Bill
@@ -932,12 +1009,15 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               Code
             </Typography>
             <input
+              ref={codeInputRef}
               type="text"
               value={quickCode}
-              onChange={(e) => setQuickCode(e.target.value)}
-              placeholder="Code"
+              onChange={(e) => handleQuickCodeChange(e.target.value)}
+              onKeyDown={handleQuickCodeKeyDown}
+              placeholder="Code / No"
               className="erp-input"
-              style={{ width: '80px' }}
+              style={{ width: '85px', textAlign: 'center', fontWeight: 700, color: '#1E40AF' }}
+              title="Enter S.No / Code to auto-fill product (Press Enter to jump to Quantity)"
             />
 
             {/* Browse Button (...) */}
@@ -968,18 +1048,35 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               size="small"
               sx={{ flex: 1, minWidth: '220px' }}
               options={productOptions}
-              getOptionLabel={(opt) => `${opt.name} - ₹${getRateForType(opt, rateType)}`}
+              getOptionLabel={(opt) => `${opt.slNo ? `[#${opt.slNo}] ` : opt.sku ? `[${opt.sku}] ` : ''}${opt.name} - ₹${getRateForType(opt, rateType)}`}
+              filterOptions={(options, state) => {
+                const input = state.inputValue.toLowerCase().trim();
+                if (!input) return options;
+                const digits = input.replace(/\D/g, '');
+                return options.filter((opt) => {
+                  const matchName = opt.name.toLowerCase().includes(input);
+                  const matchSku = opt.sku ? String(opt.sku).toLowerCase().includes(input) : false;
+                  const matchSlNo = opt.slNo !== undefined ? String(opt.slNo).includes(digits || input) : false;
+                  return matchName || matchSku || matchSlNo;
+                });
+              }}
               value={selectedCatalogProduct}
               onChange={(_, opt) => {
                 setSelectedCatalogProduct(opt);
                 if (opt) {
-                  handleAddProductFromBar(opt);
+                  if (opt.slNo) setQuickCode(String(opt.slNo));
+                  else if (opt.sku) setQuickCode(String(opt.sku));
+                  if (opt.unit) setQuickUnit(opt.unit);
+                  setTimeout(() => {
+                    qtyInputRef.current?.focus();
+                    qtyInputRef.current?.select();
+                  }, 50);
                 }
               }}
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  placeholder="Select Product..."
+                  placeholder="Select or Search Product (Name / S.No)..."
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       height: '26px',
@@ -1005,23 +1102,53 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               style={{ width: '85px' }}
             />
 
-            {/* Add Row Button */}
+            {/* Quantity Field */}
+            <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#1E40AF', ml: 1 }}>
+              Qty
+            </Typography>
+            <input
+              ref={qtyInputRef}
+              type="number"
+              min="1"
+              value={quickQty}
+              onChange={(e) => setQuickQty(e.target.value)}
+              onKeyDown={handleQuickQtyKeyDown}
+              placeholder="Qty"
+              className="erp-input"
+              style={{
+                width: '75px',
+                textAlign: 'center',
+                fontWeight: 700,
+                color: '#0F172A',
+                border: '1.5px solid #1E40AF',
+                backgroundColor: '#EFF6FF',
+              }}
+              title="Enter quantity and press Enter to add product"
+            />
+
+            {/* Add / Enter Action Button */}
             <Button
-              onClick={handleAddRow}
-              startIcon={<AddRoundedIcon sx={{ fontSize: 14 }} />}
+              onClick={() => {
+                const prod = selectedCatalogProduct || findProductByCode(quickCode, productOptions);
+                if (prod) {
+                  handleAddProductFromBar(prod, quickQty);
+                }
+              }}
+              disabled={!selectedCatalogProduct && !findProductByCode(quickCode, productOptions)}
               size="small"
               sx={{
                 height: '26px',
-                bgcolor: '#EDF4FB',
-                border: '1px solid #94A3B8',
-                color: '#1E40AF',
+                bgcolor: '#1E40AF',
+                color: '#FFFFFF',
                 fontSize: '11.5px',
                 fontWeight: 700,
-                ml: 'auto',
-                '&:hover': { bgcolor: '#DCE7F5' },
+                px: 1.5,
+                textTransform: 'none',
+                '&:hover': { bgcolor: '#1E3A8A' },
+                '&:disabled': { bgcolor: '#E2E8F0', color: '#94A3B8' },
               }}
             >
-              Add Row
+              Add Product ↵
             </Button>
           </Box>
 
@@ -1512,8 +1639,15 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                         size="small"
                         variant="contained"
                         onClick={() => {
-                          handleAddProductFromBar(prod);
+                          setSelectedCatalogProduct(prod);
+                          if (prod.slNo) setQuickCode(String(prod.slNo));
+                          else if (prod.sku) setQuickCode(String(prod.sku));
+                          if (prod.unit) setQuickUnit(prod.unit);
                           setProductCatalogModalOpen(false);
+                          setTimeout(() => {
+                            qtyInputRef.current?.focus();
+                            qtyInputRef.current?.select();
+                          }, 100);
                         }}
                         sx={{ fontSize: '11px', py: 0.2, px: 1, bgcolor: '#1E40AF' }}
                       >
