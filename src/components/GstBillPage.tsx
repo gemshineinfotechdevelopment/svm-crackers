@@ -50,8 +50,9 @@ import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 export interface GstRowItem {
   id: string;
+  code?: string;
   particular: string;
-  hsnCode: string;
+  hsnCode?: string;
   quantity: string;
   unit: string;
   rate: string;
@@ -69,6 +70,9 @@ interface CustomerOptionItem {
 
 export interface ProductCatalogOption {
   id: string;
+  code?: string;
+  slNo?: number | string;
+  sku?: string;
   name: string;
   rate?: number;
   unit?: string;
@@ -169,7 +173,6 @@ export const GstBillPage: FC = () => {
   // 4. Product Quick Entry Bar
   const [quickCode, setQuickCode] = useState<string>('');
   const [selectedCatalogProduct, setSelectedCatalogProduct] = useState<ProductCatalogOption | null>(null);
-  const [quickHsn, setQuickHsn] = useState<string>('3604');
   const [quickQty, setQuickQty] = useState<string>('1');
   const [quickUnit, setQuickUnit] = useState<string>('Case');
   const [quickRate, setQuickRate] = useState<string>('0');
@@ -178,7 +181,7 @@ export const GstBillPage: FC = () => {
 
   // 5. Product List Table State
   const [productRows, setProductRows] = useState<GstRowItem[]>([
-    { id: '1', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
+    { id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
   ]);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
@@ -312,10 +315,14 @@ export const GstBillPage: FC = () => {
 
       const pMap = new Map<string, ProductCatalogOption>();
       if (Array.isArray(prodRes)) {
-        prodRes.forEach((p: any) => {
+        prodRes.forEach((p: any, idx: number) => {
           if (p.name) {
+            const codeVal = String(p.code || p.sku || (p.slNo !== undefined && p.slNo !== null ? p.slNo : idx + 1));
             pMap.set(p.name.toLowerCase().trim(), {
               id: p._id || p.id,
+              code: codeVal,
+              slNo: p.slNo !== undefined && p.slNo !== null ? p.slNo : idx + 1,
+              sku: p.sku || codeVal,
               name: p.name.trim(),
               rate: p.rate || 0,
               unit: p.unit || 'Case',
@@ -327,12 +334,16 @@ export const GstBillPage: FC = () => {
       }
 
       if (Array.isArray(priceRes)) {
-        priceRes.forEach((item: any) => {
+        priceRes.forEach((item: any, idx: number) => {
           if (item.itemName) {
             const key = item.itemName.toLowerCase().trim();
             const existing = pMap.get(key);
+            const codeVal = String(item.code || item.sku || (item.slNo !== undefined && item.slNo !== null ? item.slNo : (prodRes.length + idx + 1)));
             pMap.set(key, {
               id: item._id || item.id || key,
+              code: existing?.code || codeVal,
+              slNo: existing?.slNo !== undefined ? existing.slNo : (item.slNo !== undefined && item.slNo !== null ? item.slNo : idx + 1),
+              sku: existing?.sku || item.sku || codeVal,
               name: item.itemName.trim(),
               rate: item.rate && item.rate > 0 ? item.rate : (existing?.rate || 0),
               unit: item.unit || existing?.unit || 'Case',
@@ -415,8 +426,10 @@ export const GstBillPage: FC = () => {
     setLrDate(getTodayDateStr());
     setTotalCases('0');
     setTotalCasesManual(false);
+    setQuickCode('');
+    setSelectedCatalogProduct(null);
     setProductRows([
-      { id: '1', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
+      { id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
     ]);
     setSelectedRowId(null);
     setBillDate(getTodayDateStr());
@@ -485,12 +498,40 @@ export const GstBillPage: FC = () => {
     }
   };
 
+  // Product Code Lookup Helper
+  const findProductByCode = (codeStr: string): ProductCatalogOption | undefined => {
+    if (!codeStr || !codeStr.trim()) return undefined;
+    const clean = codeStr.trim().toLowerCase();
+    // 1. Exact match on code, sku, or slNo string
+    let found = productOptions.find(
+      (p) =>
+        (p.code && p.code.toLowerCase() === clean) ||
+        (p.sku && p.sku.toLowerCase() === clean) ||
+        (p.slNo !== undefined && String(p.slNo).toLowerCase() === clean) ||
+        (p.id && p.id.toLowerCase() === clean)
+    );
+    if (found) return found;
+
+    // 2. Numeric match (e.g. typing "1" or "01")
+    const num = parseInt(clean, 10);
+    if (!isNaN(num)) {
+      found = productOptions.find(
+        (p) =>
+          (p.slNo !== undefined && Number(p.slNo) === num) ||
+          (p.code && parseInt(p.code, 10) === num)
+      );
+      if (found) return found;
+    }
+
+    return undefined;
+  };
+
   // Add Item to Product List
   const handleAddItem = () => {
     const newId = String(Date.now());
     setProductRows((prev) => [
       ...prev,
-      { id: newId, particular: '', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '0', amount: '0' },
+      { id: newId, code: '', particular: '', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '0', amount: '0' },
     ]);
     setSelectedRowId(newId);
   };
@@ -513,6 +554,32 @@ export const GstBillPage: FC = () => {
       prev.map((r) => {
         if (r.id === id) {
           const updated = { ...r, [field]: val };
+          if (field === 'code') {
+            const matched = findProductByCode(val);
+            if (matched) {
+              updated.particular = matched.name;
+              updated.unit = matched.unit || 'Case';
+              updated.rate = String(matched.rate || 0);
+              if (!updated.quantity || updated.quantity === '0') {
+                updated.quantity = '1';
+              }
+              const q = parseFloat(updated.quantity) || 1;
+              const rt = matched.rate || 0;
+              updated.amount = (q * rt).toFixed(2);
+            }
+          } else if (field === 'particular') {
+            const matched = productOptions.find(
+              (p) => p.name.toLowerCase().trim() === val.toLowerCase().trim()
+            );
+            if (matched) {
+              if (!updated.code) updated.code = matched.code || String(matched.slNo || '');
+              if (!updated.rate || updated.rate === '0') updated.rate = String(matched.rate || 0);
+              if (!updated.unit) updated.unit = matched.unit || 'Case';
+              const q = parseFloat(updated.quantity) || 1;
+              const rt = parseFloat(updated.rate) || 0;
+              updated.amount = (q * rt).toFixed(2);
+            }
+          }
           if (field === 'quantity' || field === 'rate') {
             const q = parseFloat(field === 'quantity' ? val : r.quantity) || 0;
             const rt = parseFloat(field === 'rate' ? val : r.rate) || 0;
@@ -530,6 +597,7 @@ export const GstBillPage: FC = () => {
     const qNum = parseFloat(quickQty) || 1;
     const rNum = parseFloat(quickRate) > 0 ? parseFloat(quickRate) : (prod.rate || 0);
     const amt = (qNum * rNum).toFixed(2);
+    const itemCode = prod.code || (prod.slNo !== undefined ? String(prod.slNo) : quickCode);
 
     const existingBlankIdx = productRows.findIndex((r) => !r.particular.trim());
     if (existingBlankIdx !== -1) {
@@ -538,8 +606,9 @@ export const GstBillPage: FC = () => {
           if (idx === existingBlankIdx) {
             return {
               ...r,
+              code: itemCode,
               particular: prod.name,
-              hsnCode: quickHsn || prod.hsn || '3604',
+              hsnCode: prod.hsn || '3604',
               quantity: String(qNum),
               unit: quickUnit || prod.unit || 'Case',
               rate: String(rNum),
@@ -554,8 +623,9 @@ export const GstBillPage: FC = () => {
         ...prev,
         {
           id: String(Date.now()),
+          code: itemCode,
           particular: prod.name,
-          hsnCode: quickHsn || prod.hsn || '3604',
+          hsnCode: prod.hsn || '3604',
           quantity: String(qNum),
           unit: quickUnit || prod.unit || 'Case',
           rate: String(rNum),
@@ -565,6 +635,7 @@ export const GstBillPage: FC = () => {
     }
 
     setSelectedCatalogProduct(null);
+    setQuickCode('');
     setQuickQty('1');
     setQuickRate('0');
   };
@@ -576,6 +647,8 @@ export const GstBillPage: FC = () => {
     return productOptions.filter(
       (p) =>
         p.name.toLowerCase().includes(term) ||
+        (p.code && p.code.toLowerCase().includes(term)) ||
+        (p.slNo !== undefined && String(p.slNo).includes(term)) ||
         (p.category && p.category.toLowerCase().includes(term))
     );
   }, [productOptions, catalogSearchTerm]);
@@ -1286,7 +1359,27 @@ export const GstBillPage: FC = () => {
               <input
                 type="text"
                 value={quickCode}
-                onChange={(e) => setQuickCode(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setQuickCode(val);
+                  const matched = findProductByCode(val);
+                  if (matched) {
+                    setSelectedCatalogProduct(matched);
+                    setQuickRate(String(matched.rate || 0));
+                    setQuickUnit(matched.unit || 'Case');
+                  } else if (!val.trim()) {
+                    setSelectedCatalogProduct(null);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const matched = findProductByCode(quickCode) || selectedCatalogProduct;
+                    if (matched) {
+                      handleAddProductFromBar(matched);
+                    }
+                  }
+                }}
                 placeholder="Code"
                 className="erp-input"
                 style={{ width: '75px' }}
@@ -1318,11 +1411,14 @@ export const GstBillPage: FC = () => {
                 size="small"
                 sx={{ flex: 1, minWidth: '200px' }}
                 options={productOptions}
-                getOptionLabel={(opt) => `${opt.name} - ₹${opt.rate || 0}`}
+                getOptionLabel={(opt) => `${opt.code ? `[${opt.code}] ` : ''}${opt.name} - ₹${opt.rate || 0}`}
                 value={selectedCatalogProduct}
                 onChange={(_, opt) => {
                   setSelectedCatalogProduct(opt);
                   if (opt) {
+                    setQuickCode(opt.code || (opt.slNo !== undefined ? String(opt.slNo) : ''));
+                    setQuickUnit(opt.unit || 'Case');
+                    setQuickRate(String(opt.rate || 0));
                     handleAddProductFromBar(opt);
                   }
                 }}
@@ -1340,17 +1436,6 @@ export const GstBillPage: FC = () => {
                     }}
                   />
                 )}
-              />
-
-              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
-                HSN
-              </Typography>
-              <input
-                type="text"
-                value={quickHsn}
-                onChange={(e) => setQuickHsn(e.target.value)}
-                className="erp-input"
-                style={{ width: '55px', textAlign: 'center' }}
               />
 
               <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
@@ -1376,8 +1461,31 @@ export const GstBillPage: FC = () => {
                 style={{ width: '65px' }}
               />
 
+              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
+                Rate
+              </Typography>
+              <input
+                type="number"
+                value={quickRate}
+                onChange={(e) => setQuickRate(e.target.value)}
+                onWheel={(e) => (e.target as HTMLElement).blur()}
+                className="erp-input"
+                style={{ width: '75px', textAlign: 'right' }}
+              />
+
               <Button
-                onClick={handleAddItem}
+                onClick={() => {
+                  if (selectedCatalogProduct) {
+                    handleAddProductFromBar(selectedCatalogProduct);
+                  } else {
+                    const matched = findProductByCode(quickCode);
+                    if (matched) {
+                      handleAddProductFromBar(matched);
+                    } else {
+                      handleAddItem();
+                    }
+                  }
+                }}
                 startIcon={<AddRoundedIcon sx={{ fontSize: 14 }} />}
                 size="small"
                 sx={{
@@ -1426,11 +1534,11 @@ export const GstBillPage: FC = () => {
                           <TableCell sx={{ width: '40px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             S.No
                           </TableCell>
+                          <TableCell sx={{ width: '75px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                            Code
+                          </TableCell>
                           <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Particulars / Product Name
-                          </TableCell>
-                          <TableCell sx={{ width: '75px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
-                            HSN
                           </TableCell>
                           <TableCell sx={{ width: '70px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Qty
@@ -1462,6 +1570,26 @@ export const GstBillPage: FC = () => {
                               {idx + 1}
                             </TableCell>
 
+                            {/* Code input */}
+                            <TableCell sx={{ textAlign: 'center', p: 0.4 }}>
+                              <input
+                                type="text"
+                                value={row.code || ''}
+                                onChange={(e) => handleRowChange(row.id, 'code', e.target.value)}
+                                placeholder="Code"
+                                style={{
+                                  width: '100%',
+                                  border: 'none',
+                                  outline: 'none',
+                                  background: 'transparent',
+                                  fontSize: '12px',
+                                  textAlign: 'center',
+                                  fontWeight: 600,
+                                  color: '#1E40AF',
+                                }}
+                              />
+                            </TableCell>
+
                             {/* Particulars input */}
                             <TableCell sx={{ p: 0.4 }}>
                               <input
@@ -1477,24 +1605,6 @@ export const GstBillPage: FC = () => {
                                   fontSize: '12px',
                                   fontWeight: 600,
                                   color: '#0F172A',
-                                }}
-                              />
-                            </TableCell>
-
-                            {/* HSN */}
-                            <TableCell sx={{ textAlign: 'center', p: 0.4 }}>
-                              <input
-                                type="text"
-                                value={row.hsnCode}
-                                onChange={(e) => handleRowChange(row.id, 'hsnCode', e.target.value)}
-                                style={{
-                                  width: '100%',
-                                  border: 'none',
-                                  outline: 'none',
-                                  background: 'transparent',
-                                  fontSize: '12px',
-                                  textAlign: 'center',
-                                  color: '#475569',
                                 }}
                               />
                             </TableCell>
@@ -2116,6 +2226,7 @@ export const GstBillPage: FC = () => {
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
+                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, width: '70px', textAlign: 'center' }}>Code</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Product Name</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Category</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Unit</TableCell>
@@ -2126,6 +2237,9 @@ export const GstBillPage: FC = () => {
               <TableBody>
                 {filteredCatalog.map((prod) => (
                   <TableRow key={prod.id} hover>
+                    <TableCell sx={{ fontSize: '12px', fontWeight: 700, color: '#1E40AF', textAlign: 'center' }}>
+                      {prod.code || prod.slNo || '-'}
+                    </TableCell>
                     <TableCell sx={{ fontSize: '12.5px', fontWeight: 600 }}>{prod.name}</TableCell>
                     <TableCell sx={{ fontSize: '12px', color: '#475569' }}>{prod.category || 'Crackers'}</TableCell>
                     <TableCell sx={{ fontSize: '12px' }}>{prod.unit || 'Case'}</TableCell>
