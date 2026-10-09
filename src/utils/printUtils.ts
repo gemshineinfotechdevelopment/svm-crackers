@@ -171,7 +171,7 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
   const customerAddressFormatted = bill.customerAddress && bill.customerAddress !== 'N/A' && bill.customerAddress !== '-'
     ? bill.customerAddress
     : '';
-  const customerAadharOrPan = (bill.customerAadhar || bill.customerPan || bill.customerGst || '').trim();
+  const customerAadharOrPan = (bill.customerAadhar || bill.customerPan || '').trim();
 
   const rawDeliveryName = (bill.deliveryName || bill.customerName || '').trim();
   const deliveryDisplayName = rawDeliveryName ? (rawDeliveryName.toLowerCase().startsWith('m/s') ? rawDeliveryName : `M/s. ${rawDeliveryName}`) : '';

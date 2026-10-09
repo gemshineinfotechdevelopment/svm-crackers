@@ -218,8 +218,8 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
     ? bill.customerAddress
     : '';
 
-  // Customer Aadhar / PAN / GST
-  const customerAadharOrPan = (bill.customerAadhar || bill.customerPan || bill.customerGst || '').trim();
+  // Customer Aadhar / PAN
+  const customerAadharOrPan = (bill.customerAadhar || bill.customerPan || '').trim();
 
   // Delivery To Details
   const rawDeliveryName = (bill.deliveryName || bill.customerName || '').trim();
