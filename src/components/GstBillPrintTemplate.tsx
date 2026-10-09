@@ -1,6 +1,5 @@
 import React from 'react';
 import defaultGaneshaLogo from '../assets/ganesha.jpg';
-import defaultApsaraFeatherLogo from '../assets/apsara_logo.jpg';
 import { getStoredSettings } from './SettingsPage';
 import { numberToIndianWords } from '../utils/numberToWords';
 
@@ -399,20 +398,8 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
             ) : null}
           </div>
 
-          {/* Right: Company Logo */}
-          <div style={{ width: '85px', textAlign: 'center', flexShrink: 0 }}>
-            <img
-              src={storeSettings.logoUrl || defaultApsaraFeatherLogo}
-              alt={displayCompanyName}
-              style={{
-                maxHeight: '68px',
-                maxWidth: '85px',
-                objectFit: 'contain',
-                display: 'block',
-                margin: '0 auto',
-              }}
-            />
-          </div>
+          {/* Right: Empty spacer so center title & details remain balanced */}
+          <div style={{ width: '75px', flexShrink: 0 }} />
         </div>
 
         {/* 3-Column Section: To (Left) | Delivery To Details (Middle) | TAX INVOICE Meta (Right) */}

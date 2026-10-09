@@ -735,7 +735,6 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const ganeshaImgUrl = `${origin}/ganesha.jpg`;
-  const apsaraImgUrl = `${origin}/apsara_logo.jpg`;
 
   const copyLabels = ['ORIGINAL', 'DUPLICATE', 'TRIPLICATE', 'EXTRA COPY'];
 
@@ -819,9 +818,7 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
             ${companyPhoneDisplay ? `<div style="font-size: 11px; font-weight: 700; color: #000000; margin-top: 1px;">Cell : ${companyPhoneDisplay}</div>` : ''}
           </div>
 
-          <div style="width: 85px; text-align: center; flex-shrink: 0;">
-            <img src="${apsaraImgUrl}" alt="SVM Crackers" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />
-          </div>
+          <div style="width: 75px; flex-shrink: 0;"></div>
         </div>
 
         <!-- 3-Column Section: To | Delivery To | Tax Invoice Meta -->
