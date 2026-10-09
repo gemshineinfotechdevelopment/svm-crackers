@@ -1,6 +1,6 @@
 import React from 'react';
 import defaultGaneshaLogo from '../assets/ganesha.jpg';
-import defaultApsaraFeatherLogo from '../assets/apsara_logo.jpg';
+import defaultProjectLogo from '../assets/logo.png';
 import { getStoredSettings } from './SettingsPage';
 import { numberToIndianWords } from '../utils/numberToWords';
 
@@ -37,6 +37,7 @@ export interface BillPrintData {
   companyState?: string;
   companyPhone?: string;
   companyWhatsapp?: string;
+  logoUrl?: string;
   preparedBy?: string;
   phone?: string;
   email?: string;
@@ -128,6 +129,9 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
   if (primaryPhone) phoneNumbersList.push(primaryPhone);
   if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
   const companyPhoneDisplay = phoneNumbersList.join(', ');
+
+  // Company Logo from Settings / Bill
+  const companyLogoUrl = bill.logoUrl || storeSettings.logoUrl || defaultProjectLogo;
 
   // Subtotal from products
   const products = bill.products || [];
@@ -362,19 +366,21 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
             ) : null}
           </div>
 
-          {/* Right: Manjula Crackers Logo */}
+          {/* Right: Company Logo from Settings */}
           <div style={{ width: '85px', textAlign: 'center', flexShrink: 0 }}>
-            <img
-              src={defaultApsaraFeatherLogo}
-              alt="Manjula Crackers"
-              style={{
-                maxHeight: '68px',
-                maxWidth: '85px',
-                objectFit: 'contain',
-                display: 'block',
-                margin: '0 auto',
-              }}
-            />
+            {companyLogoUrl ? (
+              <img
+                src={companyLogoUrl}
+                alt={displayCompanyName}
+                style={{
+                  maxHeight: '68px',
+                  maxWidth: '85px',
+                  objectFit: 'contain',
+                  display: 'block',
+                  margin: '0 auto',
+                }}
+              />
+            ) : null}
           </div>
         </div>
 

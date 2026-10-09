@@ -167,7 +167,14 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
       companyName:
         bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
           ? bill.companyName
-          : storeSettings.companyName || 'SVM Crackers',
+          : storeSettings.companyName || 'Manjula Crackers',
+      companyAddress: storeSettings.address,
+      companyCity: storeSettings.city,
+      companyPincode: storeSettings.pincode,
+      companyState: storeSettings.state,
+      companyPhone: storeSettings.phone,
+      companyWhatsapp: storeSettings.whatsapp,
+      logoUrl: storeSettings.logoUrl,
       transport: String(bill.transport || '0'),
       caseCount: String(bill.caseCount || '0'),
       discount: String(bill.discount || '0'),

@@ -193,7 +193,7 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const ganeshaImgUrl = `${origin}/ganesha.jpg`;
-  const apsaraImgUrl = `${origin}/apsara_logo.jpg`;
+  const companyLogoUrl = bill.logoUrl || storeSettings.logoUrl || `${origin}/logo.png`;
 
   const copyLabels = ['ORIGINAL', 'DUPLICATE', 'TRIPLICATE', 'EXTRA COPY'];
   const invoiceTitle = bill.invoiceTitle || (taxRate > 0 ? 'TAX INVOICE' : 'ESTIMATE');
@@ -274,7 +274,7 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
           </div>
 
           <div style="width: 85px; text-align: center; flex-shrink: 0;">
-            <img src="${apsaraImgUrl}" alt="Manjula Crackers" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />
+            ${companyLogoUrl ? `<img src="${companyLogoUrl}" alt="${displayCompanyName}" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />` : ''}
           </div>
         </div>
 
