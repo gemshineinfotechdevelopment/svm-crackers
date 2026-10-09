@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type FC } from 'react';
+import { useState, useEffect, useMemo, useRef, type FC } from 'react';
 import {
   Box,
   Typography,
@@ -28,6 +28,7 @@ import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
+import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 
 import {
   CustomersApi,
@@ -79,6 +80,25 @@ export const getTodayDateStr = () => {
   return `${day}-${month}-${year}`;
 };
 
+export const toIsoDate = (dStr: string) => {
+  if (!dStr) return '';
+  const parts = dStr.trim().split('-');
+  if (parts.length === 3) {
+    if (parts[0].length === 4) return dStr;
+    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  }
+  return '';
+};
+
+export const fromIsoDate = (isoStr: string) => {
+  if (!isoStr) return '';
+  const parts = isoStr.trim().split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return isoStr;
+};
+
 export const GstBillPage: FC = () => {
   const [storeSettings] = useState(() => getStoredSettings());
   const [activeSubTab, setActiveSubTab] = useState<'create' | 'history'>('create');
@@ -90,6 +110,8 @@ export const GstBillPage: FC = () => {
   // 1. Bill Info State (Top Left Box)
   const [billNo, setBillNo] = useState<string>('292');
   const [billDate, setBillDate] = useState<string>(getTodayDateStr);
+  const billDatePickerRef = useRef<HTMLInputElement>(null);
+  const lrDatePickerRef = useRef<HTMLInputElement>(null);
 
   // 2. Customer Info State (Top Middle Box)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOptionItem | null>(null);
@@ -499,7 +521,7 @@ export const GstBillPage: FC = () => {
       lrNo,
       lrDate,
       caseCount: totalCases || String(calculations.autoCases),
-      companyName: storeSettings.companyName || 'SVM Crackers',
+      companyName: 'SVM Crackers',
       gstin: storeSettings.gstin || '33ABFFA6758B1ZP',
       hsnNo: '3604',
       products: validRows,
@@ -710,13 +732,6 @@ export const GstBillPage: FC = () => {
             >
               {activeSubTab === 'create' ? `History (${historyList.length})` : 'Tax Bill Form'}
             </Button>
-
-            {/* Window control buttons */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4, ml: 1 }}>
-              <Box sx={{ width: 14, height: 14, border: '1px solid #94A3B8', bgcolor: '#F8FAFC', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#64748B', cursor: 'pointer' }}>_</Box>
-              <Box sx={{ width: 14, height: 14, border: '1px solid #94A3B8', bgcolor: '#F8FAFC', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#64748B', cursor: 'pointer' }}>□</Box>
-              <Box sx={{ width: 14, height: 14, border: '1px solid #DC2626', bgcolor: '#FEE2E2', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#DC2626', cursor: 'pointer' }}>×</Box>
-            </Box>
           </Box>
         </Box>
 
@@ -764,14 +779,75 @@ export const GstBillPage: FC = () => {
                     <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '60px' }}>
                       Date
                     </Typography>
-                    <input
-                      type="text"
-                      value={billDate}
-                      onChange={(e) => setBillDate(e.target.value)}
-                      placeholder="DD-MM-YYYY"
-                      className="erp-input"
-                      style={{ width: '120px' }}
-                    />
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        bgcolor: '#FFFFFF',
+                        border: '1px solid #94A3B8',
+                        borderRadius: '2px',
+                        px: 0.5,
+                        width: '120px',
+                        position: 'relative',
+                        '&:focus-within': {
+                          borderColor: '#1E40AF',
+                          boxShadow: '0 0 0 1px rgba(30, 64, 175, 0.2)',
+                        },
+                      }}
+                    >
+                      <input
+                        type="text"
+                        value={billDate}
+                        onChange={(e) => setBillDate(e.target.value)}
+                        placeholder="DD-MM-YYYY"
+                        style={{
+                          border: 'none',
+                          outline: 'none',
+                          width: '100%',
+                          fontSize: '12px',
+                          color: '#0F172A',
+                          background: 'transparent',
+                        }}
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          try {
+                            billDatePickerRef.current?.showPicker?.();
+                          } catch {
+                            billDatePickerRef.current?.focus();
+                          }
+                        }}
+                        title="Select Date"
+                        sx={{
+                          p: '2px',
+                          color: '#1E40AF',
+                          '&:hover': { bgcolor: '#EFF6FF' },
+                        }}
+                      >
+                        <CalendarMonthRoundedIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                      <input
+                        type="date"
+                        ref={billDatePickerRef}
+                        value={toIsoDate(billDate)}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setBillDate(fromIsoDate(e.target.value));
+                          }
+                        }}
+                        tabIndex={-1}
+                        style={{
+                          position: 'absolute',
+                          opacity: 0,
+                          width: '1px',
+                          height: '1px',
+                          bottom: 0,
+                          right: 0,
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    </Box>
                   </Box>
                 </Box>
               </fieldset>
@@ -959,14 +1035,76 @@ export const GstBillPage: FC = () => {
                     <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '95px' }}>
                       LR Date
                     </Typography>
-                    <input
-                      type="text"
-                      value={lrDate}
-                      onChange={(e) => setLrDate(e.target.value)}
-                      placeholder="DD-MM-YYYY"
-                      className="erp-input"
-                      style={{ flex: 1, maxWidth: '175px' }}
-                    />
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        bgcolor: '#FFFFFF',
+                        border: '1px solid #94A3B8',
+                        borderRadius: '2px',
+                        px: 0.5,
+                        flex: 1,
+                        maxWidth: '175px',
+                        position: 'relative',
+                        '&:focus-within': {
+                          borderColor: '#1E40AF',
+                          boxShadow: '0 0 0 1px rgba(30, 64, 175, 0.2)',
+                        },
+                      }}
+                    >
+                      <input
+                        type="text"
+                        value={lrDate}
+                        onChange={(e) => setLrDate(e.target.value)}
+                        placeholder="DD-MM-YYYY"
+                        style={{
+                          border: 'none',
+                          outline: 'none',
+                          width: '100%',
+                          fontSize: '12px',
+                          color: '#0F172A',
+                          background: 'transparent',
+                        }}
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          try {
+                            lrDatePickerRef.current?.showPicker?.();
+                          } catch {
+                            lrDatePickerRef.current?.focus();
+                          }
+                        }}
+                        title="Select LR Date"
+                        sx={{
+                          p: '2px',
+                          color: '#1E40AF',
+                          '&:hover': { bgcolor: '#EFF6FF' },
+                        }}
+                      >
+                        <CalendarMonthRoundedIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                      <input
+                        type="date"
+                        ref={lrDatePickerRef}
+                        value={toIsoDate(lrDate)}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setLrDate(fromIsoDate(e.target.value));
+                          }
+                        }}
+                        tabIndex={-1}
+                        style={{
+                          position: 'absolute',
+                          opacity: 0,
+                          width: '1px',
+                          height: '1px',
+                          bottom: 0,
+                          right: 0,
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    </Box>
                   </Box>
 
                   {/* Total Cases */}
@@ -1737,7 +1875,7 @@ export const GstBillPage: FC = () => {
                                   onClick={() => {
                                     setSelectedBillForPrint({
                                       ...b,
-                                      companyName: b.companyName || storeSettings.companyName || 'SVM Crackers',
+                                      companyName: b.companyName && b.companyName.toUpperCase().includes('SVM') ? b.companyName : 'SVM Crackers',
                                       gstin: b.gstin || storeSettings.gstin || '33ABFFA6758B1ZP',
                                       products: b.products || [],
                                       total: b.netAmount || b.total || 0,

@@ -111,13 +111,13 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
     };
   }, []);
 
-  // Display Company Name
+  // Display Company Name - Tax Bill strictly uses SVM Crackers
   const rawComp = bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
     ? bill.companyName
-    : storeSettings.companyName || 'SVM TRADERS';
-  const displayCompanyName = rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-    ? 'SVM TRADERS'
-    : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
+    : 'SVM Crackers';
+  const displayCompanyName = rawComp.toUpperCase().includes('SVM')
+    ? rawComp.toUpperCase()
+    : 'SVM CRACKERS';
 
   // GSTIN
   const gstinNo = bill.gstin || storeSettings.gstin || '33ABFFA6758B1ZP';
@@ -355,11 +355,11 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
             </div>
           </div>
 
-          {/* Right: Apsara Crackers Logo */}
+          {/* Right: SVM Crackers Logo */}
           <div style={{ width: '85px', textAlign: 'center', flexShrink: 0 }}>
             <img
               src={defaultApsaraFeatherLogo}
-              alt="Apsara Crackers"
+              alt="SVM Crackers"
               style={{
                 maxHeight: '68px',
                 maxWidth: '85px',

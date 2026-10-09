@@ -102,7 +102,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const [customerName, setCustomerName] = useState<string>(initialCustomerName || '');
   const [customerMobile, setCustomerMobile] = useState<string>('');
   const [customerAddress, setCustomerAddress] = useState<string>('');
-  const [companyName, setCompanyName] = useState<string>(() => storeSettings.companyName || 'SVM Crackers');
+  const [companyName, setCompanyName] = useState<string>(() => storeSettings.companyName || 'Manjula Crackers');
 
   // 3. Product Selection Bar State
   const [quickCode, setQuickCode] = useState<string>('');

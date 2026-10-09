@@ -59,11 +59,11 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
   const rawComp =
     bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
       ? bill.companyName
-      : storeSettings.companyName || 'SVM TRADERS';
+      : storeSettings.companyName || 'MANJULA CRACKERS';
   const displayCompanyName =
-    rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-      ? 'SVM TRADERS'
-      : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
+    rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA') || rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA')
+      ? 'MANJULA CRACKERS'
+      : rawComp.toUpperCase();
 
   const formatCur = (val: string | number | undefined | null) => {
     if (val === undefined || val === null || val === '') return '0.00';
@@ -252,7 +252,7 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
           </div>
 
           <div style="width: 85px; text-align: center; flex-shrink: 0;">
-            <img src="${apsaraImgUrl}" alt="Apsara Crackers" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />
+            <img src="${apsaraImgUrl}" alt="Manjula Crackers" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />
           </div>
         </div>
 
@@ -577,11 +577,11 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
   const rawComp =
     bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
       ? bill.companyName
-      : storeSettings.companyName || 'SVM TRADERS';
+      : 'SVM CRACKERS';
   const displayCompanyName =
-    rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-      ? 'SVM TRADERS'
-      : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
+    rawComp.toUpperCase().includes('SVM')
+      ? rawComp.toUpperCase()
+      : 'SVM CRACKERS';
 
   const gstinNo = bill.gstin || storeSettings.gstin || '33ABFFA6758B1ZP';
 
@@ -775,7 +775,7 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
           </div>
 
           <div style="width: 85px; text-align: center; flex-shrink: 0;">
-            <img src="${apsaraImgUrl}" alt="Apsara Crackers" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />
+            <img src="${apsaraImgUrl}" alt="SVM Crackers" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />
           </div>
         </div>
 
@@ -1114,7 +1114,7 @@ export const generateCustomerListPrintHtml = (
   dateRangeText?: string
 ): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'MANJULA CRACKERS').toUpperCase();
   const compSub = storeSettings.tagline || `Wholesale & Retail Trading • ${storeSettings.city || 'Sivakasi'}`;
   const phoneVal = (storeSettings.phone && !storeSettings.phone.includes('98765')) ? storeSettings.phone : '9843067073, 8778429299';
 
@@ -1446,7 +1446,7 @@ export const generateLedgerStatementHtml = (
   dateRangeText?: string
 ): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'MANJULA CRACKERS').toUpperCase();
   const compSub = storeSettings.tagline || `Wholesale & Retail Trading • ${storeSettings.city || 'Sivakasi'}`;
 
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
@@ -1550,7 +1550,7 @@ export const printLedgerStatementDirectly = (customerName: string, ledgerEntries
  */
 export const generateParticularsListPrintHtml = (particulars: any[], dateRangeText?: string): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'MANJULA CRACKERS').toUpperCase();
   const compSub = storeSettings.tagline || `Wholesale & Retail Trading • ${storeSettings.city || 'Sivakasi'}`;
 
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
@@ -1650,7 +1650,7 @@ export const printParticularsListDirectly = (particulars: any[], dateRangeText?:
  */
 export const generateCompaniesListPrintHtml = (companies: any[]): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'MANJULA CRACKERS').toUpperCase();
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
   const rowsHtml = companies.map((c, idx) => `
     <tr>
@@ -1716,7 +1716,7 @@ export const printCompaniesListDirectly = (companies: any[]) => {
  */
 export const generateProductsListPrintHtml = (products: any[], categoryTitle?: string): string => {
   const storeSettings = getStoredSettings();
-  const compName = (storeSettings.companyName || 'SVM CRACKERS').toUpperCase();
+  const compName = (storeSettings.companyName || 'MANJULA CRACKERS').toUpperCase();
   const currentDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
   const catTitle = categoryTitle && categoryTitle !== 'ALL' ? ` (${categoryTitle})` : '';
   const rowsHtml = products.map((p, idx) => `

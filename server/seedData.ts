@@ -38,9 +38,9 @@ const seedSampleData = async () => {
 
     console.log('⚙️ Seeding Settings...');
     await Settings.create({
-      companyName: 'SVM Crackers',
+      companyName: 'Manjula Crackers',
       tagline: 'Premium Sivakasi Crackers & Fancy Fireworks',
-      ownerName: 'Apsara Traders',
+      ownerName: 'Manjula Crackers',
       phone: '9843067073',
       whatsapp: '8778429299',
       email: 'contact@apsaracrackers.com',
@@ -119,7 +119,7 @@ const seedSampleData = async () => {
     const companies = await Company.insertMany([
       {
         slNo: '01',
-        name: 'SVM Crackers',
+        name: 'Manjula Crackers',
         avatarLetter: 'A',
         avatarBg: '#DBEAFE',
         avatarColor: '#0B4DB7',
@@ -196,7 +196,7 @@ const seedSampleData = async () => {
       customerPhone: '+91 98765 43210',
       customerAddress: '45, Gandhi Road, Salem, Tamil Nadu - 636007',
       customerGst: '33AABCS1111A1Z1',
-      companyName: 'SVM Crackers',
+      companyName: 'Manjula Crackers',
       caseCount: '5',
       billNo: '1001',
       date: '2026-09-15',
@@ -253,7 +253,7 @@ const seedSampleData = async () => {
       customerPhone: '+91 98421 23456',
       customerAddress: '12, Cross Cut Road, Madurai, Tamil Nadu - 625001',
       customerGst: '33AADCM2222B1Z2',
-      companyName: 'SVM Crackers',
+      companyName: 'Manjula Crackers',
       caseCount: '3',
       billNo: '1002',
       date: '2026-09-18',
@@ -354,7 +354,7 @@ const seedSampleData = async () => {
         particularId: bill1._id.toString(),
         billNo: '1001',
         customerName: 'Saravana Crackers & Traders',
-        companyName: 'SVM Crackers',
+        companyName: 'Manjula Crackers',
         date: '2026-09-15',
         debit: '22600.00',
         credit: '0.00',
@@ -363,7 +363,7 @@ const seedSampleData = async () => {
       },
       {
         customerName: 'Saravana Crackers & Traders',
-        companyName: 'SVM Crackers',
+        companyName: 'Manjula Crackers',
         date: '2026-09-20',
         debit: '0.00',
         credit: '10000.00',
@@ -374,7 +374,7 @@ const seedSampleData = async () => {
         particularId: bill2._id.toString(),
         billNo: '1002',
         customerName: 'Murugan Fireworks Mart',
-        companyName: 'SVM Crackers',
+        companyName: 'Manjula Crackers',
         date: '2026-09-18',
         debit: '14700.00',
         credit: '0.00',
@@ -385,7 +385,7 @@ const seedSampleData = async () => {
         particularId: bill2._id.toString(),
         billNo: '1002',
         customerName: 'Murugan Fireworks Mart',
-        companyName: 'SVM Crackers',
+        companyName: 'Manjula Crackers',
         date: '2026-09-18',
         debit: '0.00',
         credit: '14700.00',
@@ -408,7 +408,7 @@ const seedSampleData = async () => {
     console.log('=============================================');
     console.log('✨ All Sample Data Seeded Successfully into MongoDB!');
     console.log(`   - 1 Admin user (admin / password123)`);
-    console.log(`   - 1 Business Settings (SVM Crackers)`);
+    console.log(`   - 1 Business Settings (Manjula Crackers)`);
     console.log(`   - ${categories.length} Categories`);
     console.log(`   - ${products.length} Products`);
     console.log(`   - ${priceListItems.length} Price List items`);

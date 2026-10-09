@@ -47,7 +47,7 @@ function App() {
 
     const updateTitle = () => {
       const settings = getStoredSettings();
-      const compName = settings.companyName || 'SVM Crackers';
+      const compName = settings.companyName || 'Manjula Crackers';
       document.title = `${compName} - Billing & Management`;
     };
     updateTitle();
@@ -57,8 +57,8 @@ function App() {
       .then((res) => {
         const data = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res;
         if (data && typeof data === 'object') {
-          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha'))
-            ? 'SVM Crackers'
+          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha') || data.companyName.toLowerCase().includes('apsara') || data.companyName.toLowerCase().includes('svm'))
+            ? 'Manjula Crackers'
             : (data.companyName ?? DEFAULT_COMPANY_SETTINGS.companyName);
 
           const remoteSettings = { ...DEFAULT_COMPANY_SETTINGS, ...data, companyName: compName };

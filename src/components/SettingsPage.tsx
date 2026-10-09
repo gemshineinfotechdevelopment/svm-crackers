@@ -40,7 +40,7 @@ export interface CompanySettings {
 }
 
 export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
-  companyName: 'SVM Crackers',
+  companyName: 'Manjula Crackers',
   tagline: 'Standard Fire Works & Fancy Crackers',
   ownerName: '',
   phone: '9843067073',
@@ -136,8 +136,8 @@ export const getStoredSettings = (): CompanySettings => {
     const saved = localStorage.getItem('apsara_app_settings') || localStorage.getItem('varun_app_settings') || localStorage.getItem('dheeksha_app_settings');
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (!parsed.companyName || parsed.companyName.toLowerCase().includes('varun') || parsed.companyName.toLowerCase().includes('dheeksha')) {
-        parsed.companyName = 'SVM Crackers';
+      if (!parsed.companyName || parsed.companyName.toLowerCase().includes('varun') || parsed.companyName.toLowerCase().includes('dheeksha') || parsed.companyName.toLowerCase().includes('apsara') || parsed.companyName.toLowerCase().includes('svm')) {
+        parsed.companyName = 'Manjula Crackers';
       }
       if (!parsed.logoUrl || parsed.logoUrl.includes('varun-traders.png')) {
         parsed.logoUrl = defaultProjectLogo;
@@ -184,8 +184,8 @@ export const SettingsPage: React.FC = () => {
         const res = await SettingsApi.get();
         const data = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res;
         if (data && typeof data === 'object') {
-          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha'))
-            ? 'SVM Crackers'
+          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha') || data.companyName.toLowerCase().includes('apsara') || data.companyName.toLowerCase().includes('svm'))
+            ? 'Manjula Crackers'
             : data.companyName;
 
           const logo = (!data.logoUrl || data.logoUrl.includes('varun-traders.png'))

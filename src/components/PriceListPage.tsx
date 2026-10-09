@@ -312,6 +312,7 @@ export const PriceListPage: FC = () => {
         lower.includes('phone') ||
         lower.includes('gstin') ||
         lower.includes('terms &') ||
+        lower.includes('manjula') ||
         lower.includes('svm') ||
         lower.includes('apsara')
       ) {
@@ -536,6 +537,7 @@ export const PriceListPage: FC = () => {
         l.includes('discount list') ||
         l.includes('total') ||
         l.includes('grand total') ||
+        l.includes('manjula') ||
         l.includes('svm') ||
         l.includes('apsara')
       );
@@ -1103,7 +1105,7 @@ export const PriceListPage: FC = () => {
     ];
 
     const storeSettings = getStoredSettings();
-    const compName = storeSettings.companyName || 'SVM Crackers';
+    const compName = storeSettings.companyName || 'Manjula Crackers';
     const cleanPrefix = compName.replace(/[^a-zA-Z0-9_-]/g, '_');
 
     const worksheet = XLSX.utils.json_to_sheet(templateData);
@@ -1118,7 +1120,7 @@ export const PriceListPage: FC = () => {
       return;
     }
     const storeSettings = getStoredSettings();
-    const compName = storeSettings.companyName || 'SVM Crackers';
+    const compName = storeSettings.companyName || 'Manjula Crackers';
     const cleanPrefix = compName.replace(/[^a-zA-Z0-9_-]/g, '_');
 
     const exportData = filteredItems.map((item, idx) => ({
@@ -1143,7 +1145,7 @@ export const PriceListPage: FC = () => {
     if (!printWindow) return;
 
     const storeSettings = getStoredSettings();
-    const compName = storeSettings.companyName || 'SVM Crackers';
+    const compName = storeSettings.companyName || 'Manjula Crackers';
     const compUpper = compName.toUpperCase();
     const compTagline = storeSettings.tagline || `Official Wholesale & Retail Price List • ${storeSettings.city || 'Sivakasi'}`;
 

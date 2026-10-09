@@ -116,7 +116,7 @@ export const Navbar: FC<NavbarProps> = ({
     { label: 'Settings', tabKey: 'Settings' },
   ];
 
-  const firmName = (companySettings.companyName || 'SRI VIGNATHA TRADERS').toUpperCase();
+  const firmName = (companySettings.companyName || 'MANJULA CRACKERS').toUpperCase();
   const currentYear = new Date().getFullYear();
 
   return (

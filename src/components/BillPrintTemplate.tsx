@@ -95,11 +95,11 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
   const rawComp =
     bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
       ? bill.companyName
-      : storeSettings.companyName || 'SVM TRADERS';
+      : storeSettings.companyName || 'MANJULA CRACKERS';
   const displayCompanyName =
-    rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA')
-      ? 'SVM TRADERS'
-      : (rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA') ? 'SVM TRADERS' : rawComp.toUpperCase());
+    rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA') || rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA')
+      ? 'MANJULA CRACKERS'
+      : rawComp.toUpperCase();
 
   // Subtotal from products
   const products = bill.products || [];
@@ -329,11 +329,11 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
             </div>
           </div>
 
-          {/* Right: Apsara Crackers Logo */}
+          {/* Right: Manjula Crackers Logo */}
           <div style={{ width: '85px', textAlign: 'center', flexShrink: 0 }}>
             <img
               src={defaultApsaraFeatherLogo}
-              alt="Apsara Crackers"
+              alt="Manjula Crackers"
               style={{
                 maxHeight: '68px',
                 maxWidth: '85px',

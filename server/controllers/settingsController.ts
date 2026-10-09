@@ -9,7 +9,7 @@ export const getSettings = async (_req: Request, res: Response, next: NextFuncti
     let settings = await Settings.findOne();
     if (!settings) {
       settings = await Settings.create({
-        companyName: 'Apsara Crackers',
+        companyName: 'Manjula Crackers',
         tagline: 'Standard Fire Works & Fancy Crackers',
         phone: '9843067073',
         whatsapp: '8778429299',
@@ -20,8 +20,8 @@ export const getSettings = async (_req: Request, res: Response, next: NextFuncti
       });
     } else {
       let needsSave = false;
-      if (!settings.companyName || settings.companyName.toLowerCase().includes('varun') || settings.companyName.toLowerCase().includes('dheeksha')) {
-        settings.companyName = 'Apsara Crackers';
+      if (!settings.companyName || settings.companyName.toLowerCase().includes('varun') || settings.companyName.toLowerCase().includes('dheeksha') || settings.companyName.toLowerCase().includes('apsara') || settings.companyName.toLowerCase().includes('svm')) {
+        settings.companyName = 'Manjula Crackers';
         needsSave = true;
       }
       if (!settings.phone || settings.phone.includes('98765')) {
