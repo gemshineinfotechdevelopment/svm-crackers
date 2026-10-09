@@ -5,7 +5,7 @@ import { Navbar, type NavTab } from './components/Navbar';
 import { LoginPage } from './components/LoginPage';
 import { CategoriesPage } from './components/CategoriesPage';
 import { PriceListPage } from './components/PriceListPage';
-import { ProductsPage } from './components/ProductsPage';
+import { SalesPage } from './components/SalesPage';
 import { AllCustomersPage } from './components/AllCustomersPage';
 import { AddCustomerPage } from './components/AddCustomerPage';
 import { ParticularsPage } from './components/ParticularsPage';
@@ -17,7 +17,7 @@ import { YearRestrictionDialog } from './components/YearRestrictionDialog';
 const ACTIVE_TAB_KEY = 'apsara_active_tab';
 const CUSTOMER_SUBVIEW_KEY = 'apsara_customer_subview';
 
-const VALID_TABS = ['All Customers', 'Quotation', 'GST Bill', 'Categories', 'Price List', 'Product', 'Settings'] as const;
+const VALID_TABS = ['All Customers', 'Sales', 'Quotation', 'GST Bill', 'Categories', 'Price List', 'Settings'] as const;
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -121,8 +121,8 @@ function App() {
 
   const handleEditBillSuccess = () => {
     setEditingBill(null);
-    setActiveTab('All Customers');
-    localStorage.setItem(ACTIVE_TAB_KEY, 'All Customers');
+    setActiveTab('Sales');
+    localStorage.setItem(ACTIVE_TAB_KEY, 'Sales');
   };
 
   if (!isAuthenticated) {
@@ -171,6 +171,14 @@ function App() {
             </>
           )}
 
+          {/* Sales Tab (Displays all quotation bills) */}
+          {activeTab === 'Sales' && (
+            <SalesPage
+              onNewQuotation={() => handleSelectTab('Quotation')}
+              onEditBill={handleEditBill}
+            />
+          )}
+
           {/* Quotation / Particulars Tab */}
           {activeTab === 'Quotation' && (
             <ParticularsPage
@@ -188,9 +196,6 @@ function App() {
 
           {/* Price List Tab */}
           {activeTab === 'Price List' && <PriceListPage />}
-
-          {/* Products Tab */}
-          {activeTab === 'Product' && <ProductsPage />}
 
           {/* Settings Tab */}
           {activeTab === 'Settings' && <SettingsPage />}
