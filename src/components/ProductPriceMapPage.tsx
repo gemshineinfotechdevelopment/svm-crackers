@@ -193,9 +193,13 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
           rateVal = Number(prod.rate) || 0;
         }
 
+        const explicitCode = savedRateItem?.code !== undefined
+          ? savedRateItem.code
+          : (prod.slNo !== undefined ? prod.slNo : idx + 1);
+
         combinedRows.push({
           productId: prod._id || prod.id,
-          code: prod.slNo !== undefined ? prod.slNo : idx + 1,
+          code: explicitCode,
           productName: pName,
           quantity: 1,
           rate: rateVal,
@@ -219,8 +223,10 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
           rateVal = rp.rate;
         }
 
+        const explicitCode = savedRateItem?.code !== undefined ? savedRateItem.code : rp.code;
+
         combinedRows.push({
-          code: rp.code,
+          code: explicitCode,
           productName: rp.productName,
           quantity: 1,
           rate: rateVal,
@@ -228,12 +234,52 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
       }
     });
 
-    // Sort by code/slNo ascending
-    combinedRows.sort((a, b) => {
-      const numA = Number(a.code) || 0;
-      const numB = Number(b.code) || 0;
-      return numA - numB;
+    // 3. Include any extra custom products saved in currentMap.rates
+    if (currentMap && Array.isArray(currentMap.rates)) {
+      currentMap.rates.forEach((r, idx) => {
+        const rName = String(r.productName || '').trim();
+        const rKey = rName.toLowerCase();
+        if (rName && !processedNames.has(rKey)) {
+          processedNames.add(rKey);
+          combinedRows.push({
+            productId: r.productId,
+            code: r.code !== undefined ? r.code : (combinedRows.length + idx + 1),
+            productName: rName,
+            quantity: typeof r.quantity === 'number' ? r.quantity : 1,
+            rate: Number(r.rate) || 0,
+          });
+        }
+      });
+    }
+
+    // 4. Ensure 100% strictly UNIQUE Product ID (code) for every single product - no duplicates!
+    const usedCodes = new Set<number>();
+    let nextAvailableCode = 1;
+
+    // First pass: register unique positive integer codes
+    combinedRows.forEach((row) => {
+      const numCode = Number(row.code);
+      if (Number.isInteger(numCode) && numCode > 0 && !usedCodes.has(numCode)) {
+        usedCodes.add(numCode);
+        row.code = numCode;
+      } else {
+        row.code = -1; // Collision or invalid -> mark for reassignment
+      }
     });
+
+    // Second pass: resolve collisions and invalid codes with next available unique number
+    combinedRows.forEach((row) => {
+      if (row.code === -1) {
+        while (usedCodes.has(nextAvailableCode)) {
+          nextAvailableCode++;
+        }
+        row.code = nextAvailableCode;
+        usedCodes.add(nextAvailableCode);
+      }
+    });
+
+    // Sort by code ascending
+    combinedRows.sort((a, b) => Number(a.code) - Number(b.code));
 
     setTableRows(combinedRows);
     setSelectedRowIndex(0);

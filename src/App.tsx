@@ -4,7 +4,6 @@ import { theme } from './theme/theme';
 import { Navbar, type NavTab } from './components/Navbar';
 import { LoginPage } from './components/LoginPage';
 import { CategoriesPage } from './components/CategoriesPage';
-import { PriceListPage } from './components/PriceListPage';
 import { ProductsPage } from './components/ProductsPage';
 import { SalesPage } from './components/SalesPage';
 import { AllCustomersPage } from './components/AllCustomersPage';
@@ -23,7 +22,7 @@ const ACTIVE_TAB_KEY = 'apsara_active_tab';
 const CUSTOMER_SUBVIEW_KEY = 'apsara_customer_subview';
 const PRODUCT_SUBPAGE_KEY = 'svm_product_subpage';
 
-const VALID_TABS = ['All Customers', 'Sales', 'Estimate', 'Product', 'Quotation', 'Price List', 'Categories', 'Stock', 'GST Bill', 'Despatch', 'Settings'] as const;
+const VALID_TABS = ['All Customers', 'Sales', 'Estimate', 'Product', 'Quotation', 'Categories', 'Stock', 'GST Bill', 'Despatch', 'Settings'] as const;
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -278,9 +277,6 @@ function App() {
 
           {/* Stock & Sales Analytics Tab */}
           {activeTab === 'Stock' && <StockPage />}
-
-          {/* Price List Tab */}
-          {activeTab === 'Price List' && <PriceListPage />}
 
           {/* Product Master Tab */}
           {activeTab === 'Product' && (

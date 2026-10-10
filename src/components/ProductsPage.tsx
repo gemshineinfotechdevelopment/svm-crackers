@@ -258,7 +258,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
     return products.filter((p) => p.productType === 'Wholesale' || p.productType === 'Both').length;
   }, [products]);
 
-  // Tab Filtering & Search
+  // Tab Filtering & Search with Guaranteed Unique Product IDs
   const tabProducts = useMemo(() => {
     let list: ProductItem[] = [];
     if (activeTabType === 'Retail') {
@@ -268,7 +268,35 @@ export const ProductsPage: FC<ProductsPageProps> = ({
     } else {
       list = [...products];
     }
-    return list.sort((a, b) => (a.slNo || 0) - (b.slNo || 0));
+
+    // Ensure 100% strictly UNIQUE serial number (slNo / Product ID) with zero duplicates
+    const usedSlNos = new Set<number>();
+    let nextAvailable = 1;
+
+    // First pass: register unique positive integer slNos
+    const deduplicated = list.map((item) => {
+      const num = Number(item.slNo);
+      if (Number.isInteger(num) && num > 0 && !usedSlNos.has(num)) {
+        usedSlNos.add(num);
+        return { ...item, slNo: num };
+      }
+      return { ...item, slNo: -1 };
+    });
+
+    // Second pass: assign next available unique number to collisions
+    const result = deduplicated.map((item) => {
+      if (item.slNo === -1) {
+        while (usedSlNos.has(nextAvailable)) {
+          nextAvailable++;
+        }
+        const assigned = nextAvailable;
+        usedSlNos.add(assigned);
+        return { ...item, slNo: assigned };
+      }
+      return item;
+    });
+
+    return result.sort((a, b) => (a.slNo || 0) - (b.slNo || 0));
   }, [products, activeTabType]);
 
   const filteredProducts = useMemo(() => {

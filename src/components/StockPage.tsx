@@ -22,8 +22,6 @@ import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import EmojiEventsRoundedIcon from '@mui/icons-material/EmojiEventsRounded';
 import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
-import MonetizationOnRoundedIcon from '@mui/icons-material/MonetizationOnRounded';
-import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import * as XLSX from 'xlsx';
 
 import { ParticularsApi, ProductsApi } from '../services/api';
@@ -70,7 +68,7 @@ export const extractBillYear = (bill: any): number => {
 export const StockPage: FC = () => {
   const currentYear = getActiveBillingYear() || new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<string | number>(currentYear);
-  const [sortBy, setSortBy] = useState<'quantity' | 'revenue' | 'bills'>('quantity');
+  const [sortBy, setSortBy] = useState<'quantity' | 'name'>('quantity');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [loading, setLoading] = useState<boolean>(true);
@@ -234,9 +232,8 @@ export const StockPage: FC = () => {
 
     // Sort according to user preference
     list.sort((a, b) => {
-      if (sortBy === 'quantity') return b.totalQuantity - a.totalQuantity;
-      if (sortBy === 'revenue') return b.totalRevenue - a.totalRevenue;
-      return b.billsCount - a.billsCount;
+      if (sortBy === 'name') return a.productName.localeCompare(b.productName);
+      return b.totalQuantity - a.totalQuantity;
     });
 
     // Assign rank
@@ -333,8 +330,6 @@ export const StockPage: FC = () => {
       'Product Name': item.productName,
       Category: item.category,
       'Units Sold (Qty)': item.totalQuantity,
-      'Total Revenue (₹)': item.totalRevenue,
-      'Orders / Bills': item.billsCount,
       Year: selectedYear === 'ALL' ? 'All Years' : selectedYear,
     }));
 
@@ -376,8 +371,6 @@ export const StockPage: FC = () => {
                 <th>Product Name</th>
                 <th>Category</th>
                 <th class="text-right">Units Sold</th>
-                <th class="text-right">Total Revenue (₹)</th>
-                <th class="text-center">Orders</th>
               </tr>
             </thead>
             <tbody>
@@ -388,9 +381,7 @@ export const StockPage: FC = () => {
                   <td class="text-center badge">#${item.rank}</td>
                   <td><b>${item.productName}</b></td>
                   <td>${item.category}</td>
-                  <td class="text-right"><b>${item.totalQuantity.toLocaleString('en-IN')}</b></td>
-                  <td class="text-right">₹${item.totalRevenue.toLocaleString('en-IN')}</td>
-                  <td class="text-center">${item.billsCount}</td>
+                  <td class="text-right"><b>${item.totalQuantity.toLocaleString('en-IN')} units</b></td>
                 </tr>
               `
                 )
@@ -665,40 +656,21 @@ export const StockPage: FC = () => {
                       {item.topName}
                     </Typography>
 
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-                      <Box
-                        sx={{
-                          bgcolor: '#ECFDF5',
-                          border: '1px solid #A7F3D0',
-                          borderRadius: '6px',
-                          p: '6px 8px',
-                          textAlign: 'center',
-                        }}
-                      >
-                        <Typography sx={{ fontSize: '10px', color: '#047857', fontWeight: 600, textTransform: 'uppercase' }}>
-                          Units Sold
-                        </Typography>
-                        <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#065F46' }}>
-                          🔥 {item.topQty.toLocaleString('en-IN')}
-                        </Typography>
-                      </Box>
-
-                      <Box
-                        sx={{
-                          bgcolor: '#EFF6FF',
-                          border: '1px solid #BFDBFE',
-                          borderRadius: '6px',
-                          p: '6px 8px',
-                          textAlign: 'center',
-                        }}
-                      >
-                        <Typography sx={{ fontSize: '10px', color: '#1D4ED8', fontWeight: 600, textTransform: 'uppercase' }}>
-                          Revenue
-                        </Typography>
-                        <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#1E40AF' }}>
-                          ₹{item.topRev.toLocaleString('en-IN')}
-                        </Typography>
-                      </Box>
+                    <Box
+                      sx={{
+                        bgcolor: '#ECFDF5',
+                        border: '1px solid #A7F3D0',
+                        borderRadius: '6px',
+                        p: '8px 12px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <Typography sx={{ fontSize: '10.5px', color: '#047857', fontWeight: 600, textTransform: 'uppercase' }}>
+                        Units Sold
+                      </Typography>
+                      <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#065F46' }}>
+                        🔥 {item.topQty.toLocaleString('en-IN')} units
+                      </Typography>
                     </Box>
                   </Box>
                 );
@@ -707,7 +679,7 @@ export const StockPage: FC = () => {
           </Box>
 
           {/* 2. Key Performance Metric Cards */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 1.5 }}>
             {/* 🏆 Top Product */}
             <Box
               sx={{
@@ -758,68 +730,10 @@ export const StockPage: FC = () => {
                   Total Units Sold
                 </Typography>
                 <Typography sx={{ fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>
-                  {summaryMetrics.totalQty.toLocaleString('en-IN')}
+                  {summaryMetrics.totalQty.toLocaleString('en-IN')} units
                 </Typography>
                 <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
                   Across {summaryMetrics.totalProductsCount} products
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* 💰 Total Turnover */}
-            <Box
-              sx={{
-                bgcolor: '#FFFFFF',
-                border: '1px solid #DDD6FE',
-                borderRadius: '8px',
-                p: 1.8,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-              }}
-            >
-              <Box sx={{ p: 1.2, bgcolor: '#F3E8FF', borderRadius: '8px', display: 'flex' }}>
-                <MonetizationOnRoundedIcon sx={{ fontSize: 26, color: '#7C3AED' }} />
-              </Box>
-              <Box>
-                <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
-                  Total Sales Revenue
-                </Typography>
-                <Typography sx={{ fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>
-                  ₹{summaryMetrics.totalRev.toLocaleString('en-IN')}
-                </Typography>
-                <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
-                  For {selectedYear === 'ALL' ? 'all recorded years' : `year ${selectedYear}`}
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* 🧾 Orders Analyzed */}
-            <Box
-              sx={{
-                bgcolor: '#FFFFFF',
-                border: '1px solid #FED7AA',
-                borderRadius: '8px',
-                p: 1.8,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-              }}
-            >
-              <Box sx={{ p: 1.2, bgcolor: '#FFEDD5', borderRadius: '8px', display: 'flex' }}>
-                <ReceiptLongRoundedIcon sx={{ fontSize: 26, color: '#EA580C' }} />
-              </Box>
-              <Box>
-                <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
-                  Total Estimate Bills
-                </Typography>
-                <Typography sx={{ fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>
-                  {summaryMetrics.totalBills.toLocaleString('en-IN')}
-                </Typography>
-                <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
-                  Estimate bills only
                 </Typography>
               </Box>
             </Box>
@@ -917,8 +831,7 @@ export const StockPage: FC = () => {
                 }}
               >
                 <option value="quantity">🔥 Most Sold Units (Qty)</option>
-                <option value="revenue">💰 Highest Revenue (₹)</option>
-                <option value="bills">🧾 Most Bills / Orders</option>
+                <option value="name">🔤 Product Name (A-Z)</option>
               </select>
 
               <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#334155', ml: 1 }}>
@@ -944,16 +857,14 @@ export const StockPage: FC = () => {
                 <TableRow sx={{ '& th': { bgcolor: '#E2E8F0', color: '#0F172A', fontWeight: 800, fontSize: '11.5px', py: 0.8 } }}>
                   <TableCell align="center" sx={{ width: '60px' }}>Rank</TableCell>
                   <TableCell>Product Name</TableCell>
-                  <TableCell sx={{ width: '150px' }}>Category</TableCell>
-                  <TableCell align="right" sx={{ width: '160px' }}>Units Sold (Qty)</TableCell>
-                  <TableCell align="right" sx={{ width: '160px' }}>Total Sales (₹)</TableCell>
-                  <TableCell align="center" sx={{ width: '110px' }}>Orders</TableCell>
+                  <TableCell sx={{ width: '180px' }}>Category</TableCell>
+                  <TableCell align="right" sx={{ width: '180px' }}>Units Sold (Qty)</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredStats.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#64748B', fontSize: '13px' }}>
+                    <TableCell colSpan={4} align="center" sx={{ py: 4, color: '#64748B', fontSize: '13px' }}>
                       No product sales records found matching the filter.
                     </TableCell>
                   </TableRow>
@@ -1026,25 +937,11 @@ export const StockPage: FC = () => {
 
                         {/* Units Sold */}
                         <TableCell align="right">
-                          <Typography sx={{ fontSize: '13px', fontWeight: 900, color: '#16A34A' }}>
+                          <Typography sx={{ fontSize: '13.5px', fontWeight: 900, color: '#16A34A' }}>
                             {item.totalQuantity.toLocaleString('en-IN')}
                           </Typography>
                           <Typography sx={{ fontSize: '10px', color: '#64748B' }}>
-                            sold
-                          </Typography>
-                        </TableCell>
-
-                        {/* Total Revenue */}
-                        <TableCell align="right">
-                          <Typography sx={{ fontSize: '13.5px', fontWeight: 800, color: '#1E40AF' }}>
-                            ₹{item.totalRevenue.toLocaleString('en-IN')}
-                          </Typography>
-                        </TableCell>
-
-                        {/* Orders Count */}
-                        <TableCell align="center">
-                          <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>
-                            {item.billsCount} bills
+                            units sold
                           </Typography>
                         </TableCell>
                       </TableRow>

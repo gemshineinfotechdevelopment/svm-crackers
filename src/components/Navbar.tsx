@@ -22,7 +22,6 @@ import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
 import CategoryRoundedIcon from '@mui/icons-material/CategoryRounded';
-import FormatListNumberedRoundedIcon from '@mui/icons-material/FormatListNumberedRounded';
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
@@ -45,7 +44,7 @@ import {
 } from '../utils/yearContext';
 import { PRODUCT_SUB_PAGES, type ProductSubPage } from '../types/productSubPages';
 
-export type NavTab = 'All Customers' | 'Sales' | 'Estimate' | 'Product' | 'Quotation' | 'Price List' | 'Categories' | 'Stock' | 'GST Bill' | 'Despatch' | 'Settings';
+export type NavTab = 'All Customers' | 'Sales' | 'Estimate' | 'Product' | 'Quotation' | 'Categories' | 'Stock' | 'GST Bill' | 'Despatch' | 'Settings';
 
 interface NavbarProps {
   activeTab?: NavTab;
@@ -148,7 +147,6 @@ export const Navbar: FC<NavbarProps> = ({
     { label: 'Estimate', tabKey: 'Estimate' },
     { label: 'Product Master', tabKey: 'Product' },
     { label: 'Quotation', tabKey: 'Quotation' },
-    { label: 'Price List', tabKey: 'Price List' },
     { label: 'Categories', tabKey: 'Categories' },
     { label: 'Stock', tabKey: 'Stock' },
     { label: 'Tax Bill', tabKey: 'GST Bill' },
@@ -607,7 +605,6 @@ export const Navbar: FC<NavbarProps> = ({
             { label: 'Estimate (Bill)', tab: 'Estimate' as NavTab, icon: <ReceiptLongRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Product Master', tab: 'Product' as NavTab, icon: <Inventory2RoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Quotation', tab: 'Quotation' as NavTab, icon: <RequestQuoteRoundedIcon sx={{ fontSize: 18 }} /> },
-            { label: 'Price List', tab: 'Price List' as NavTab, icon: <FormatListNumberedRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Categories', tab: 'Categories' as NavTab, icon: <CategoryRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Stock (Sales)', tab: 'Stock' as NavTab, icon: <TrendingUpRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Tax Bill (GST)', tab: 'GST Bill' as NavTab, icon: <DescriptionRoundedIcon sx={{ fontSize: 18 }} /> },

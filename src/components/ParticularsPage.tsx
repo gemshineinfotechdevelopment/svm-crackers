@@ -31,9 +31,15 @@ import {
   CustomersApi,
   CompaniesApi,
   ProductsApi,
-  PriceListsApi,
   ParticularsApi,
+  type PriceMapRecord,
 } from '../services/api';
+import {
+  fetchPriceMaps,
+  DEFAULT_PRICE_MAP_NAMES,
+  REFERENCE_RETAIL_PRODUCTS,
+  PRICEMAP_CHANGE_EVENT,
+} from '../utils/priceMapStorage';
 import { getStoredSettings } from './SettingsPage';
 import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
@@ -128,8 +134,11 @@ const findProductByCode = (code: string | undefined | null, options: ProductCata
   return null;
 };
 
-const getRateForType = (prod: ProductCatalogOption | undefined | null, rType: string): number => {
+const getRateForType = (prod: ProductCatalogOption | undefined | null, rType: string, isPriceMapActive?: boolean): number => {
   if (!prod) return 0;
+  if (isPriceMapActive) {
+    return Number(prod.rate) || 0;
+  }
   const mrp = Number(prod.mrp) || 0;
   const netRate = Number(prod.rate) || 0;
   const wholesaleRate = Number(prod.wholesaleRate) || (prod.productType === 'Wholesale' ? netRate : netRate);
@@ -207,9 +216,11 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const [, setCompanyOptions] = useState<{ id: string; name: string }[]>([]);
   const [productOptions, setProductOptions] = useState<ProductCatalogOption[]>([]);
   const [rawProducts, setRawProducts] = useState<any[]>([]);
-  const [rawPriceLists, setRawPriceLists] = useState<any[]>([]);
-  const [priceMapOptions, setPriceMapOptions] = useState<string[]>(['S V M', 'M S K', 'Manjula', 'Gift', 'MPS']);
-  const [selectedPriceMap, setSelectedPriceMap] = useState<string>(() => initialDraft?.priceMap || '');
+  const [priceMaps, setPriceMaps] = useState<PriceMapRecord[]>([]);
+  const [priceMapOptions, setPriceMapOptions] = useState<string[]>(DEFAULT_PRICE_MAP_NAMES);
+  const [selectedPriceMap, setSelectedPriceMap] = useState<string>(() => {
+    return initialDraft?.priceMap || localStorage.getItem('svm_selected_pricemap_name') || 'SVM';
+  });
 
   // 1. Customer Info Left Box State
   const [customerNo, setCustomerNo] = useState<string>(() => initialDraft?.customerNo || '');
@@ -486,62 +497,87 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     }
   };
 
-  // Helper to build product options based on raw catalog products, raw price lists, and chosen Price Map
+  // Helper to build product options matching Product Price Map page data exactly
   const buildProductOptions = (
     prodList: any[],
-    priceList: any[],
+    priceMapsList: PriceMapRecord[],
     mapName: string
   ): ProductCatalogOption[] => {
-    const prodMap = new Map<string, ProductCatalogOption>();
     const cleanMap = (mapName || '').trim().toLowerCase().replace(/[\s\-_]/g, '');
 
-    // 1. Process all catalog products
-    if (Array.isArray(prodList)) {
+    // Find matching price map record from Price Map Master
+    const targetMap = cleanMap
+      ? priceMapsList.find((m) => (m.name || '').trim().toLowerCase().replace(/[\s\-_]/g, '') === cleanMap)
+      : priceMapsList.find((m) => (m.name || '').trim().toLowerCase() === 'svm') || priceMapsList[0];
+
+    const existingRatesMap = new Map<string, number>();
+    const codeLookup = new Map<string, number>();
+
+    if (targetMap && Array.isArray(targetMap.rates)) {
+      targetMap.rates.forEach((r) => {
+        if (r.productName && typeof r.rate === 'number' && r.rate >= 0) {
+          existingRatesMap.set(r.productName.trim().toLowerCase(), r.rate);
+        }
+        if (r.code !== undefined && r.code !== null && typeof r.rate === 'number' && r.rate >= 0) {
+          codeLookup.set(String(r.code).trim().toLowerCase(), r.rate);
+        }
+      });
+    }
+
+    // Reference rates map for SVM
+    const refMap = new Map<string, number>();
+    REFERENCE_RETAIL_PRODUCTS.forEach((rp) => {
+      refMap.set(rp.productName.trim().toLowerCase(), rp.rate);
+    });
+
+    const combinedOptions: ProductCatalogOption[] = [];
+    const processedNames = new Set<string>();
+
+    // 1. Process website / catalog products
+    if (Array.isArray(prodList) && prodList.length > 0) {
       prodList.forEach((p: any, idx: number) => {
-        const key = (p.name || '').trim();
+        const key = String(p.name || '').trim();
         if (!key) return;
+        const lowerKey = key.toLowerCase();
+        if (processedNames.has(lowerKey)) return;
+        processedNames.add(lowerKey);
+
         const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
         let rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
         const pType = p.productType || 'Retail';
         const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : String(idx + 1);
         const skuCode = p.sku ? String(p.sku) : slNumber;
-        let unitVal = p.unit || '1 Box';
+        const unitVal = p.unit || '1 Box';
 
-        // If a specific price map is selected, check if this product has a price override in matching batch/company
-        if (cleanMap) {
-          const matchingPriceItem = Array.isArray(priceList) ? priceList.find((pl: any) => {
-            const bName = (pl.batchName || pl.company || pl.companyName || pl.shopName || '').toLowerCase().replace(/[\s\-_]/g, '');
-            const plName = (pl.itemName || pl.name || '').trim().toLowerCase();
-            return bName === cleanMap && plName === key.toLowerCase();
-          }) : undefined;
-
-          if (matchingPriceItem) {
-            if (matchingPriceItem.rate !== undefined && matchingPriceItem.rate !== null && Number(matchingPriceItem.rate) > 0) {
-              rateVal = typeof matchingPriceItem.rate === 'number' ? matchingPriceItem.rate : parseFloat(matchingPriceItem.rate) || rateVal;
-            }
-            if (matchingPriceItem.unit) {
-              unitVal = matchingPriceItem.unit;
-            }
-          } else if (p.priceMaps && typeof p.priceMaps === 'object') {
-            for (const [mK, mV] of Object.entries(p.priceMaps)) {
-              if (mK.toLowerCase().replace(/[\s\-_]/g, '') === cleanMap && typeof mV === 'number') {
-                rateVal = mV;
-                break;
-              }
+        // Check if rate is defined in active price map
+        if (existingRatesMap.has(lowerKey)) {
+          rateVal = existingRatesMap.get(lowerKey)!;
+        } else if (codeLookup.has(slNumber.trim().toLowerCase())) {
+          rateVal = codeLookup.get(slNumber.trim().toLowerCase())!;
+        } else if (codeLookup.has(skuCode.trim().toLowerCase())) {
+          rateVal = codeLookup.get(skuCode.trim().toLowerCase())!;
+        } else if ((!cleanMap || cleanMap === 'svm') && refMap.has(lowerKey)) {
+          rateVal = refMap.get(lowerKey)!;
+        } else if (p.priceMaps && typeof p.priceMaps === 'object') {
+          for (const [mK, mV] of Object.entries(p.priceMaps)) {
+            if (mK.toLowerCase().replace(/[\s\-_]/g, '') === cleanMap && typeof mV === 'number') {
+              rateVal = mV;
+              break;
             }
           }
         }
 
-        prodMap.set(key.toLowerCase(), {
+        const finalRate = rateVal;
+        combinedOptions.push({
           id: p._id || p.id,
           sku: skuCode,
           slNo: slNumber,
           name: key,
           category: p.category || 'General',
-          rate: rateVal,
-          mrp: mrpVal,
-          wholesaleRate: rateVal,
-          retailRate: mrpVal > 0 ? mrpVal : rateVal,
+          rate: finalRate,
+          mrp: (cleanMap && targetMap) ? finalRate : (mrpVal || finalRate),
+          wholesaleRate: finalRate,
+          retailRate: finalRate,
           productType: pType,
           unit: unitVal,
           qty: typeof p.qty === 'number' ? p.qty : (typeof p.stock === 'number' ? p.stock : (typeof p.totalStock === 'number' ? p.totalStock : 0)),
@@ -549,76 +585,104 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       });
     }
 
-    // 2. Process priceList items
-    if (Array.isArray(priceList)) {
-      priceList.forEach((p: any, idx: number) => {
-        const key = (p.itemName || p.name || '').trim();
-        if (!key) return;
-        const bName = (p.batchName || p.company || p.companyName || p.shopName || '').toLowerCase().replace(/[\s\-_]/g, '');
+    // 2. Ensure all REFERENCE_RETAIL_PRODUCTS from Product Price Map are included
+    REFERENCE_RETAIL_PRODUCTS.forEach((rp) => {
+      const rpKey = rp.productName.trim().toLowerCase();
+      if (!processedNames.has(rpKey)) {
+        processedNames.add(rpKey);
+        let rateVal = rp.rate;
 
-        if (cleanMap) {
-          if (bName === cleanMap) {
-            const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
-            const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
-            const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : (p.sNo !== undefined ? String(p.sNo) : String(idx + 1));
-            const skuCode = p.sku ? String(p.sku) : (p.itemCode ? String(p.itemCode) : `PL-${100 + idx}`);
-            const existingOpt = prodMap.get(key.toLowerCase());
-            const preservedQty = existingOpt?.qty !== undefined
-              ? existingOpt.qty
-              : (typeof p.qty === 'number' ? p.qty : (typeof p.stock === 'number' ? p.stock : 0));
+        if (existingRatesMap.has(rpKey)) {
+          rateVal = existingRatesMap.get(rpKey)!;
+        } else if (!cleanMap || cleanMap === 'svm') {
+          rateVal = rp.rate;
+        }
 
-            prodMap.set(key.toLowerCase(), {
-              id: p._id || p.id,
-              sku: skuCode,
-              slNo: slNumber,
-              name: key,
-              category: p.category || 'General',
-              rate: rateVal,
-              mrp: mrpVal,
-              wholesaleRate: rateVal,
-              retailRate: mrpVal > 0 ? mrpVal : rateVal,
-              productType: 'Both',
-              unit: p.unit || '1 Box',
-              qty: preservedQty,
-            });
-          }
-        } else {
-          if (!prodMap.has(key.toLowerCase())) {
-            const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
-            const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
-            const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : (p.sNo !== undefined ? String(p.sNo) : String(idx + 1));
-            const skuCode = p.sku ? String(p.sku) : (p.itemCode ? String(p.itemCode) : `PL-${100 + idx}`);
-            const existingOpt = prodMap.get(key.toLowerCase());
-            const preservedQty = existingOpt?.qty !== undefined
-              ? existingOpt.qty
-              : (typeof p.qty === 'number' ? p.qty : (typeof p.stock === 'number' ? p.stock : 0));
+        combinedOptions.push({
+          id: `ref-${rp.code}`,
+          sku: String(rp.code),
+          slNo: String(rp.code),
+          name: rp.productName,
+          category: 'General',
+          rate: rateVal,
+          mrp: rateVal,
+          wholesaleRate: rateVal,
+          retailRate: rateVal,
+          productType: 'Retail',
+          unit: '1 Box',
+          qty: 1,
+        });
+      }
+    });
 
-            prodMap.set(key.toLowerCase(), {
-              id: p._id || p.id,
-              sku: skuCode,
-              slNo: slNumber,
-              name: key,
-              category: p.category || 'General',
-              rate: rateVal,
-              mrp: mrpVal,
-              wholesaleRate: rateVal,
-              retailRate: mrpVal > 0 ? mrpVal : rateVal,
-              productType: 'Both',
-              unit: p.unit || '1 Box',
-              qty: preservedQty,
-            });
-          }
+    // 3. Include any extra custom products defined in targetMap.rates
+    if (targetMap && Array.isArray(targetMap.rates)) {
+      targetMap.rates.forEach((r, idx) => {
+        const rName = String(r.productName || '').trim();
+        const rKey = rName.toLowerCase();
+        if (rName && !processedNames.has(rKey)) {
+          processedNames.add(rKey);
+          const rRate = Number(r.rate) || 0;
+          combinedOptions.push({
+            id: r.productId || `pm-${idx}`,
+            sku: String(r.code || idx + 1),
+            slNo: String(r.code || idx + 1),
+            name: rName,
+            category: 'General',
+            rate: rRate,
+            mrp: rRate,
+            wholesaleRate: rRate,
+            retailRate: rRate,
+            productType: 'Retail',
+            unit: '1 Box',
+            qty: typeof r.quantity === 'number' ? r.quantity : 1,
+          });
         }
       });
     }
 
-    return Array.from(prodMap.values());
+    // 4. Ensure 100% strictly UNIQUE Product ID (code/slNo) for every single product - no duplicates!
+    const usedCodes = new Set<number>();
+    let nextAvailableCode = 1;
+
+    // First pass: register unique positive integer codes
+    combinedOptions.forEach((opt) => {
+      const numCode = Number(opt.slNo || opt.sku);
+      if (Number.isInteger(numCode) && numCode > 0 && !usedCodes.has(numCode)) {
+        usedCodes.add(numCode);
+        opt.slNo = String(numCode);
+        opt.sku = String(numCode);
+      } else {
+        opt.slNo = '-1';
+        opt.sku = '-1';
+      }
+    });
+
+    // Second pass: resolve collisions and invalid codes with next available unique number
+    combinedOptions.forEach((opt) => {
+      if (opt.slNo === '-1') {
+        while (usedCodes.has(nextAvailableCode)) {
+          nextAvailableCode++;
+        }
+        opt.slNo = String(nextAvailableCode);
+        opt.sku = String(nextAvailableCode);
+        usedCodes.add(nextAvailableCode);
+      }
+    });
+
+    // Sort by slNo numeric order ascending (1, 2, 3...)
+    combinedOptions.sort((a, b) => Number(a.slNo) - Number(b.slNo));
+
+    return combinedOptions;
   };
 
-  // Switch Price Map and recalculate rates
+  // Switch Price Map and recalculate rates for all rows in the bill
   const handlePriceMapChange = (mapVal: string) => {
     setSelectedPriceMap(mapVal);
-    const updatedOptions = buildProductOptions(rawProducts, rawPriceLists, mapVal);
+    if (mapVal) {
+      localStorage.setItem('svm_selected_pricemap_name', mapVal);
+    }
+    const updatedOptions = buildProductOptions(rawProducts, priceMaps, mapVal);
     setProductOptions(updatedOptions);
 
     if (selectedCatalogProduct) {
@@ -628,28 +692,30 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       if (matched) setSelectedCatalogProduct(matched);
     }
 
+    // Automatically recalculate all product rows in the bill with the new Price Map rates
+    setProductRows((prev) =>
+      prev.map((row) => {
+        if (!row.particular.trim()) return row;
+        const matched = updatedOptions.find(
+          (p) => p.name.toLowerCase().trim() === row.particular.toLowerCase().trim()
+        );
+        if (matched) {
+          const newRate = Number(matched.rate) || 0;
+          const q = parseFloat(row.quantity) || 1;
+          const amt = String(Math.round(q * newRate));
+          return {
+            ...row,
+            rate: String(newRate),
+            amount: amt,
+            pktUnit: matched.unit || row.pktUnit,
+          };
+        }
+        return row;
+      })
+    );
+
     if (mapVal) {
-      setProductRows((prev) =>
-        prev.map((row) => {
-          if (!row.particular.trim()) return row;
-          const matched = updatedOptions.find(
-            (p) => p.name.toLowerCase().trim() === row.particular.toLowerCase().trim()
-          );
-          if (matched) {
-            const newRate = getRateForType(matched, rateType);
-            const q = parseFloat(row.quantity) || 1;
-            const amt = Math.round(q * newRate);
-            return {
-              ...row,
-              rate: String(newRate),
-              amount: String(amt),
-              pktUnit: matched.unit || row.pktUnit,
-            };
-          }
-          return row;
-        })
-      );
-      setSnackbarMessage(`Price Map set to "${mapVal}". Product prices updated.`);
+      setSnackbarMessage(`Price Map set to "${mapVal}". All bill product prices updated.`);
       setSnackbarOpen(true);
     } else {
       setSnackbarMessage('Price Map reset to default rates.');
@@ -660,11 +726,11 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   // Load backend data for a specific year
   const loadOptions = async (targetYear: number = selectedYear) => {
     try {
-      const [custRes, compRes, prodRes, priceRes, lastBillRes] = await Promise.all([
+      const [custRes, compRes, prodRes, priceMapsRes, lastBillRes] = await Promise.all([
         CustomersApi.getAll(targetYear).catch(() => []),
         CompaniesApi.getAll().catch(() => []),
-        ProductsApi.getAll(targetYear).catch(() => []),
-        PriceListsApi.getAll({ year: targetYear }).catch(() => []),
+        ProductsApi.getAll(undefined, targetYear).catch(() => []),
+        fetchPriceMaps(targetYear).catch(() => []),
         ParticularsApi.getNextBillNo(mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR', targetYear).catch(() => ({ nextBillNo: '1001' })),
       ]);
 
@@ -706,27 +772,27 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       }
 
       const productsArray = Array.isArray(prodRes) ? prodRes : [];
-      const pricesArray = Array.isArray(priceRes) ? priceRes : [];
+      const mapsArray = Array.isArray(priceMapsRes) ? priceMapsRes : [];
       setRawProducts(productsArray);
-      setRawPriceLists(pricesArray);
+      setPriceMaps(mapsArray);
 
-      // Build dynamic price map options from preset + companies + price list batches
-      const dynamicMaps = new Set<string>(['S V M', 'M S K', 'Manjula', 'Gift', 'MPS']);
+      // Build dynamic price map options from Price Map Master records + presets
+      const dynamicMaps = new Set<string>();
+      mapsArray.forEach((pm: PriceMapRecord) => {
+        if (pm.name && pm.name.trim()) dynamicMaps.add(pm.name.trim());
+      });
+      DEFAULT_PRICE_MAP_NAMES.forEach((name) => dynamicMaps.add(name));
       if (Array.isArray(compRes)) {
         compRes.forEach((c: any) => {
           if (c.name && c.name.trim()) dynamicMaps.add(c.name.trim());
         });
       }
-      pricesArray.forEach((pl: any) => {
-        if (pl.batchName && pl.batchName.trim()) dynamicMaps.add(pl.batchName.trim());
-        if (pl.company && pl.company.trim()) dynamicMaps.add(pl.company.trim());
-      });
       setPriceMapOptions(Array.from(dynamicMaps));
 
-      const unified = buildProductOptions(productsArray, pricesArray, selectedPriceMap);
+      const unified = buildProductOptions(productsArray, mapsArray, selectedPriceMap);
       setProductOptions(unified);
     } catch (err) {
-      console.error('Error loading data for Quotation page:', err);
+      console.error('Error loading data for Quotation / Estimate page:', err);
     }
   };
 
@@ -740,12 +806,19 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         loadOptions(e.detail.year);
       }
     };
+
+    const handlePriceMapsUpdated = () => {
+      loadOptions(selectedYear);
+    };
+
     window.addEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+    window.addEventListener(PRICEMAP_CHANGE_EVENT, handlePriceMapsUpdated);
     return () => {
       window.removeEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
+      window.removeEventListener(PRICEMAP_CHANGE_EVENT, handlePriceMapsUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedYear]);
 
   // Re-sync sessions if mode changes (ESTIMATE <-> QUOTATION)
   useEffect(() => {
@@ -770,6 +843,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       setBillNo(String(editBillData.billNo || ''));
       setBillDate(editBillData.date || getInitialDateStr());
       if (editBillData.rateType) setRateType(editBillData.rateType);
+      if (editBillData.priceMap) setSelectedPriceMap(editBillData.priceMap);
       setDiscountRs(String(editBillData.discount ?? '0'));
       setPackingRs(String(editBillData.packing ?? ''));
       setCompanyName(editBillData.companyName || storeSettings.companyName || 'S.V.M Fireworks Agencies');
@@ -925,7 +999,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             findProductByCode(val, productOptions);
           if (match) {
             updated.particular = match.name;
-            const calculatedRate = getRateForType(match, rateType);
+            const calculatedRate = getRateForType(match, rateType, Boolean(selectedPriceMap));
             updated.rate = String(calculatedRate);
             if (match.unit) updated.pktUnit = match.unit;
           }
@@ -996,7 +1070,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       }
     }
 
-    const rateVal = getRateForType(prod, rateType);
+    const rateVal = getRateForType(prod, rateType, Boolean(selectedPriceMap));
     const validQ = isNaN(q) || q <= 0 ? 1 : q;
     const newRow: ProductRowItem = {
       id: String(Date.now()),
@@ -1840,7 +1914,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               size="small"
               sx={{ flex: 1, minWidth: '220px' }}
               options={productOptions}
-              getOptionLabel={(opt) => `${opt.slNo ? `[#${opt.slNo}] ` : opt.sku ? `[${opt.sku}] ` : ''}${opt.name} - ₹${getRateForType(opt, rateType)}`}
+              getOptionLabel={(opt) => `${opt.slNo ? `[#${opt.slNo}] ` : opt.sku ? `[${opt.sku}] ` : ''}${opt.name} - ₹${getRateForType(opt, rateType, Boolean(selectedPriceMap))}`}
               filterOptions={(options, state) => {
                 const input = state.inputValue.toLowerCase().trim();
                 if (!input) return options;
@@ -2443,7 +2517,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                     <TableCell sx={{ fontSize: '12px', color: '#475569' }}>{prod.category || 'General'}</TableCell>
                     <TableCell sx={{ fontSize: '12px' }}>{prod.unit || '1 Box'}</TableCell>
                     <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, textAlign: 'right', color: '#1E40AF' }}>
-                      ₹ {getRateForType(prod, rateType)}
+                      ₹ {getRateForType(prod, rateType, Boolean(selectedPriceMap))}
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center' }}>
                       <Button
