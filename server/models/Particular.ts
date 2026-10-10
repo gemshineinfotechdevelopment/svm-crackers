@@ -39,7 +39,10 @@ export interface IParticular extends Document {
   pdfPublicId?: string;
   products: IParticularProductItem[];
   // GST Specific Fields
-  billType?: 'REGULAR' | 'GST';
+  billType?: 'REGULAR' | 'GST' | 'QUOTATION' | 'ESTIMATE' | string;
+  isConverted?: boolean;
+  convertedBillNo?: string;
+  convertedAt?: Date;
   placeOfSupply?: string;
   reverseCharge?: string;
   vehicleNo?: string;
@@ -96,9 +99,8 @@ const ParticularSchema: Schema = new Schema(
     billNo: { type: String, required: true, trim: true },
     tax: { type: String, default: '' },
     amount: { type: String, default: '0.00' },
-    total: { type: String, default: '0.00' },
-    paymentStatus: { type: String, enum: ['PAID', 'UNPAID', 'PARTIAL'], default: 'UNPAID' },
-    paymentMode: { type: String, enum: ['CASH', 'UPI', 'BANK', 'CREDIT'], default: 'CREDIT' },
+    paymentStatus: { type: String, default: 'UNPAID' },
+    paymentMode: { type: String, default: 'CREDIT' },
     paidAmount: { type: String, default: '0.00' },
     notes: { type: String, default: '' },
     date: { type: String, required: true },
@@ -107,8 +109,11 @@ const ParticularSchema: Schema = new Schema(
     pdfName: { type: String, default: '' },
     pdfPublicId: { type: String, default: '' },
     products: [ParticularProductItemSchema],
-    // GST Specific Fields
-    billType: { type: String, enum: ['REGULAR', 'GST'], default: 'REGULAR' },
+    // GST & Document Specific Fields
+    billType: { type: String, default: 'REGULAR' },
+    isConverted: { type: Boolean, default: false },
+    convertedBillNo: { type: String, default: '' },
+    convertedAt: { type: Date },
     placeOfSupply: { type: String, default: '' },
     reverseCharge: { type: String, default: 'No' },
     vehicleNo: { type: String, default: '' },

@@ -39,6 +39,59 @@ export const extractYearFromDate = (dateStr: string | Date | undefined, fallback
 };
 
 /**
+ * Calculates Indian Financial Year starting year (April 1 to March 31).
+ * Example: 01-04-2026 to 31-03-2027 => 2026
+ * On 01-04-2027, advances to 2027 and restarts bill numbering from 1.
+ */
+export const getFinancialYear = (
+  dateStr?: string | Date | undefined,
+  fallbackYear = new Date().getFullYear()
+): number => {
+  if (!dateStr) {
+    const now = new Date();
+    return now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
+  }
+  if (dateStr instanceof Date) {
+    const y = dateStr.getFullYear();
+    if (isNaN(y)) return fallbackYear;
+    return dateStr.getMonth() < 3 ? y - 1 : y;
+  }
+  const clean = String(dateStr).trim();
+
+  // Format: DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY
+  const dmyMatch = clean.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);
+  if (dmyMatch) {
+    let y = parseInt(dmyMatch[3], 10);
+    if (y < 100) y += 2000;
+    const m = parseInt(dmyMatch[2], 10) - 1; // 0 = Jan, 1 = Feb, 2 = Mar, 3 = Apr
+    if (!isNaN(y) && !isNaN(m)) {
+      return m < 3 ? y - 1 : y;
+    }
+  }
+
+  // Format: YYYY-MM-DD, YYYY/MM/DD
+  const ymdMatch = clean.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (ymdMatch) {
+    const y = parseInt(ymdMatch[1], 10);
+    const m = parseInt(ymdMatch[2], 10) - 1;
+    if (!isNaN(y) && !isNaN(m)) {
+      return m < 3 ? y - 1 : y;
+    }
+  }
+
+  // Fallback to standard parse
+  const parsed = Date.parse(clean);
+  if (!isNaN(parsed)) {
+    const d = new Date(parsed);
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    return m < 3 ? y - 1 : y;
+  }
+
+  return fallbackYear;
+};
+
+/**
  * Safe database backfill to populate `year` field on historical records without changing any other data.
  */
 export const backfillMissingYears = async (): Promise<void> => {

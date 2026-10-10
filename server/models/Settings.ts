@@ -12,6 +12,7 @@ export interface ISettings extends Document {
   pincode?: string;
   state?: string;
   gstin?: string;
+  licNo?: string;
   pan?: string;
   logoUrl?: string;
   enableTax?: boolean;
@@ -28,17 +29,18 @@ export interface ISettings extends Document {
 
 const SettingsSchema: Schema = new Schema(
   {
-    companyName: { type: String, default: 'Manjula Crackers', trim: true },
+    companyName: { type: String, default: 'S.V.M Fireworks Agencies', trim: true },
     tagline: { type: String, default: 'Standard Fire Works & Fancy Crackers', trim: true },
     ownerName: { type: String, default: '', trim: true },
     phone: { type: String, default: '9843067073', trim: true },
     whatsapp: { type: String, default: '8778429299', trim: true },
     email: { type: String, default: '', trim: true },
-    address: { type: String, default: '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi', trim: true },
+    address: { type: String, default: 'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road, Keela Thiruthangal - 626 130. Tamil Nadu', trim: true },
     city: { type: String, default: 'Sivakasi', trim: true },
-    pincode: { type: String, default: '626123', trim: true },
+    pincode: { type: String, default: '626130', trim: true },
     state: { type: String, default: 'Tamil Nadu', trim: true },
-    gstin: { type: String, default: '', trim: true },
+    gstin: { type: String, default: '33ADBFS7999E1ZO', trim: true },
+    licNo: { type: String, default: 'E/SS/TN/24/83 (E86652)', trim: true },
     pan: { type: String, default: '', trim: true },
     logoUrl: { type: String, default: '' },
     enableTax: { type: Boolean, default: false },

@@ -29,6 +29,7 @@ import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 
 import {
   CustomersApi,
@@ -39,14 +40,21 @@ import {
 import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { GstBillPrintModal } from './GstBillPrintModal';
 import type { GstBillPrintData, GstProductItem } from './GstBillPrintTemplate';
+import { DuplicateBillModal } from './DuplicateBillModal';
 import { numberToIndianWords } from '../utils/numberToWords';
 import {
   getActiveBillingYear,
   validateDateMatchesYear,
+  getCurrentFinancialYear,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
 import { getSelectedBillYear } from '../utils/billYearUtils';
 import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
+import {
+  getGstSessions,
+  saveGstSessions,
+  type GstDraftSession,
+} from '../utils/billingSessionManager';
 
 export interface GstRowItem {
   id: string;
@@ -148,36 +156,50 @@ export const GstBillPage: FC = () => {
   const [customerOptions, setCustomerOptions] = useState<CustomerOptionItem[]>([]);
   const [productOptions, setProductOptions] = useState<ProductCatalogOption[]>([]);
 
+  // 0. Session Draft Management State
+  const initialSessionData = useMemo(() => {
+    return getGstSessions();
+  }, []);
+
+  const [sessions, setSessions] = useState<GstDraftSession[]>(() => initialSessionData.sessions);
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => initialSessionData.activeId);
+
+  const initialDraft = useMemo(() => {
+    return initialSessionData.sessions.find((s) => s.id === initialSessionData.activeId) || initialSessionData.sessions[0] || null;
+  }, []);
+
   // 1. Bill Info State (Top Left Box)
-  const [billNo, setBillNo] = useState<string>('292');
-  const [billDate, setBillDate] = useState<string>(getTodayDateStr);
+  const [billNo, setBillNo] = useState<string>(() => initialDraft?.billNo || '0001');
+  const [billDate, setBillDate] = useState<string>(() => initialDraft?.billDate || getTodayDateStr());
   const billDatePickerRef = useRef<HTMLInputElement>(null);
   const lrDatePickerRef = useRef<HTMLInputElement>(null);
 
   // 2. Customer Info State (Top Middle Box)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOptionItem | null>(null);
-  const [customerName, setCustomerName] = useState<string>('');
-  const [customerAddress, setCustomerAddress] = useState<string>('');
-  const [customerGst, setCustomerGst] = useState<string>('');
-  const [customerAadhar, setCustomerAadhar] = useState<string>('');
-  const [customerPhone, setCustomerPhone] = useState<string>('');
+  const [customerName, setCustomerName] = useState<string>(() => initialDraft?.customerName || '');
+  const [customerAddress, setCustomerAddress] = useState<string>(() => initialDraft?.customerAddress || '');
+  const [customerGst, setCustomerGst] = useState<string>(() => initialDraft?.customerGst || '');
+  const [customerAadhar, setCustomerAadhar] = useState<string>(() => initialDraft?.customerAadhar || '');
+  const [customerPhone, setCustomerPhone] = useState<string>(() => initialDraft?.customerPhone || initialDraft?.customerMobile || '');
 
   // 3. Despatch Info State (Top Right Box)
-  const [despatchedTo, setDespatchedTo] = useState<string>('');
-  const [lorryTransport, setLorryTransport] = useState<string>('');
-  const [lrNo, setLrNo] = useState<string>('');
-  const [lrDate, setLrDate] = useState<string>(getTodayDateStr);
-  const [totalCases, setTotalCases] = useState<string>('0');
+  const [despatchedTo, setDespatchedTo] = useState<string>(() => initialDraft?.despatchedTo || '');
+  const [lorryTransport, setLorryTransport] = useState<string>(() => initialDraft?.lorryTransport || '');
+  const [lrNo, setLrNo] = useState<string>(() => initialDraft?.lrNo || '');
+  const [lrDate, setLrDate] = useState<string>(() => initialDraft?.lrDate || getTodayDateStr());
+  const [totalCases, setTotalCases] = useState<string>(() => initialDraft?.totalCases || '0');
   const [totalCasesManual, setTotalCasesManual] = useState<boolean>(false);
 
   // 4. Product Quick Entry Bar
   const quickCodeInputRef = useRef<HTMLInputElement>(null);
+  const quickHsnInputRef = useRef<HTMLInputElement>(null);
   const quickQtyInputRef = useRef<HTMLInputElement>(null);
   const quickUnitInputRef = useRef<HTMLInputElement>(null);
   const quickRateInputRef = useRef<HTMLInputElement>(null);
 
   const [quickCode, setQuickCode] = useState<string>('');
   const [selectedCatalogProduct, setSelectedCatalogProduct] = useState<ProductCatalogOption | null>(null);
+  const [quickHsn, setQuickHsn] = useState<string>('3604');
   const [quickQty, setQuickQty] = useState<string>('1');
   const [quickUnit, setQuickUnit] = useState<string>('Case');
   const [quickRate, setQuickRate] = useState<string>('0');
@@ -185,15 +207,222 @@ export const GstBillPage: FC = () => {
   const [catalogSearchTerm, setCatalogSearchTerm] = useState<string>('');
 
   // 5. Product List Table State
-  const [productRows, setProductRows] = useState<GstRowItem[]>([
-    { id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
-  ]);
+  const [productRows, setProductRows] = useState<GstRowItem[]>(() => {
+    if (initialDraft?.productRows && initialDraft.productRows.length > 0) {
+      return initialDraft.productRows;
+    }
+    return [{ id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' }];
+  });
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   // 6. Amount Info State (Right Panel)
-  const [taxType, setTaxType] = useState<'CGST_SGST' | 'IGST'>('IGST');
-  const [taxPercent, setTaxPercent] = useState<string>('18');
-  const [billFlag, setBillFlag] = useState<boolean>(true);
+  const [taxType, setTaxType] = useState<'CGST_SGST' | 'IGST'>(() => (initialDraft?.taxType as any) || 'IGST');
+  const [taxPercent, setTaxPercent] = useState<string>(() => initialDraft?.taxPercent || '18');
+  const [billFlag, setBillFlag] = useState<boolean>(() => (initialDraft?.billFlag !== undefined ? initialDraft.billFlag : true));
+
+  // Session Helper: Apply session data to form inputs
+  const applySessionToForm = (sess: GstDraftSession) => {
+    setBillNo(sess.billNo || '');
+    setBillDate(sess.billDate || getTodayDateStr());
+    setSelectedCustomer(null);
+    setCustomerName(sess.customerName || '');
+    setCustomerAddress(sess.customerAddress || '');
+    setCustomerGst(sess.customerGst || '');
+    setCustomerAadhar(sess.customerAadhar || '');
+    setCustomerPhone(sess.customerPhone || sess.customerMobile || '');
+    setDespatchedTo(sess.despatchedTo || '');
+    setLorryTransport(sess.lorryTransport || '');
+    setLrNo(sess.lrNo || '');
+    setLrDate(sess.lrDate || getTodayDateStr());
+    setTotalCases(sess.totalCases || '0');
+    setTotalCasesManual(false);
+    setProductRows(
+      sess.productRows && sess.productRows.length > 0
+        ? sess.productRows
+        : [{ id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' }]
+    );
+    setSelectedRowId(null);
+    setTaxType((sess.taxType as any) || 'IGST');
+    setTaxPercent(sess.taxPercent || '18');
+    setBillFlag(sess.billFlag !== undefined ? sess.billFlag : true);
+  };
+
+  // Real-time draft session autosave
+  useEffect(() => {
+    if (!activeSessionId) return;
+    setSessions((prev) => {
+      const updated = prev.map((s) => {
+        if (s.id === activeSessionId) {
+          return {
+            ...s,
+            billNo,
+            billDate,
+            customerName,
+            customerAddress,
+            customerGst,
+            customerAadhar,
+            customerPhone,
+            customerMobile: customerPhone,
+            despatchedTo,
+            lorryTransport,
+            lrNo,
+            lrDate,
+            totalCases,
+            productRows,
+            taxType,
+            taxPercent,
+            billFlag,
+            selectedYear,
+            lastUpdated: Date.now(),
+          };
+        }
+        return s;
+      });
+      saveGstSessions(updated, activeSessionId);
+      return updated;
+    });
+  }, [
+    activeSessionId,
+    billNo,
+    billDate,
+    customerName,
+    customerAddress,
+    customerGst,
+    customerAadhar,
+    customerPhone,
+    despatchedTo,
+    lorryTransport,
+    lrNo,
+    lrDate,
+    totalCases,
+    productRows,
+    taxType,
+    taxPercent,
+    billFlag,
+    selectedYear,
+  ]);
+
+  // Create a brand new bill session (preserves existing bill sessions)
+  const handleCreateNewSession = async (targetYear: number | string = selectedYear) => {
+    let nextNum = '292';
+    try {
+      const res = await ParticularsApi.getNextBillNo('GST', targetYear);
+      const rawNo = (res && typeof res === 'object' && 'nextBillNo' in res) ? res.nextBillNo : res;
+      if (typeof rawNo === 'string' && rawNo.trim()) {
+        const cleanNo = rawNo.replace(/^GST[-_ ]*/i, '');
+        nextNum = cleanNo || '292';
+      }
+    } catch {
+      // fallback
+    }
+
+    const newIndex = sessions.length + 1;
+    const newSession: GstDraftSession = {
+      id: `gst_session_${Date.now()}_${newIndex}`,
+      title: `Tax Bill ${newIndex}`,
+      billNo: nextNum,
+      billDate: getTodayDateStr(),
+      customerName: '',
+      customerPhone: '',
+      customerMobile: '',
+      customerAddress: '',
+      customerGst: '',
+      customerAadhar: '',
+      despatchedTo: '',
+      lorryTransport: '',
+      lrNo: '',
+      lrDate: getTodayDateStr(),
+      totalCases: '0',
+      productRows: [
+        { id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
+      ],
+      taxPercent: '18',
+      taxType: 'IGST',
+      billFlag: true,
+      selectedYear: Number(targetYear) || selectedYear,
+      lastUpdated: Date.now(),
+    };
+
+    const updated = [...sessions, newSession];
+    setSessions(updated);
+    setActiveSessionId(newSession.id);
+    saveGstSessions(updated, newSession.id);
+    applySessionToForm(newSession);
+
+    setSnackbarMessage('New Tax Bill session created. Previous draft is saved!');
+    setSnackbarOpen(true);
+  };
+
+  // Switch between open draft sessions
+  const handleSwitchSession = (targetSessionId: string) => {
+    if (targetSessionId === activeSessionId) return;
+
+    // Save current active state before switching
+    const updated = sessions.map((s) => {
+      if (s.id === activeSessionId) {
+        return {
+          ...s,
+          billNo,
+          billDate,
+          customerName,
+          customerAddress,
+          customerGst,
+          customerAadhar,
+          customerPhone,
+          customerMobile: customerPhone,
+          despatchedTo,
+          lorryTransport,
+          lrNo,
+          lrDate,
+          totalCases,
+          productRows,
+          taxType,
+          taxPercent,
+          billFlag,
+          selectedYear,
+          lastUpdated: Date.now(),
+        };
+      }
+      return s;
+    });
+
+    const targetSession = updated.find((s) => s.id === targetSessionId);
+    if (!targetSession) return;
+
+    setSessions(updated);
+    setActiveSessionId(targetSessionId);
+    saveGstSessions(updated, targetSessionId);
+    applySessionToForm(targetSession);
+  };
+
+  // Close an individual draft session
+  const handleCloseSession = (targetSessionId: string) => {
+    if (sessions.length <= 1) {
+      if (window.confirm('Clear current Tax Bill draft?')) {
+        handleResetForm();
+      }
+      return;
+    }
+
+    const sess = sessions.find((s) => s.id === targetSessionId);
+    const hasData = sess && sess.productRows.some((r) => r.particular.trim() !== '');
+    if (hasData) {
+      if (!window.confirm(`Close "${sess?.customerName || sess?.title}"? This draft tab will be removed.`)) {
+        return;
+      }
+    }
+
+    const remaining = sessions.filter((s) => s.id !== targetSessionId);
+    let nextId = activeSessionId;
+    if (targetSessionId === activeSessionId) {
+      nextId = remaining[0].id;
+      applySessionToForm(remaining[0]);
+    }
+
+    setSessions(remaining);
+    setActiveSessionId(nextId);
+    saveGstSessions(remaining, nextId);
+  };
 
   // UI state
   const [savingBill, setSavingBill] = useState<boolean>(false);
@@ -366,19 +595,26 @@ export const GstBillPage: FC = () => {
     }
   };
 
-  const fetchNextGstBillNo = async (targetYear: number | string = selectedYear) => {
+  const fetchNextGstBillNo = async (targetYear?: number | string, targetDate?: string) => {
     try {
-      const res = await ParticularsApi.getNextBillNo('GST', targetYear);
+      const dateForFY = targetDate || billDate || getTodayDateStr();
+      const effectiveFY = targetYear || getCurrentFinancialYear(dateForFY);
+      const res = await ParticularsApi.getNextBillNo('GST', effectiveFY);
       const rawNo = (res && typeof res === 'object' && 'nextBillNo' in res) ? res.nextBillNo : res;
       if (typeof rawNo === 'string' && rawNo.trim()) {
         const cleanNo = rawNo.replace(/^GST[-_ ]*/i, '');
-        setBillNo(cleanNo || '292');
+        setBillNo(cleanNo || '0001');
       } else {
-        setBillNo('292');
+        setBillNo('0001');
       }
     } catch {
-      setBillNo('292');
+      setBillNo('0001');
     }
+  };
+
+  const handleBillDateChange = (newDateStr: string) => {
+    setBillDate(newDateStr);
+    fetchNextGstBillNo(undefined, newDateStr);
   };
 
   // Fetch History Bills
@@ -603,6 +839,7 @@ export const GstBillPage: FC = () => {
     const rNum = parseFloat(quickRate) > 0 ? parseFloat(quickRate) : (prod.rate || 0);
     const amt = (qNum * rNum).toFixed(2);
     const itemCode = prod.code || (prod.slNo !== undefined ? String(prod.slNo) : quickCode);
+    const itemHsn = quickHsn || prod.hsn || '3604';
 
     const existingBlankIdx = productRows.findIndex((r) => !r.particular.trim());
     if (existingBlankIdx !== -1) {
@@ -613,7 +850,7 @@ export const GstBillPage: FC = () => {
               ...r,
               code: itemCode,
               particular: prod.name,
-              hsnCode: prod.hsn || '3604',
+              hsnCode: itemHsn,
               quantity: String(qNum),
               unit: quickUnit || prod.unit || 'Case',
               rate: String(rNum),
@@ -630,7 +867,7 @@ export const GstBillPage: FC = () => {
           id: String(Date.now()),
           code: itemCode,
           particular: prod.name,
-          hsnCode: prod.hsn || '3604',
+          hsnCode: itemHsn,
           quantity: String(qNum),
           unit: quickUnit || prod.unit || 'Case',
           rate: String(rNum),
@@ -641,6 +878,7 @@ export const GstBillPage: FC = () => {
 
     setSelectedCatalogProduct(null);
     setQuickCode('');
+    setQuickHsn('3604');
     setQuickQty('1');
     setQuickRate('0');
     setTimeout(() => {
@@ -658,6 +896,7 @@ export const GstBillPage: FC = () => {
       const rNum = parseFloat(quickRate) || 0;
       const amt = (qNum * rNum).toFixed(2);
       const itemCode = quickCode.trim();
+      const itemHsn = quickHsn || '3604';
 
       const existingBlankIdx = productRows.findIndex((r) => !r.particular.trim());
       if (existingBlankIdx !== -1) {
@@ -668,7 +907,7 @@ export const GstBillPage: FC = () => {
                 ...r,
                 code: itemCode,
                 particular: itemCode || 'Product Item',
-                hsnCode: '3604',
+                hsnCode: itemHsn,
                 quantity: String(qNum),
                 unit: quickUnit || 'Case',
                 rate: String(rNum),
@@ -685,7 +924,7 @@ export const GstBillPage: FC = () => {
             id: String(Date.now()),
             code: itemCode,
             particular: itemCode || 'Product Item',
-            hsnCode: '3604',
+            hsnCode: itemHsn,
             quantity: String(qNum),
             unit: quickUnit || 'Case',
             rate: String(rNum),
@@ -696,6 +935,7 @@ export const GstBillPage: FC = () => {
 
       setSelectedCatalogProduct(null);
       setQuickCode('');
+      setQuickHsn('3604');
       setQuickQty('1');
       setQuickRate('0');
       setTimeout(() => {
@@ -740,33 +980,34 @@ export const GstBillPage: FC = () => {
     return {
       billNo,
       date: billDate,
-      customerName: customerName || 'General Customer',
-      customerPhone,
-      customerAddress,
-      customerGst,
-      customerAadhar,
-      deliveryName: customerName,
-      deliveryAddress: customerAddress,
-      deliveryAadhar: customerAadhar,
+      customerName: (customerName || '').trim(),
+      customerPhone: (customerPhone || '').trim(),
+      customerAddress: (customerAddress || '').trim(),
+      customerGst: (customerGst || '').trim(),
+      customerAadhar: (customerAadhar || '').trim(),
+      deliveryName: (customerName || '').trim(),
+      deliveryAddress: (customerAddress || '').trim(),
+      deliveryAadhar: (customerAadhar || '').trim(),
       placeOfSupply: 'Tamil Nadu (33)',
       reverseCharge: 'No',
       despatchFrom: 'SIVAKASI',
-      despatchTo: despatchedTo || customerAddress,
+      despatchTo: (despatchedTo || customerAddress || '').trim(),
       dispatchFrom: 'SIVAKASI',
-      dispatchTo: despatchedTo || customerAddress,
-      transport: lorryTransport,
-      lorryTransport,
-      lrNo,
-      lrDate,
+      dispatchTo: (despatchedTo || customerAddress || '').trim(),
+      transport: (lorryTransport || '').trim(),
+      lorryTransport: (lorryTransport || '').trim(),
+      lrNo: (lrNo || '').trim(),
+      lrDate: (lrDate || '').trim(),
       caseCount: totalCases || String(calculations.autoCases),
-      companyName: 'SVM Crackers',
+      companyName: storeSettings.companyName || 'S.V.M Fireworks Agencies',
       companyAddress: storeSettings.address,
       companyCity: storeSettings.city,
       companyPincode: storeSettings.pincode,
       companyState: storeSettings.state,
       companyPhone: storeSettings.phone,
       companyWhatsapp: storeSettings.whatsapp,
-      gstin: storeSettings.gstin || '33ABFFA6758B1ZP',
+      gstin: storeSettings.gstin || '33ADBFS7999E1ZO',
+      licNo: storeSettings.licNo || 'E/SS/TN/24/83 (E86652)',
       hsnNo: '3604',
       products: validRows,
       subtotal: calculations.subTotal,
@@ -787,6 +1028,88 @@ export const GstBillPage: FC = () => {
       invoiceCopy: 'ORIGINAL',
     };
   };
+
+  // Duplicate for Multiple Customers State & Memo
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+
+  const handleOpenDuplicateModal = () => {
+    const validProducts = productRows.filter((r) => r.particular.trim() !== '');
+    if (validProducts.length === 0) {
+      setSnackbarMessage('Please add at least one product with name before duplicating.');
+      setSnackbarOpen(true);
+      return;
+    }
+    setDuplicateModalOpen(true);
+  };
+
+  const currentGstTemplateBill = useMemo(() => {
+    const billData = buildCurrentGstBillData();
+    return {
+      billNo: billData.billNo,
+      date: billData.date,
+      year: selectedYear,
+      customerName: billData.customerName,
+      customerPhone: billData.customerPhone || '',
+      customerAddress: billData.customerAddress || '',
+      customerGst: billData.customerGst || '',
+      customerAadhar: billData.customerAadhar || '',
+      despatchTo: billData.despatchTo || '',
+      lorryTransport: billData.lorryTransport || '',
+      lrNo: billData.lrNo || '',
+      lrDate: billData.lrDate || '',
+      caseCount: String(billData.caseCount || '0'),
+      companyName: billData.companyName || 'SVM Crackers',
+      taxType,
+      taxPercent,
+      cgstPercent: calculations.cgstPct,
+      cgstTotal: calculations.cgstRs,
+      sgstPercent: calculations.sgstPct,
+      sgstTotal: calculations.sgstRs,
+      igstPercent: calculations.igstPct,
+      igstTotal: calculations.igstRs,
+      subTotal: calculations.subTotal,
+      amount: calculations.subTotal,
+      total: calculations.netAmount,
+      netAmount: calculations.netAmount,
+      roundOff: calculations.roundOff,
+      inWords: calculations.inWords,
+      billFlag: billFlag ? 'YES' : 'NO',
+      billType: 'GST',
+      products: billData.products.map((p) => ({
+        particular: p.particular,
+        quantity: String(p.quantity),
+        rate: String(p.rate),
+        pktUnit: String(p.unit || 'Case'),
+        amount: String(p.amount),
+        hsnCode: String(p.hsnCode || '3604'),
+        taxableAmount: String(p.taxableAmount || p.amount),
+        gstRate: taxPercent,
+        cgst: calculations.cgstRs,
+        sgst: calculations.sgstRs,
+        igst: calculations.igstRs,
+      })),
+    };
+  }, [
+    billNo,
+    billDate,
+    selectedYear,
+    customerName,
+    customerPhone,
+    customerAddress,
+    customerGst,
+    customerAadhar,
+    despatchedTo,
+    lorryTransport,
+    lrNo,
+    lrDate,
+    totalCases,
+    taxType,
+    taxPercent,
+    calculations,
+    billFlag,
+    productRows,
+    storeSettings,
+  ]);
 
   // Execute Save Bill
   const executeSaveBill = async () => {
@@ -828,7 +1151,7 @@ export const GstBillPage: FC = () => {
         lrNo: billData.lrNo || '',
         lrDate: billData.lrDate || '',
         caseCount: String(billData.caseCount || '0'),
-        companyName: billData.companyName || 'SVM Crackers',
+        companyName: billData.companyName || 'S.V.M Fireworks Agencies',
         taxType,
         taxPercent,
         cgstPercent: calculations.cgstPct,
@@ -880,7 +1203,16 @@ export const GstBillPage: FC = () => {
       setPrintModalOpen(true);
 
       fetchGstHistory();
-      fetchNextGstBillNo();
+      if (sessions.length > 1) {
+        const remaining = sessions.filter((s) => s.id !== activeSessionId);
+        const nextId = remaining[0].id;
+        setSessions(remaining);
+        setActiveSessionId(nextId);
+        saveGstSessions(remaining, nextId);
+        applySessionToForm(remaining[0]);
+      } else {
+        handleResetForm();
+      }
     } catch (e: any) {
       console.error('Error saving GST bill', e);
       setSnackbarMessage(e.message || 'Failed to save GST Bill');
@@ -956,8 +1288,8 @@ export const GstBillPage: FC = () => {
             <Button
               size="small"
               onClick={() => {
-                const openCreateTab = () => {
-                  handleResetForm();
+                const openNewSession = () => {
+                  handleCreateNewSession(selectedYear);
                   setActiveSubTab('create');
                 };
 
@@ -966,11 +1298,11 @@ export const GstBillPage: FC = () => {
                   triggerYearRestrictionDialog({
                     selectedYear: String(selectedYear),
                     currentSystemYear: String(currentSystemYear),
-                    onProceed: () => openCreateTab(),
+                    onProceed: () => openNewSession(),
                   });
                   return;
                 }
-                openCreateTab();
+                openNewSession();
               }}
               startIcon={<AddRoundedIcon sx={{ fontSize: 14 }} />}
               sx={{
@@ -986,7 +1318,7 @@ export const GstBillPage: FC = () => {
                 '&:hover': { bgcolor: activeSubTab === 'create' ? '#1D4ED8' : '#D9E4F2' },
               }}
             >
-              New Bill
+              + New Bill
             </Button>
 
             <Button
@@ -1017,6 +1349,157 @@ export const GstBillPage: FC = () => {
         {/* CREATE GST INVOICE VIEW */}
         {activeSubTab === 'create' ? (
           <Box sx={{ p: { xs: 1, sm: 1.5 }, bgcolor: '#F0F5FA' }}>
+            {/* Multi-Session Tabs Bar */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.8,
+                mb: 1.2,
+                pb: 0.8,
+                borderBottom: '1px solid #CBD5E1',
+                overflowX: 'auto',
+                '&::-webkit-scrollbar': { height: '4px' },
+                '&::-webkit-scrollbar-thumb': { bgcolor: '#94A3B8', borderRadius: '4px' },
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#475569',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  mr: 0.5,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Active Sessions:
+              </Typography>
+
+              {sessions.map((sess, idx) => {
+                const isActive = sess.id === activeSessionId;
+                const rowCount = (sess.productRows || []).filter((r) => r.particular && r.particular.trim() !== '').length;
+                const displayName = sess.customerName?.trim()
+                  ? sess.customerName
+                  : sess.title || `Tax Bill ${idx + 1}`;
+
+                return (
+                  <Box
+                    key={sess.id}
+                    onClick={() => handleSwitchSession(sess.id)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.8,
+                      px: 1.2,
+                      py: 0.4,
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      bgcolor: isActive ? '#1E40AF' : '#FFFFFF',
+                      color: isActive ? '#FFFFFF' : '#334155',
+                      border: `1px solid ${isActive ? '#1E40AF' : '#CBD5E1'}`,
+                      fontSize: '11.5px',
+                      fontWeight: isActive ? 700 : 600,
+                      whiteSpace: 'nowrap',
+                      boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      transition: 'all 0.15s ease',
+                      '&:hover': {
+                        bgcolor: isActive ? '#1E3A8A' : '#F1F5F9',
+                      },
+                    }}
+                  >
+                    <span>{displayName}</span>
+                    {rowCount > 0 && (
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          padding: '1px 5px',
+                          borderRadius: '10px',
+                          backgroundColor: isActive ? 'rgba(255,255,255,0.25)' : '#E2E8F0',
+                          color: isActive ? '#FFFFFF' : '#0F172A',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {rowCount} {rowCount === 1 ? 'item' : 'items'}
+                      </span>
+                    )}
+                    {sessions.length > 1 && (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCloseSession(sess.id);
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          opacity: 0.8,
+                          fontWeight: 800,
+                          padding: '0 2px',
+                          marginLeft: '2px',
+                        }}
+                        title="Close session"
+                      >
+                        ✕
+                      </span>
+                    )}
+                  </Box>
+                );
+              })}
+
+              {/* + New Bill Session Button */}
+              <Button
+                size="small"
+                onClick={() => {
+                  const currentSystemYear = new Date().getFullYear();
+                  if (Number(selectedYear) !== currentSystemYear) {
+                    triggerYearRestrictionDialog({
+                      selectedYear: String(selectedYear),
+                      currentSystemYear: String(currentSystemYear),
+                      onProceed: () => handleCreateNewSession(selectedYear),
+                    });
+                    return;
+                  }
+                  handleCreateNewSession(selectedYear);
+                }}
+                startIcon={<AddRoundedIcon sx={{ fontSize: 14 }} />}
+                sx={{
+                  bgcolor: '#ECFDF5',
+                  border: '1px dashed #059669',
+                  color: '#047857',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  height: '26px',
+                  px: 1.2,
+                  whiteSpace: 'nowrap',
+                  '&:hover': { bgcolor: '#D1FAE5' },
+                }}
+              >
+                + New Bill Session
+              </Button>
+
+              {/* Duplicate for Multiple Customers Quick Button in GST Session Bar */}
+              <Button
+                size="small"
+                onClick={handleOpenDuplicateModal}
+                startIcon={<ContentCopyRoundedIcon sx={{ fontSize: 13 }} />}
+                sx={{
+                  bgcolor: '#EFF6FF',
+                  border: '1px solid #93C5FD',
+                  color: '#1E40AF',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  height: '26px',
+                  px: 1.2,
+                  whiteSpace: 'nowrap',
+                  '&:hover': { bgcolor: '#DBEAFE' },
+                }}
+              >
+                Duplicate to Customers
+              </Button>
+            </Box>
+
             {/* ========================================================= */}
             {/* TOP SECTION: 3 FIELDSETS (Bill Info, Customer Info, Despatch Info) */}
             {/* ========================================================= */}
@@ -1077,7 +1560,7 @@ export const GstBillPage: FC = () => {
                       <input
                         type="text"
                         value={billDate}
-                        onChange={(e) => setBillDate(e.target.value)}
+                        onChange={(e) => handleBillDateChange(e.target.value)}
                         placeholder="DD-MM-YYYY"
                         style={{
                           border: 'none',
@@ -1112,7 +1595,7 @@ export const GstBillPage: FC = () => {
                         value={toIsoDate(billDate)}
                         onChange={(e) => {
                           if (e.target.value) {
-                            setBillDate(fromIsoDate(e.target.value));
+                            handleBillDateChange(fromIsoDate(e.target.value));
                           }
                         }}
                         tabIndex={-1}
@@ -1487,9 +1970,10 @@ export const GstBillPage: FC = () => {
                     setQuickCode(opt.code || (opt.slNo !== undefined ? String(opt.slNo) : ''));
                     setQuickUnit(opt.unit || 'Case');
                     setQuickRate(String(opt.rate || 0));
+                    setQuickHsn(opt.hsn || '3604');
                     setTimeout(() => {
-                      quickQtyInputRef.current?.focus();
-                      quickQtyInputRef.current?.select();
+                      quickHsnInputRef.current?.focus();
+                      quickHsnInputRef.current?.select();
                     }, 50);
                   }
                 }}
@@ -1507,6 +1991,25 @@ export const GstBillPage: FC = () => {
                     }}
                   />
                 )}
+              />
+
+              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
+                HSN
+              </Typography>
+              <input
+                ref={quickHsnInputRef}
+                type="text"
+                value={quickHsn}
+                onChange={(e) => setQuickHsn(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    quickQtyInputRef.current?.focus();
+                    quickQtyInputRef.current?.select();
+                  }
+                }}
+                className="erp-input"
+                style={{ width: '60px', textAlign: 'center', fontWeight: 600, color: '#1E40AF' }}
               />
 
               <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
@@ -1614,25 +2117,28 @@ export const GstBillPage: FC = () => {
                     <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow sx={{ bgcolor: '#DCE7F5' }}>
-                          <TableCell sx={{ width: '40px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '38px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             S.No
                           </TableCell>
-                          <TableCell sx={{ width: '75px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '70px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Code
                           </TableCell>
                           <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Particulars / Product Name
                           </TableCell>
-                          <TableCell sx={{ width: '70px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '65px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                            HSN
+                          </TableCell>
+                          <TableCell sx={{ width: '60px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Qty
                           </TableCell>
-                          <TableCell sx={{ width: '65px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '60px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Unit
                           </TableCell>
-                          <TableCell sx={{ width: '90px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '85px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Rate (Rs.)
                           </TableCell>
-                          <TableCell sx={{ width: '100px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '95px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Amount (Rs.)
                           </TableCell>
                           <TableCell sx={{ width: '35px', textAlign: 'center', bgcolor: '#DCE7F5', p: 0.2 }} />
@@ -1688,6 +2194,26 @@ export const GstBillPage: FC = () => {
                                   fontSize: '12px',
                                   fontWeight: 600,
                                   color: '#0F172A',
+                                }}
+                              />
+                            </TableCell>
+
+                            {/* HSN input */}
+                            <TableCell sx={{ textAlign: 'center', p: 0.4 }}>
+                              <input
+                                type="text"
+                                value={row.hsnCode || '3604'}
+                                onChange={(e) => handleRowChange(row.id, 'hsnCode', e.target.value)}
+                                placeholder="3604"
+                                style={{
+                                  width: '100%',
+                                  border: 'none',
+                                  outline: 'none',
+                                  background: 'transparent',
+                                  fontSize: '12px',
+                                  textAlign: 'center',
+                                  fontWeight: 600,
+                                  color: '#1E40AF',
                                 }}
                               />
                             </TableCell>
@@ -1777,6 +2303,7 @@ export const GstBillPage: FC = () => {
                             <TableCell sx={{ textAlign: 'center', color: '#CBD5E1', fontSize: '11px' }}>
                               {productRows.length + i + 1}
                             </TableCell>
+                            <TableCell />
                             <TableCell />
                             <TableCell />
                             <TableCell />
@@ -2024,56 +2551,34 @@ export const GstBillPage: FC = () => {
                     />
                   </Box>
 
-                  {/* Bottom: Bill Checkbox and [ Save Bill ] / [ Print ] */}
+                  {/* Bottom: Bill Checkbox and Action Buttons */}
                   <Box
                     sx={{
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 1,
+                      flexDirection: 'column',
+                      gap: 0.8,
                       mt: 1.5,
-                      pt: 1,
+                      pt: 1.2,
                       borderTop: '1px solid #E2E8F0',
                     }}
                   >
-                    {/* Bill [ ] Checkbox */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                      <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A' }}>
-                        Bill
-                      </Typography>
-                      <input
-                        type="checkbox"
-                        checked={billFlag}
-                        onChange={(e) => setBillFlag(e.target.checked)}
-                        style={{ cursor: 'pointer', width: '16px', height: '16px' }}
-                      />
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      {/* Bill [ ] Checkbox */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                        <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A' }}>
+                          Bill
+                        </Typography>
+                        <input
+                          type="checkbox"
+                          checked={billFlag}
+                          onChange={(e) => setBillFlag(e.target.checked)}
+                          style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                        />
+                      </Box>
                     </Box>
 
-                    {/* Action buttons */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {/* Print Button */}
-                      <Button
-                        onClick={handlePrintCurrent}
-                        variant="outlined"
-                        size="small"
-                        startIcon={<PrintOutlinedIcon sx={{ fontSize: 15 }} />}
-                        sx={{
-                          bgcolor: '#E5ECF4',
-                          borderColor: '#94A3B8',
-                          color: '#0F172A',
-                          fontWeight: 700,
-                          fontSize: '12px',
-                          textTransform: 'none',
-                          px: 1.5,
-                          py: 0.5,
-                          borderRadius: '3px',
-                          '&:hover': { bgcolor: '#D9E4F2' },
-                        }}
-                      >
-                        Print
-                      </Button>
-
-                      {/* Save Bill Button (Deep burgundy/plum matching quotation and screenshot) */}
+                    {/* Action Buttons Row 1: Save Bill and Print */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 0.8 }}>
                       <Button
                         onClick={handleSaveBill}
                         disabled={savingBill}
@@ -2082,19 +2587,61 @@ export const GstBillPage: FC = () => {
                           bgcolor: '#741748',
                           color: '#FFFFFF',
                           fontWeight: 700,
-                          fontSize: '12.5px',
+                          fontSize: '12px',
                           textTransform: 'none',
-                          px: 2.5,
-                          py: 0.5,
-                          minWidth: '85px',
+                          py: 0.7,
                           borderRadius: '3px',
+                          whiteSpace: 'nowrap',
                           boxShadow: 'none',
                           '&:hover': { bgcolor: '#580e34' },
                         }}
                       >
                         {savingBill ? <CircularProgress size={16} color="inherit" /> : 'Save Bill'}
                       </Button>
+
+                      <Button
+                        onClick={handlePrintCurrent}
+                        variant="outlined"
+                        size="small"
+                        startIcon={<PrintOutlinedIcon sx={{ fontSize: 14 }} />}
+                        sx={{
+                          bgcolor: '#E5ECF4',
+                          borderColor: '#94A3B8',
+                          color: '#0F172A',
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          textTransform: 'none',
+                          py: 0.7,
+                          borderRadius: '3px',
+                          whiteSpace: 'nowrap',
+                          '&:hover': { bgcolor: '#D9E4F2' },
+                        }}
+                      >
+                        Print
+                      </Button>
                     </Box>
+
+                    {/* Action Buttons Row 2: Duplicate to Customers */}
+                    <Button
+                      onClick={handleOpenDuplicateModal}
+                      variant="contained"
+                      fullWidth
+                      startIcon={<ContentCopyRoundedIcon sx={{ fontSize: 14 }} />}
+                      sx={{
+                        bgcolor: '#1E40AF',
+                        color: '#FFFFFF',
+                        fontWeight: 700,
+                        fontSize: '12px',
+                        textTransform: 'none',
+                        py: 0.65,
+                        borderRadius: '3px',
+                        whiteSpace: 'nowrap',
+                        boxShadow: 'none',
+                        '&:hover': { bgcolor: '#1D4ED8' },
+                      }}
+                    >
+                      Duplicate to Customers
+                    </Button>
                   </Box>
                 </Box>
               </fieldset>
@@ -2205,14 +2752,15 @@ export const GstBillPage: FC = () => {
                                   onClick={() => {
                                     setSelectedBillForPrint({
                                       ...b,
-                                      companyName: b.companyName && b.companyName.toUpperCase().includes('SVM') ? b.companyName : 'SVM Crackers',
-                                      companyAddress: b.companyAddress || storeSettings.address,
-                                      companyCity: b.companyCity || storeSettings.city,
-                                      companyPincode: b.companyPincode || storeSettings.pincode,
-                                      companyState: b.companyState || storeSettings.state,
+                                      companyName: storeSettings.companyName || b.companyName || 'S.V.M Fireworks Agencies',
+                                      companyAddress: storeSettings.address || b.companyAddress,
+                                      companyCity: storeSettings.city || b.companyCity,
+                                      companyPincode: storeSettings.pincode || b.companyPincode,
+                                      companyState: storeSettings.state || b.companyState,
                                       companyPhone: b.companyPhone || storeSettings.phone,
                                       companyWhatsapp: b.companyWhatsapp || storeSettings.whatsapp,
-                                      gstin: b.gstin || storeSettings.gstin || '33ABFFA6758B1ZP',
+                                      gstin: b.gstin || storeSettings.gstin || '33ADBFS7999E1ZO',
+                                      licNo: b.licNo || storeSettings.licNo || 'E/SS/TN/24/83 (E86652)',
                                       products: b.products || [],
                                       subtotal: b.subTotal || b.subtotal || b.amount || 0,
                                       taxType: b.taxType || (parseFloat(String(b.igstTotal || 0)) > 0 ? 'IGST' : 'CGST_SGST'),
@@ -2338,10 +2886,11 @@ export const GstBillPage: FC = () => {
                           setQuickCode(prod.code || (prod.slNo !== undefined ? String(prod.slNo) : ''));
                           setQuickUnit(prod.unit || 'Case');
                           setQuickRate(String(prod.rate || 0));
+                          setQuickHsn(prod.hsn || '3604');
                           setProductCatalogModalOpen(false);
                           setTimeout(() => {
-                            quickQtyInputRef.current?.focus();
-                            quickQtyInputRef.current?.select();
+                            quickHsnInputRef.current?.focus();
+                            quickHsnInputRef.current?.select();
                           }, 50);
                         }}
                         sx={{ fontSize: '11px', py: 0.2, px: 1, bgcolor: '#1E40AF' }}
@@ -2454,6 +3003,22 @@ export const GstBillPage: FC = () => {
           bill={selectedBillForPrint}
         />
       )}
+      {/* Duplicate Bill to Multiple Customers Modal */}
+      {duplicateModalOpen && (
+        <DuplicateBillModal
+          open={duplicateModalOpen}
+          onClose={() => setDuplicateModalOpen(false)}
+          templateBill={currentGstTemplateBill}
+          mode="GST"
+          selectedYear={selectedYear}
+          onSuccess={(createdBills) => {
+            setSnackbarMessage(`Successfully duplicated GST bill to ${createdBills.length} customers!`);
+            setSnackbarOpen(true);
+            fetchGstHistory();
+          }}
+        />
+      )}
+
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={3000}

@@ -207,7 +207,7 @@ export const PriceMapsApi = {
 
 // Particulars API
 export const ParticularsApi = {
-  getAll: (customerName?: string, billType?: 'REGULAR' | 'GST' | 'ALL', year?: number | string) => {
+  getAll: (customerName?: string, billType?: 'REGULAR' | 'GST' | 'QUOTATION' | 'ESTIMATE' | 'ALL' | string, year?: number | string) => {
     const params = new URLSearchParams();
     if (customerName && customerName !== 'ALL') params.append('customerName', customerName);
     if (billType && billType !== 'ALL') params.append('billType', billType);
@@ -236,6 +236,12 @@ export const ParticularsApi = {
   create: (data: any) => request<any>('/particulars', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => request<any>(`/particulars/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) => request<any>(`/particulars/${id}`, { method: 'DELETE' }),
+  convertToBill: (id: string) => request<any>(`/particulars/${id}/convert-to-bill`, { method: 'POST' }),
+  bulkDuplicate: (data: { templateBill: any; customers: any[]; year?: number | string }) =>
+    request<{ success: boolean; message: string; count: number; data: any[]; billNos: string[] }>('/particulars/bulk-duplicate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   uploadPdf: (id: string, pdfData: string, pdfName: string) =>
     request<any>(`/particulars/${id}/pdf`, {
       method: 'POST',
@@ -276,6 +282,30 @@ export const SettingsApi = {
     }),
 };
 
+// Despatch API
+export const DespatchApi = {
+  getAll: (params?: { year?: string | number; search?: string; transport?: string; agent?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.year && String(params.year).toUpperCase() !== 'ALL') query.append('year', String(params.year));
+    if (params?.search) query.append('search', params.search);
+    if (params?.transport) query.append('transport', params.transport);
+    if (params?.agent) query.append('agent', params.agent);
+    const qs = query.toString();
+    return request<any>(`/despatches${qs ? `?${qs}` : ''}`);
+  },
+  getById: (id: string) => request<any>(`/despatches/${id}`),
+  create: (data: any) => request<any>('/despatches', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: any) => request<any>(`/despatches/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => request<any>(`/despatches/${id}`, { method: 'DELETE' }),
+  getNextSNo: (year?: string | number) =>
+    request<{ success: boolean; nextSNo: number }>(`/despatches/next-sno${year ? `?year=${year}` : ''}`),
+  syncBills: (year?: string | number) =>
+    request<{ success: boolean; message: string; createdCount: number; updatedCount: number }>(
+      '/despatches/sync-bills',
+      { method: 'POST', body: JSON.stringify({ year }) }
+    ),
+};
+
 // Health Check API
 export const HealthApi = {
   check: () => request<{ status: string; message: string; port?: number | string; timestamp: string }>('/health'),
@@ -288,3 +318,4 @@ export const HealthApi = {
     }
   },
 };
+

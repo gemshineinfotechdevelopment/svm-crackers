@@ -46,7 +46,7 @@ export const GstBillPrintModal: React.FC<GstBillPrintModalProps> = ({ open, onCl
         customerPhone: bill.customerPhone,
         totalAmount: bill.total || bill.subtotal || 0,
         date: bill.date,
-        companyName: bill.companyName || 'SVM Crackers',
+        companyName: bill.companyName || 'S.V.M Fireworks Agencies',
         isGst: true,
       });
     } catch (err) {
@@ -67,7 +67,7 @@ export const GstBillPrintModal: React.FC<GstBillPrintModalProps> = ({ open, onCl
         customerPhone: bill.customerPhone,
         totalAmount: bill.total || bill.subtotal || 0,
         date: bill.date,
-        companyName: bill.companyName || 'SVM Crackers',
+        companyName: bill.companyName || 'S.V.M Fireworks Agencies',
         isGst: true,
       });
     } catch (err) {

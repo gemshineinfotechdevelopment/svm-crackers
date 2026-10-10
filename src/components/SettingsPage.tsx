@@ -52,6 +52,7 @@ export interface CompanySettings {
   pincode: string;
   state: string;
   gstin: string;
+  licNo?: string;
   pan: string;
   logoUrl?: string;
   enableTax?: boolean;
@@ -67,17 +68,18 @@ export interface CompanySettings {
 }
 
 export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
-  companyName: 'Manjula Crackers',
+  companyName: 'S.V.M Fireworks Agencies',
   tagline: 'Standard Fire Works & Fancy Crackers',
   ownerName: '',
   phone: '9843067073',
   whatsapp: '8778429299',
   email: '',
-  address: '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi',
+  address: 'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road, Keela Thiruthangal - 626 130. Tamil Nadu',
   city: 'Sivakasi',
-  pincode: '626123',
+  pincode: '626130',
   state: 'Tamil Nadu',
-  gstin: '',
+  gstin: '33ADBFS7999E1ZO',
+  licNo: 'E/SS/TN/24/83 (E86652)',
   pan: '',
   logoUrl: defaultProjectLogo,
   enableTax: false,
@@ -200,26 +202,32 @@ export const getStoredSettings = (): CompanySettings => {
     const currentYear = new Date().getFullYear();
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (!parsed.companyName || parsed.companyName.toLowerCase().includes('varun') || parsed.companyName.toLowerCase().includes('dheeksha') || parsed.companyName.toLowerCase().includes('apsara') || parsed.companyName.toLowerCase().includes('svm')) {
-        parsed.companyName = 'Manjula Crackers';
+      if (!parsed.companyName || typeof parsed.companyName !== 'string' || parsed.companyName === 'false' || parsed.companyName === 'true' || parsed.companyName.toLowerCase().includes('varun') || parsed.companyName.toLowerCase().includes('dheeksha') || parsed.companyName.toLowerCase().includes('apsara') || parsed.companyName.toLowerCase().includes('manjula')) {
+        parsed.companyName = 'S.V.M Fireworks Agencies';
       }
-      if (!parsed.logoUrl || parsed.logoUrl.includes('varun-traders.png')) {
+      if (!parsed.logoUrl || typeof parsed.logoUrl !== 'string' || parsed.logoUrl.includes('varun-traders.png')) {
         parsed.logoUrl = defaultProjectLogo;
       }
-      if (!parsed.phone || parsed.phone.includes('98765')) {
+      if (!parsed.phone || typeof parsed.phone !== 'string') {
         parsed.phone = '9843067073';
       }
-      if (!parsed.whatsapp || parsed.whatsapp.includes('98765')) {
+      if (!parsed.whatsapp || typeof parsed.whatsapp !== 'string') {
         parsed.whatsapp = '8778429299';
       }
-      if (!parsed.address || parsed.address.toLowerCase().includes('tirupur') || parsed.address.toLowerCase().includes('varun')) {
-        parsed.address = '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+      if (!parsed.address || typeof parsed.address !== 'string' || parsed.address === 'false' || parsed.address === 'true' || parsed.address.toLowerCase().includes('tirupur') || parsed.address.toLowerCase().includes('varun') || parsed.address.toLowerCase().includes('rajivgandhi') || parsed.address.toLowerCase().includes('67 - h/e')) {
+        parsed.address = 'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road, Keela Thiruthangal - 626 130. Tamil Nadu';
       }
-      if (!parsed.city) {
+      if (!parsed.city || typeof parsed.city !== 'string') {
         parsed.city = 'Sivakasi';
       }
-      if (!parsed.state) {
+      if (!parsed.state || typeof parsed.state !== 'string') {
         parsed.state = 'Tamil Nadu';
+      }
+      if (!parsed.gstin || typeof parsed.gstin !== 'string') {
+        parsed.gstin = '33ADBFS7999E1ZO';
+      }
+      if (!parsed.licNo || typeof parsed.licNo !== 'string') {
+        parsed.licNo = 'E/SS/TN/24/83 (E86652)';
       }
       return {
         ...DEFAULT_COMPANY_SETTINGS,
@@ -290,23 +298,23 @@ export const SettingsPage: React.FC = () => {
         const res = await SettingsApi.get();
         const data = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res;
         if (data && typeof data === 'object') {
-          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha') || data.companyName.toLowerCase().includes('apsara') || data.companyName.toLowerCase().includes('svm'))
-            ? 'Manjula Crackers'
+          const compName = (!data.companyName || typeof data.companyName !== 'string' || data.companyName === 'false' || data.companyName === 'true' || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha') || data.companyName.toLowerCase().includes('apsara') || data.companyName.toLowerCase().includes('manjula'))
+            ? 'S.V.M Fireworks Agencies'
             : data.companyName;
 
-          const logo = (!data.logoUrl || data.logoUrl.includes('varun-traders.png'))
+          const logo = (!data.logoUrl || typeof data.logoUrl !== 'string' || data.logoUrl.includes('varun-traders.png'))
             ? defaultProjectLogo
             : data.logoUrl;
 
-          const address = (!data.address || data.address.toLowerCase().includes('tirupur') || data.address.toLowerCase().includes('varun'))
-            ? '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi'
+          const address = (!data.address || typeof data.address !== 'string' || data.address === 'false' || data.address === 'true' || data.address.toLowerCase().includes('tirupur') || data.address.toLowerCase().includes('varun') || data.address.toLowerCase().includes('rajivgandhi') || data.address.toLowerCase().includes('67 - h/e'))
+            ? 'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road, Keela Thiruthangal - 626 130. Tamil Nadu'
             : data.address;
 
-          const phone = (!data.phone || data.phone.includes('98765'))
+          const phone = (!data.phone || typeof data.phone !== 'string')
             ? '9843067073'
             : data.phone;
 
-          const whatsapp = (!data.whatsapp || data.whatsapp.includes('98765'))
+          const whatsapp = (!data.whatsapp || typeof data.whatsapp !== 'string')
             ? '8778429299'
             : data.whatsapp;
 
@@ -325,9 +333,10 @@ export const SettingsPage: React.FC = () => {
             email: data.email ?? DEFAULT_COMPANY_SETTINGS.email,
             address: address,
             city: data.city || 'Sivakasi',
-            pincode: data.pincode || '626123',
+            pincode: data.pincode || '626130',
             state: data.state || 'Tamil Nadu',
             gstin: data.gstin ?? DEFAULT_COMPANY_SETTINGS.gstin,
+            licNo: data.licNo ?? DEFAULT_COMPANY_SETTINGS.licNo,
             pan: data.pan ?? DEFAULT_COMPANY_SETTINGS.pan,
             logoUrl: logo,
             enableTax: Boolean(data.enableTax),
@@ -1060,20 +1069,33 @@ export const SettingsPage: React.FC = () => {
             <fieldset className="erp-fieldset">
               <legend className="erp-legend">Tax & Legal Registration</legend>
               <Grid container spacing={1.2}>
-                <Grid size={{ xs: 12, sm: 6 }}>
+                <Grid size={{ xs: 12, sm: 4 }}>
                   <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
                     GSTIN Number
                   </Typography>
                   <input
                     type="text"
                     className="erp-input"
-                    placeholder="e.g. 33AAAAA0000A1Z5"
+                    placeholder="e.g. 33ADBFS7999E1ZO"
                     value={settings.gstin}
                     onChange={(e) => handleChange('gstin', e.target.value.toUpperCase())}
                   />
                 </Grid>
 
-                <Grid size={{ xs: 12, sm: 6 }}>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
+                    License Number (LIC NO)
+                  </Typography>
+                  <input
+                    type="text"
+                    className="erp-input"
+                    placeholder="e.g. E/SS/TN/24/83 (E86652)"
+                    value={settings.licNo || ''}
+                    onChange={(e) => handleChange('licNo', e.target.value)}
+                  />
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 4 }}>
                   <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#475569', mb: 0.2 }}>
                     PAN Number
                   </Typography>

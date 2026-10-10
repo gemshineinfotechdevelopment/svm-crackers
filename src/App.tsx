@@ -10,7 +10,9 @@ import { SalesPage } from './components/SalesPage';
 import { AllCustomersPage } from './components/AllCustomersPage';
 import { AddCustomerPage } from './components/AddCustomerPage';
 import { ParticularsPage } from './components/ParticularsPage';
+import { QuotationPage } from './components/QuotationPage';
 import { GstBillPage } from './components/GstBillPage';
+import { DespatchPage } from './components/DespatchPage';
 import { SettingsPage, getStoredSettings, DEFAULT_COMPANY_SETTINGS } from './components/SettingsPage';
 import { SettingsApi } from './services/api';
 import { YearRestrictionDialog } from './components/YearRestrictionDialog';
@@ -20,7 +22,7 @@ const ACTIVE_TAB_KEY = 'apsara_active_tab';
 const CUSTOMER_SUBVIEW_KEY = 'apsara_customer_subview';
 const PRODUCT_SUBPAGE_KEY = 'svm_product_subpage';
 
-const VALID_TABS = ['All Customers', 'Sales', 'Product', 'Quotation', 'GST Bill', 'Categories', 'Price List', 'Settings'] as const;
+const VALID_TABS = ['All Customers', 'Sales', 'Estimate', 'Product', 'Quotation', 'Price List', 'Categories', 'GST Bill', 'Despatch', 'Settings'] as const;
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -28,7 +30,7 @@ function App() {
   });
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
     const saved = localStorage.getItem(ACTIVE_TAB_KEY);
-    if (saved === 'Billing') return 'Quotation';
+    if (saved === 'Billing') return 'Estimate';
     if (saved && VALID_TABS.includes(saved as NavTab)) {
       return saved as NavTab;
     }
@@ -48,7 +50,6 @@ function App() {
   });
   const [customerSubView, setCustomerSubView] = useState<'list' | 'add'>(() => {
     const saved = localStorage.getItem(CUSTOMER_SUBVIEW_KEY);
-    // Never restore 'add' subview on refresh - go back to list on refresh for add page
     return saved === 'list' ? 'list' : 'list';
   });
   const [selectedCustomerName, setSelectedCustomerName] = useState<string>('');
@@ -70,7 +71,7 @@ function App() {
 
     const updateTitle = () => {
       const settings = getStoredSettings();
-      const compName = settings.companyName || 'Manjula Crackers';
+      const compName = settings.companyName || 'S.V.M Fireworks Agencies';
       document.title = `${compName} - Billing & Management`;
     };
     updateTitle();
@@ -80,11 +81,24 @@ function App() {
       .then((res) => {
         const data = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res;
         if (data && typeof data === 'object') {
-          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha') || data.companyName.toLowerCase().includes('apsara') || data.companyName.toLowerCase().includes('svm'))
-            ? 'Manjula Crackers'
-            : (data.companyName ?? DEFAULT_COMPANY_SETTINGS.companyName);
+          const compName = (!data.companyName || typeof data.companyName !== 'string' || data.companyName === 'false' || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha') || data.companyName.toLowerCase().includes('apsara') || data.companyName.toLowerCase().includes('manjula'))
+            ? DEFAULT_COMPANY_SETTINGS.companyName
+            : data.companyName;
 
-          const remoteSettings = { ...DEFAULT_COMPANY_SETTINGS, ...data, companyName: compName };
+          const compAddr = (!data.address || typeof data.address !== 'string' || data.address === 'false' || data.address.toLowerCase().includes('tirupur') || data.address.toLowerCase().includes('varun') || data.address.toLowerCase().includes('rajivgandhi') || data.address.toLowerCase().includes('67 - h/e'))
+            ? DEFAULT_COMPANY_SETTINGS.address
+            : data.address;
+
+          const remoteSettings = {
+            ...DEFAULT_COMPANY_SETTINGS,
+            ...data,
+            companyName: compName,
+            address: compAddr,
+            phone: data.phone || DEFAULT_COMPANY_SETTINGS.phone,
+            whatsapp: data.whatsapp || DEFAULT_COMPANY_SETTINGS.whatsapp,
+            gstin: data.gstin || DEFAULT_COMPANY_SETTINGS.gstin,
+            licNo: data.licNo || DEFAULT_COMPANY_SETTINGS.licNo,
+          };
           localStorage.setItem('apsara_app_settings', JSON.stringify(remoteSettings));
           window.dispatchEvent(new Event('apsara_settings_updated'));
           updateTitle();
@@ -121,24 +135,44 @@ function App() {
       setCustomerSubView('list');
       localStorage.setItem(CUSTOMER_SUBVIEW_KEY, 'list');
     }
-    if (tab === 'Quotation') {
+    if (tab === 'Estimate' || tab === 'Quotation') {
       setSelectedCustomerName('');
       setEditingBill(null);
     }
   };
 
-  const handleCustomerSelectedForParticular = (customerName: string) => {
+  const handleCustomerSelectedForEstimate = (customerName: string) => {
+    setSelectedCustomerName(customerName);
+    setEditingBill(null);
+    setActiveTab('Estimate');
+    localStorage.setItem(ACTIVE_TAB_KEY, 'Estimate');
+  };
+
+  const handleCustomerSelectedForQuotation = (customerName: string) => {
     setSelectedCustomerName(customerName);
     setEditingBill(null);
     setActiveTab('Quotation');
     localStorage.setItem(ACTIVE_TAB_KEY, 'Quotation');
   };
 
+  const handleCustomerSelectedForParticular = (customerName: string, subTab?: string) => {
+    if (subTab === 'Quotation') {
+      handleCustomerSelectedForQuotation(customerName);
+    } else {
+      handleCustomerSelectedForEstimate(customerName);
+    }
+  };
+
   const handleEditBill = (bill: any) => {
     setEditingBill(bill);
     setSelectedCustomerName('');
-    setActiveTab('Quotation');
-    localStorage.setItem(ACTIVE_TAB_KEY, 'Quotation');
+    if (bill.billType === 'QUOTATION') {
+      setActiveTab('Quotation');
+      localStorage.setItem(ACTIVE_TAB_KEY, 'Quotation');
+    } else {
+      setActiveTab('Estimate');
+      localStorage.setItem(ACTIVE_TAB_KEY, 'Estimate');
+    }
   };
 
   const handleEditBillSuccess = () => {
@@ -189,31 +223,54 @@ function App() {
                 <AllCustomersPage
                   onAddNewCustomer={() => setCustomerSubView('add')}
                   onSelectCustomerForParticular={handleCustomerSelectedForParticular}
+                  onSelectCustomerForEstimate={handleCustomerSelectedForEstimate}
+                  onSelectCustomerForQuotation={handleCustomerSelectedForQuotation}
                   onEditBill={handleEditBill}
                 />
               )}
             </>
           )}
 
-          {/* Sales Tab (Displays all quotation bills) */}
+          {/* Sales Tab (Displays all regular / estimate bills) */}
           {activeTab === 'Sales' && (
             <SalesPage
-              onNewQuotation={() => handleSelectTab('Quotation')}
+              onNewEstimate={() => handleSelectTab('Estimate')}
+              onNewQuotation={() => handleSelectTab('Estimate')}
               onEditBill={handleEditBill}
             />
           )}
 
-          {/* Quotation / Particulars Tab */}
-          {activeTab === 'Quotation' && (
+          {/* Estimate / Billing Tab (Adds to Sales) */}
+          {activeTab === 'Estimate' && (
             <ParticularsPage
+              mode="ESTIMATE"
               initialCustomerName={selectedCustomerName}
               editBillData={editingBill}
               onEditSuccess={handleEditBillSuccess}
             />
           )}
 
+          {/* Quotation Tab (Sample products calculation - Does not affect sales) */}
+          {activeTab === 'Quotation' && (
+            <QuotationPage
+              initialCustomerName={selectedCustomerName}
+              onNavigateToEstimate={(billData) => {
+                setEditingBill(billData);
+                setActiveTab('Estimate');
+                localStorage.setItem(ACTIVE_TAB_KEY, 'Estimate');
+              }}
+              onNavigateToSales={() => {
+                setActiveTab('Sales');
+                localStorage.setItem(ACTIVE_TAB_KEY, 'Sales');
+              }}
+            />
+          )}
+
           {/* GST Bill Tab */}
           {activeTab === 'GST Bill' && <GstBillPage />}
+
+          {/* Despatch Tab */}
+          {activeTab === 'Despatch' && <DespatchPage />}
 
           {/* Categories Tab */}
           {activeTab === 'Categories' && <CategoriesPage />}
