@@ -176,11 +176,6 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     previousYears: { year: number; billCount: number }[];
   } | null>(null);
 
-  // Dropdown options
-  const [customerOptions, setCustomerOptions] = useState<CustomerOptionItem[]>([]);
-  const [, setCompanyOptions] = useState<{ id: string; name: string }[]>([]);
-  const [productOptions, setProductOptions] = useState<ProductCatalogOption[]>([]);
-
   const isEditMode = Boolean(editBillData && (editBillData._id || editBillData.id));
 
   // 0. Session Draft Management State
@@ -189,13 +184,22 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     return getParticularSessions(mode);
   }, [mode, Boolean(editBillData)]);
 
-  const [sessions, setSessions] = useState<ParticularDraftSession[]>(() => initialSessionData.sessions);
-  const [activeSessionId, setActiveSessionId] = useState<string>(() => initialSessionData.activeId);
-
   const initialDraft = useMemo(() => {
     if (editBillData) return null;
     return initialSessionData.sessions.find((s) => s.id === initialSessionData.activeId) || initialSessionData.sessions[0] || null;
-  }, []);
+  }, [initialSessionData, Boolean(editBillData)]);
+
+  const [sessions, setSessions] = useState<ParticularDraftSession[]>(() => initialSessionData.sessions);
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => initialSessionData.activeId);
+
+  // Dropdown options
+  const [customerOptions, setCustomerOptions] = useState<CustomerOptionItem[]>([]);
+  const [, setCompanyOptions] = useState<{ id: string; name: string }[]>([]);
+  const [productOptions, setProductOptions] = useState<ProductCatalogOption[]>([]);
+  const [rawProducts, setRawProducts] = useState<any[]>([]);
+  const [rawPriceLists, setRawPriceLists] = useState<any[]>([]);
+  const [priceMapOptions, setPriceMapOptions] = useState<string[]>(['S V M', 'M S K', 'Manjula', 'Gift', 'MPS']);
+  const [selectedPriceMap, setSelectedPriceMap] = useState<string>(() => initialDraft?.priceMap || '');
 
   // 1. Customer Info Left Box State
   const [customerNo, setCustomerNo] = useState<string>(() => initialDraft?.customerNo || '');
@@ -249,6 +253,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setCustomerMobile(sess.customerMobile || '');
     setCustomerAddress(sess.customerAddress || '');
     setCompanyName(sess.companyName || storeSettings.companyName || 'Manjula Crackers');
+    setSelectedPriceMap(sess.priceMap || '');
     setSelectedCustomer(null);
     setProductRows(
       sess.productRows && sess.productRows.length > 0
@@ -280,6 +285,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             customerMobile,
             customerAddress,
             companyName,
+            priceMap: selectedPriceMap,
             productRows,
             discountPercent,
             discountRs,
@@ -308,6 +314,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     customerMobile,
     customerAddress,
     companyName,
+    selectedPriceMap,
     productRows,
     discountPercent,
     discountRs,
@@ -456,6 +463,165 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     }
   };
 
+  // Helper to build product options based on raw catalog products, raw price lists, and chosen Price Map
+  const buildProductOptions = (
+    prodList: any[],
+    priceList: any[],
+    mapName: string
+  ): ProductCatalogOption[] => {
+    const prodMap = new Map<string, ProductCatalogOption>();
+    const cleanMap = (mapName || '').trim().toLowerCase().replace(/[\s\-_]/g, '');
+
+    // 1. Process all catalog products
+    if (Array.isArray(prodList)) {
+      prodList.forEach((p: any, idx: number) => {
+        const key = (p.name || '').trim();
+        if (!key) return;
+        const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
+        let rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
+        const pType = p.productType || 'Retail';
+        const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : String(idx + 1);
+        const skuCode = p.sku ? String(p.sku) : slNumber;
+        let unitVal = p.unit || '1 Box';
+
+        // If a specific price map is selected, check if this product has a price override in matching batch/company
+        if (cleanMap) {
+          const matchingPriceItem = Array.isArray(priceList) ? priceList.find((pl: any) => {
+            const bName = (pl.batchName || pl.company || pl.companyName || pl.shopName || '').toLowerCase().replace(/[\s\-_]/g, '');
+            const plName = (pl.itemName || pl.name || '').trim().toLowerCase();
+            return bName === cleanMap && plName === key.toLowerCase();
+          }) : undefined;
+
+          if (matchingPriceItem) {
+            if (matchingPriceItem.rate !== undefined && matchingPriceItem.rate !== null && Number(matchingPriceItem.rate) > 0) {
+              rateVal = typeof matchingPriceItem.rate === 'number' ? matchingPriceItem.rate : parseFloat(matchingPriceItem.rate) || rateVal;
+            }
+            if (matchingPriceItem.unit) {
+              unitVal = matchingPriceItem.unit;
+            }
+          } else if (p.priceMaps && typeof p.priceMaps === 'object') {
+            for (const [mK, mV] of Object.entries(p.priceMaps)) {
+              if (mK.toLowerCase().replace(/[\s\-_]/g, '') === cleanMap && typeof mV === 'number') {
+                rateVal = mV;
+                break;
+              }
+            }
+          }
+        }
+
+        prodMap.set(key.toLowerCase(), {
+          id: p._id || p.id,
+          sku: skuCode,
+          slNo: slNumber,
+          name: key,
+          category: p.category || 'General',
+          rate: rateVal,
+          mrp: mrpVal,
+          wholesaleRate: rateVal,
+          retailRate: mrpVal > 0 ? mrpVal : rateVal,
+          productType: pType,
+          unit: unitVal,
+        });
+      });
+    }
+
+    // 2. Process priceList items
+    if (Array.isArray(priceList)) {
+      priceList.forEach((p: any, idx: number) => {
+        const key = (p.itemName || p.name || '').trim();
+        if (!key) return;
+        const bName = (p.batchName || p.company || p.companyName || p.shopName || '').toLowerCase().replace(/[\s\-_]/g, '');
+
+        if (cleanMap) {
+          if (bName === cleanMap) {
+            const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
+            const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
+            const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : (p.sNo !== undefined ? String(p.sNo) : String(idx + 1));
+            const skuCode = p.sku ? String(p.sku) : (p.itemCode ? String(p.itemCode) : `PL-${100 + idx}`);
+
+            prodMap.set(key.toLowerCase(), {
+              id: p._id || p.id,
+              sku: skuCode,
+              slNo: slNumber,
+              name: key,
+              category: p.category || 'General',
+              rate: rateVal,
+              mrp: mrpVal,
+              wholesaleRate: rateVal,
+              retailRate: mrpVal > 0 ? mrpVal : rateVal,
+              productType: 'Both',
+              unit: p.unit || '1 Box',
+            });
+          }
+        } else {
+          if (!prodMap.has(key.toLowerCase())) {
+            const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
+            const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
+            const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : (p.sNo !== undefined ? String(p.sNo) : String(idx + 1));
+            const skuCode = p.sku ? String(p.sku) : (p.itemCode ? String(p.itemCode) : `PL-${100 + idx}`);
+            prodMap.set(key.toLowerCase(), {
+              id: p._id || p.id,
+              sku: skuCode,
+              slNo: slNumber,
+              name: key,
+              category: p.category || 'General',
+              rate: rateVal,
+              mrp: mrpVal,
+              wholesaleRate: rateVal,
+              retailRate: mrpVal > 0 ? mrpVal : rateVal,
+              productType: 'Both',
+              unit: p.unit || '1 Box',
+            });
+          }
+        }
+      });
+    }
+
+    return Array.from(prodMap.values());
+  };
+
+  // Switch Price Map and recalculate rates
+  const handlePriceMapChange = (mapVal: string) => {
+    setSelectedPriceMap(mapVal);
+    const updatedOptions = buildProductOptions(rawProducts, rawPriceLists, mapVal);
+    setProductOptions(updatedOptions);
+
+    if (selectedCatalogProduct) {
+      const matched = updatedOptions.find(
+        (p) => p.name.toLowerCase().trim() === selectedCatalogProduct.name.toLowerCase().trim()
+      );
+      if (matched) setSelectedCatalogProduct(matched);
+    }
+
+    if (mapVal) {
+      setProductRows((prev) =>
+        prev.map((row) => {
+          if (!row.particular.trim()) return row;
+          const matched = updatedOptions.find(
+            (p) => p.name.toLowerCase().trim() === row.particular.toLowerCase().trim()
+          );
+          if (matched) {
+            const newRate = getRateForType(matched, rateType);
+            const q = parseFloat(row.quantity) || 1;
+            const amt = Math.round(q * newRate);
+            return {
+              ...row,
+              rate: String(newRate),
+              amount: String(amt),
+              pktUnit: matched.unit || row.pktUnit,
+            };
+          }
+          return row;
+        })
+      );
+      setSnackbarMessage(`Price Map set to "${mapVal}". Product prices updated.`);
+      setSnackbarOpen(true);
+    } else {
+      setSnackbarMessage('Price Map reset to default rates.');
+      setSnackbarOpen(true);
+    }
+  };
+
   // Load backend data for a specific year
   const loadOptions = async (targetYear: number = selectedYear) => {
     try {
@@ -504,60 +670,25 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         setBillNo(lastBillRes.nextBillNo || '1001');
       }
 
-      // Merge Products & Price List for selected year
-      const prodMap = new Map<string, ProductCatalogOption>();
-      if (Array.isArray(prodRes)) {
-        prodRes.forEach((p: any, idx: number) => {
-          const key = (p.name || '').trim();
-          if (key) {
-            const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
-            const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
-            const pType = p.productType || 'Retail';
-            const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : String(idx + 1);
-            const skuCode = p.sku ? String(p.sku) : slNumber;
-            prodMap.set(key.toLowerCase(), {
-              id: p._id || p.id,
-              sku: skuCode,
-              slNo: slNumber,
-              name: key,
-              category: p.category || 'General',
-              rate: rateVal,
-              mrp: mrpVal,
-              wholesaleRate: typeof p.wholesaleRate === 'number' ? p.wholesaleRate : (pType === 'Wholesale' ? rateVal : rateVal),
-              retailRate: typeof p.retailRate === 'number' ? p.retailRate : (pType === 'Retail' ? (rateVal || mrpVal) : (mrpVal || rateVal)),
-              productType: pType,
-              unit: p.unit || '1 Box',
-            });
-          }
+      const productsArray = Array.isArray(prodRes) ? prodRes : [];
+      const pricesArray = Array.isArray(priceRes) ? priceRes : [];
+      setRawProducts(productsArray);
+      setRawPriceLists(pricesArray);
+
+      // Build dynamic price map options from preset + companies + price list batches
+      const dynamicMaps = new Set<string>(['S V M', 'M S K', 'Manjula', 'Gift', 'MPS']);
+      if (Array.isArray(compRes)) {
+        compRes.forEach((c: any) => {
+          if (c.name && c.name.trim()) dynamicMaps.add(c.name.trim());
         });
       }
+      pricesArray.forEach((pl: any) => {
+        if (pl.batchName && pl.batchName.trim()) dynamicMaps.add(pl.batchName.trim());
+        if (pl.company && pl.company.trim()) dynamicMaps.add(pl.company.trim());
+      });
+      setPriceMapOptions(Array.from(dynamicMaps));
 
-      if (Array.isArray(priceRes)) {
-        priceRes.forEach((p: any, idx: number) => {
-          const key = (p.itemName || '').trim();
-          if (key && !prodMap.has(key.toLowerCase())) {
-            const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
-            const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
-            const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : (p.sNo !== undefined ? String(p.sNo) : String(idx + 1));
-            const skuCode = p.sku ? String(p.sku) : (p.itemCode ? String(p.itemCode) : `PL-${100 + idx}`);
-            prodMap.set(key.toLowerCase(), {
-              id: p._id || p.id,
-              sku: skuCode,
-              slNo: slNumber,
-              name: key,
-              category: p.category || 'General',
-              rate: rateVal,
-              mrp: mrpVal,
-              wholesaleRate: rateVal,
-              retailRate: mrpVal > 0 ? mrpVal : rateVal,
-              productType: 'Both',
-              unit: p.unit || '1 Box',
-            });
-          }
-        });
-      }
-
-      const unified = Array.from(prodMap.values());
+      const unified = buildProductOptions(productsArray, pricesArray, selectedPriceMap);
       setProductOptions(unified);
     } catch (err) {
       console.error('Error loading data for Quotation page:', err);
@@ -701,6 +832,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       paymentStatus: paymentMode === 'Cash' || paymentMode === 'UPI' ? 'PAID' : 'UNPAID',
       paidAmount: paymentMode === 'Cash' || paymentMode === 'UPI' ? netPayment.toFixed(2) : '0.00',
       notes: remarks,
+      priceMap: selectedPriceMap,
       billType: mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR',
       products: validRows.map((r) => ({
         particular: r.particular,
@@ -726,6 +858,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     netPayment,
     paymentMode,
     remarks,
+    selectedPriceMap,
     mode,
     productRows,
   ]);
@@ -869,6 +1002,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         paymentStatus: paymentMode === 'Cash' || paymentMode === 'UPI' ? 'PAID' : 'UNPAID',
         paidAmount: paymentMode === 'Cash' || paymentMode === 'UPI' ? netPayment.toFixed(2) : '0.00',
         notes: remarks,
+        priceMap: selectedPriceMap,
         billType: mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR',
         products: validRows.map((r) => ({
           particular: r.particular,
@@ -1458,36 +1592,96 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           </Box>
 
           {/* ========================================================= */}
-          {/* PRODUCT SELECTION BAR: Code [...] Select Product A/cy */}
+          {/* PRODUCT SELECTION BAR: Price Map | Code [...] Select Product A/cy */}
           {/* ========================================================= */}
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              bgcolor: '#FFFFFF',
-              border: '1px solid #B0C4DE',
-              borderRadius: '4px',
-              p: 0.8,
-              mb: 1,
-              flexWrap: 'wrap',
-            }}
-          >
-            {/* Code */}
-            <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>
-              Code
+          <Box sx={{ mb: 1 }}>
+            <Typography
+              sx={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: '#475569',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                mb: 0.4,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
+              <span>Price Map - Product</span>
+              {selectedPriceMap && (
+                <span
+                  style={{
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    color: '#1E40AF',
+                    backgroundColor: '#EFF6FF',
+                    padding: '1px 8px',
+                    borderRadius: '10px',
+                    border: '1px solid #BFDBFE',
+                  }}
+                >
+                  Active Price Map: {selectedPriceMap}
+                </span>
+              )}
             </Typography>
-            <input
-              ref={codeInputRef}
-              type="text"
-              value={quickCode}
-              onChange={(e) => handleQuickCodeChange(e.target.value)}
-              onKeyDown={handleQuickCodeKeyDown}
-              placeholder="Code / No"
-              className="erp-input"
-              style={{ width: '85px', textAlign: 'center', fontWeight: 700, color: '#1E40AF' }}
-              title="Enter S.No / Code to auto-fill product (Press Enter to jump to Quantity)"
-            />
+
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                bgcolor: '#FFFFFF',
+                border: '1px solid #B0C4DE',
+                borderRadius: '4px',
+                p: 0.8,
+                flexWrap: 'wrap',
+              }}
+            >
+              {/* Price Map Selector */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap' }}>
+                  Price Map
+                </Typography>
+                <select
+                  value={selectedPriceMap}
+                  onChange={(e) => handlePriceMapChange(e.target.value)}
+                  className="erp-input"
+                  style={{
+                    height: '26px',
+                    fontSize: '12px',
+                    fontWeight: selectedPriceMap ? 700 : 500,
+                    color: selectedPriceMap ? '#1E40AF' : '#475569',
+                    backgroundColor: selectedPriceMap ? '#EFF6FF' : '#FFFFFF',
+                    borderColor: selectedPriceMap ? '#1E40AF' : '#94A3B8',
+                    minWidth: '155px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="">--Select Price Map--</option>
+                  {priceMapOptions.map((mapName) => (
+                    <option key={mapName} value={mapName}>
+                      {mapName}
+                    </option>
+                  ))}
+                </select>
+              </Box>
+
+              {/* Code */}
+              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
+                Code
+              </Typography>
+              <input
+                ref={codeInputRef}
+                type="text"
+                value={quickCode}
+                onChange={(e) => handleQuickCodeChange(e.target.value)}
+                onKeyDown={handleQuickCodeKeyDown}
+                placeholder="Code / No"
+                className="erp-input"
+                style={{ width: '85px', textAlign: 'center', fontWeight: 700, color: '#1E40AF' }}
+                title="Enter S.No / Code to auto-fill product (Press Enter to jump to Quantity)"
+              />
 
             {/* Browse Button (...) */}
             <Button
@@ -1620,6 +1814,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               Add Product ↵
             </Button>
           </Box>
+        </Box>
 
           {/* ========================================================= */}
           {/* MAIN SPLIT SECTION: TABLE (Left ~68%) | PAYMENT INFO (Right ~32%) */}
