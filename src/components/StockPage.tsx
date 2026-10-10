@@ -103,8 +103,8 @@ export const StockPage: FC = () => {
         ProductsApi.getAll().catch(() => []),
       ]);
 
-      const billsList = Array.isArray(billsData) ? billsData : (billsData?.data || []);
-      const prodsList = Array.isArray(productsData) ? productsData : (productsData?.data || []);
+      const billsList = Array.isArray(billsData) ? billsData : ((billsData as any)?.data || []);
+      const prodsList = Array.isArray(productsData) ? productsData : ((productsData as any)?.data || []);
 
       setRawBills(billsList);
       setRawProducts(prodsList);
@@ -371,7 +371,7 @@ export const StockPage: FC = () => {
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, 'Stock Report', ws);
+    XLSX.utils.book_append_sheet(wb, ws, 'Stock Report');
     XLSX.writeFile(wb, `SVM_Crackers_Stock_Report_${selectedYear}.xlsx`);
   };
 
