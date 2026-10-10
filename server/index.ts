@@ -19,6 +19,7 @@ import particularRoutes from './routes/particularRoutes';
 import accountRoutes from './routes/accountRoutes';
 import authRoutes from './routes/authRoutes';
 import settingsRoutes from './routes/settingsRoutes';
+import priceMapRoutes from './routes/priceMapRoutes';
 import despatchRoutes from './routes/despatchRoutes';
 import { seedDefaultAdmin } from './controllers/authController';
 import { backfillMissingYears } from './utils/yearUtils';
@@ -119,6 +120,7 @@ app.use('/api/pricelists', priceListRoutes);
 app.use('/api/particulars', particularRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/pricemaps', priceMapRoutes);
 app.use('/api/despatches', despatchRoutes);
 
 // Global Error Handler

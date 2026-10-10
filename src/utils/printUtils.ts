@@ -57,15 +57,15 @@ export const isDateInRange = (dateStr: string, fromDateStr: string, toDateStr: s
 export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): string => {
   const storeSettings = getStoredSettings();
   const displayCompanyName =
-    storeSettings.companyName && storeSettings.companyName.trim() !== '' && storeSettings.companyName !== 'General'
+    storeSettings.companyName && typeof storeSettings.companyName === 'string' && storeSettings.companyName.trim() !== '' && storeSettings.companyName !== 'General' && storeSettings.companyName !== 'false'
       ? storeSettings.companyName.toUpperCase()
-      : (bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General')
+      : (bill.companyName && typeof bill.companyName === 'string' && bill.companyName.trim() !== '' && bill.companyName !== 'General' && bill.companyName !== 'false')
         ? bill.companyName.toUpperCase()
         : 'S.V.M FIREWORKS AGENCIES';
 
-  const companyAddress = (storeSettings.address && !storeSettings.address.toLowerCase().includes('rajivgandhi') && !storeSettings.address.toLowerCase().includes('67 - h/e'))
+  const companyAddress = (storeSettings.address && typeof storeSettings.address === 'string' && storeSettings.address !== 'false' && !storeSettings.address.toLowerCase().includes('rajivgandhi') && !storeSettings.address.toLowerCase().includes('67 - h/e'))
     ? storeSettings.address.trim()
-    : (bill.companyAddress && !bill.companyAddress.toLowerCase().includes('rajivgandhi') && !bill.companyAddress.toLowerCase().includes('67 - h/e'))
+    : (bill.companyAddress && typeof bill.companyAddress === 'string' && bill.companyAddress !== 'false' && !bill.companyAddress.toLowerCase().includes('rajivgandhi') && !bill.companyAddress.toLowerCase().includes('67 - h/e'))
       ? bill.companyAddress.trim()
       : 'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road, Keela Thiruthangal - 626 130. Tamil Nadu';
   const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
@@ -592,28 +592,32 @@ export const printBillDirectly = (bill: BillPrintData) => {
 export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number = 1): string => {
   const storeSettings = getStoredSettings();
   const displayCompanyName =
-    storeSettings.companyName && storeSettings.companyName.trim() !== '' && storeSettings.companyName !== 'General'
+    storeSettings.companyName && typeof storeSettings.companyName === 'string' && storeSettings.companyName.trim() !== '' && storeSettings.companyName !== 'General' && storeSettings.companyName !== 'false'
       ? storeSettings.companyName.trim()
-      : bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General' && bill.companyName !== 'SVM Crackers'
+      : bill.companyName && typeof bill.companyName === 'string' && bill.companyName.trim() !== '' && bill.companyName !== 'General' && bill.companyName !== 'SVM Crackers' && bill.companyName !== 'false'
         ? bill.companyName.trim()
         : 'S.V.M Fireworks Agencies';
 
-  const gstinNo = storeSettings.gstin || bill.gstin || '33ADBFS7999E1ZO';
-  const licNo = storeSettings.licNo || bill.licNo || 'E/SS/TN/24/83 (E86652)';
+  const gstinNo = (storeSettings.gstin && typeof storeSettings.gstin === 'string' ? storeSettings.gstin : bill.gstin) || '33ADBFS7999E1ZO';
+  const licNo = (storeSettings.licNo && typeof storeSettings.licNo === 'string' ? storeSettings.licNo : bill.licNo) || 'E/SS/TN/24/83 (E86652)';
 
-  const companyAddressLines = formatCompanyAddressLines(storeSettings.address || bill.companyAddress);
+  const companyAddressLines = formatCompanyAddressLines(
+    storeSettings.address && typeof storeSettings.address === 'string' && storeSettings.address !== 'false'
+      ? storeSettings.address
+      : bill.companyAddress
+  );
   const companyAddressHtml = companyAddressLines.map((l) => `<div>${l}</div>`).join('');
 
-  const customerDisplayName = (bill.customerName || '').trim() || 'Ravikumar';
-  const customerAddressDisplay = (bill.customerAddress || bill.customerCity || bill.despatchTo || bill.dispatchTo || '').trim() || 'BOMMSANDRA';
+  const customerDisplayName = (bill.customerName || '').trim();
+  const customerAddressDisplay = (bill.customerAddress || bill.customerCity || '').trim();
   const customerGstDisplay = (bill.customerGst && bill.customerGst !== 'N/A' && bill.customerGst !== '-')
     ? bill.customerGst.trim()
-    : 'OWN USE';
+    : '';
   const customerAadharDisplay = (bill.customerAadhar && bill.customerAadhar !== 'N/A' && bill.customerAadhar !== '-')
     ? bill.customerAadhar.trim()
     : '';
 
-  const despatchToDisplay = (bill.despatchTo || bill.dispatchTo || bill.customerCity || customerAddressDisplay || 'BOMMSANDRA').trim();
+  const despatchToDisplay = (bill.despatchTo || bill.dispatchTo || customerAddressDisplay || '').trim();
   const lorryTransportDisplay = (bill.lorryTransport || (bill.transport && bill.transport !== '-' && bill.transport !== '0') ? (bill.lorryTransport || bill.transport) : '') || '';
   const lrNoDisplay = (bill.lrNo && bill.lrNo !== '-') ? bill.lrNo : '';
   const lrDateDisplay = (bill.lrDate && bill.lrDate !== '-') ? bill.lrDate : '';

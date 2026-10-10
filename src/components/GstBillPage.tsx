@@ -192,12 +192,14 @@ export const GstBillPage: FC = () => {
 
   // 4. Product Quick Entry Bar
   const quickCodeInputRef = useRef<HTMLInputElement>(null);
+  const quickHsnInputRef = useRef<HTMLInputElement>(null);
   const quickQtyInputRef = useRef<HTMLInputElement>(null);
   const quickUnitInputRef = useRef<HTMLInputElement>(null);
   const quickRateInputRef = useRef<HTMLInputElement>(null);
 
   const [quickCode, setQuickCode] = useState<string>('');
   const [selectedCatalogProduct, setSelectedCatalogProduct] = useState<ProductCatalogOption | null>(null);
+  const [quickHsn, setQuickHsn] = useState<string>('3604');
   const [quickQty, setQuickQty] = useState<string>('1');
   const [quickUnit, setQuickUnit] = useState<string>('Case');
   const [quickRate, setQuickRate] = useState<string>('0');
@@ -837,6 +839,7 @@ export const GstBillPage: FC = () => {
     const rNum = parseFloat(quickRate) > 0 ? parseFloat(quickRate) : (prod.rate || 0);
     const amt = (qNum * rNum).toFixed(2);
     const itemCode = prod.code || (prod.slNo !== undefined ? String(prod.slNo) : quickCode);
+    const itemHsn = quickHsn || prod.hsn || '3604';
 
     const existingBlankIdx = productRows.findIndex((r) => !r.particular.trim());
     if (existingBlankIdx !== -1) {
@@ -847,7 +850,7 @@ export const GstBillPage: FC = () => {
               ...r,
               code: itemCode,
               particular: prod.name,
-              hsnCode: prod.hsn || '3604',
+              hsnCode: itemHsn,
               quantity: String(qNum),
               unit: quickUnit || prod.unit || 'Case',
               rate: String(rNum),
@@ -864,7 +867,7 @@ export const GstBillPage: FC = () => {
           id: String(Date.now()),
           code: itemCode,
           particular: prod.name,
-          hsnCode: prod.hsn || '3604',
+          hsnCode: itemHsn,
           quantity: String(qNum),
           unit: quickUnit || prod.unit || 'Case',
           rate: String(rNum),
@@ -875,6 +878,7 @@ export const GstBillPage: FC = () => {
 
     setSelectedCatalogProduct(null);
     setQuickCode('');
+    setQuickHsn('3604');
     setQuickQty('1');
     setQuickRate('0');
     setTimeout(() => {
@@ -892,6 +896,7 @@ export const GstBillPage: FC = () => {
       const rNum = parseFloat(quickRate) || 0;
       const amt = (qNum * rNum).toFixed(2);
       const itemCode = quickCode.trim();
+      const itemHsn = quickHsn || '3604';
 
       const existingBlankIdx = productRows.findIndex((r) => !r.particular.trim());
       if (existingBlankIdx !== -1) {
@@ -902,7 +907,7 @@ export const GstBillPage: FC = () => {
                 ...r,
                 code: itemCode,
                 particular: itemCode || 'Product Item',
-                hsnCode: '3604',
+                hsnCode: itemHsn,
                 quantity: String(qNum),
                 unit: quickUnit || 'Case',
                 rate: String(rNum),
@@ -919,7 +924,7 @@ export const GstBillPage: FC = () => {
             id: String(Date.now()),
             code: itemCode,
             particular: itemCode || 'Product Item',
-            hsnCode: '3604',
+            hsnCode: itemHsn,
             quantity: String(qNum),
             unit: quickUnit || 'Case',
             rate: String(rNum),
@@ -930,6 +935,7 @@ export const GstBillPage: FC = () => {
 
       setSelectedCatalogProduct(null);
       setQuickCode('');
+      setQuickHsn('3604');
       setQuickQty('1');
       setQuickRate('0');
       setTimeout(() => {
@@ -974,24 +980,24 @@ export const GstBillPage: FC = () => {
     return {
       billNo,
       date: billDate,
-      customerName: customerName || 'General Customer',
-      customerPhone,
-      customerAddress,
-      customerGst,
-      customerAadhar,
-      deliveryName: customerName,
-      deliveryAddress: customerAddress,
-      deliveryAadhar: customerAadhar,
+      customerName: (customerName || '').trim(),
+      customerPhone: (customerPhone || '').trim(),
+      customerAddress: (customerAddress || '').trim(),
+      customerGst: (customerGst || '').trim(),
+      customerAadhar: (customerAadhar || '').trim(),
+      deliveryName: (customerName || '').trim(),
+      deliveryAddress: (customerAddress || '').trim(),
+      deliveryAadhar: (customerAadhar || '').trim(),
       placeOfSupply: 'Tamil Nadu (33)',
       reverseCharge: 'No',
       despatchFrom: 'SIVAKASI',
-      despatchTo: despatchedTo || customerAddress,
+      despatchTo: (despatchedTo || customerAddress || '').trim(),
       dispatchFrom: 'SIVAKASI',
-      dispatchTo: despatchedTo || customerAddress,
-      transport: lorryTransport,
-      lorryTransport,
-      lrNo,
-      lrDate,
+      dispatchTo: (despatchedTo || customerAddress || '').trim(),
+      transport: (lorryTransport || '').trim(),
+      lorryTransport: (lorryTransport || '').trim(),
+      lrNo: (lrNo || '').trim(),
+      lrDate: (lrDate || '').trim(),
       caseCount: totalCases || String(calculations.autoCases),
       companyName: storeSettings.companyName || 'S.V.M Fireworks Agencies',
       companyAddress: storeSettings.address,
@@ -1964,9 +1970,10 @@ export const GstBillPage: FC = () => {
                     setQuickCode(opt.code || (opt.slNo !== undefined ? String(opt.slNo) : ''));
                     setQuickUnit(opt.unit || 'Case');
                     setQuickRate(String(opt.rate || 0));
+                    setQuickHsn(opt.hsn || '3604');
                     setTimeout(() => {
-                      quickQtyInputRef.current?.focus();
-                      quickQtyInputRef.current?.select();
+                      quickHsnInputRef.current?.focus();
+                      quickHsnInputRef.current?.select();
                     }, 50);
                   }
                 }}
@@ -1984,6 +1991,25 @@ export const GstBillPage: FC = () => {
                     }}
                   />
                 )}
+              />
+
+              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
+                HSN
+              </Typography>
+              <input
+                ref={quickHsnInputRef}
+                type="text"
+                value={quickHsn}
+                onChange={(e) => setQuickHsn(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    quickQtyInputRef.current?.focus();
+                    quickQtyInputRef.current?.select();
+                  }
+                }}
+                className="erp-input"
+                style={{ width: '60px', textAlign: 'center', fontWeight: 600, color: '#1E40AF' }}
               />
 
               <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
@@ -2091,25 +2117,28 @@ export const GstBillPage: FC = () => {
                     <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow sx={{ bgcolor: '#DCE7F5' }}>
-                          <TableCell sx={{ width: '40px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '38px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             S.No
                           </TableCell>
-                          <TableCell sx={{ width: '75px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '70px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Code
                           </TableCell>
                           <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Particulars / Product Name
                           </TableCell>
-                          <TableCell sx={{ width: '70px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '65px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                            HSN
+                          </TableCell>
+                          <TableCell sx={{ width: '60px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Qty
                           </TableCell>
-                          <TableCell sx={{ width: '65px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '60px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Unit
                           </TableCell>
-                          <TableCell sx={{ width: '90px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '85px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Rate (Rs.)
                           </TableCell>
-                          <TableCell sx={{ width: '100px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                          <TableCell sx={{ width: '95px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Amount (Rs.)
                           </TableCell>
                           <TableCell sx={{ width: '35px', textAlign: 'center', bgcolor: '#DCE7F5', p: 0.2 }} />
@@ -2165,6 +2194,26 @@ export const GstBillPage: FC = () => {
                                   fontSize: '12px',
                                   fontWeight: 600,
                                   color: '#0F172A',
+                                }}
+                              />
+                            </TableCell>
+
+                            {/* HSN input */}
+                            <TableCell sx={{ textAlign: 'center', p: 0.4 }}>
+                              <input
+                                type="text"
+                                value={row.hsnCode || '3604'}
+                                onChange={(e) => handleRowChange(row.id, 'hsnCode', e.target.value)}
+                                placeholder="3604"
+                                style={{
+                                  width: '100%',
+                                  border: 'none',
+                                  outline: 'none',
+                                  background: 'transparent',
+                                  fontSize: '12px',
+                                  textAlign: 'center',
+                                  fontWeight: 600,
+                                  color: '#1E40AF',
                                 }}
                               />
                             </TableCell>
@@ -2254,6 +2303,7 @@ export const GstBillPage: FC = () => {
                             <TableCell sx={{ textAlign: 'center', color: '#CBD5E1', fontSize: '11px' }}>
                               {productRows.length + i + 1}
                             </TableCell>
+                            <TableCell />
                             <TableCell />
                             <TableCell />
                             <TableCell />
@@ -2836,10 +2886,11 @@ export const GstBillPage: FC = () => {
                           setQuickCode(prod.code || (prod.slNo !== undefined ? String(prod.slNo) : ''));
                           setQuickUnit(prod.unit || 'Case');
                           setQuickRate(String(prod.rate || 0));
+                          setQuickHsn(prod.hsn || '3604');
                           setProductCatalogModalOpen(false);
                           setTimeout(() => {
-                            quickQtyInputRef.current?.focus();
-                            quickQtyInputRef.current?.select();
+                            quickHsnInputRef.current?.focus();
+                            quickHsnInputRef.current?.select();
                           }, 50);
                         }}
                         sx={{ fontSize: '11px', py: 0.2, px: 1, bgcolor: '#1E40AF' }}
