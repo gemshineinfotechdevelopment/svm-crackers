@@ -30,7 +30,7 @@ export const getActiveBillingYear = (): number => {
       const saved = localStorage.getItem(SELECTED_YEAR_STORAGE_KEY) || localStorage.getItem(SELECTED_BILL_YEAR_STORAGE_KEY);
       if (saved) {
         const parsed = parseInt(saved, 10);
-        if (!isNaN(parsed) && parsed >= 2000 && parsed <= currentSysYear + 2) {
+        if (!isNaN(parsed) && parsed >= 2000 && parsed <= currentSysYear + 1) {
           return parsed;
         }
       }
@@ -52,7 +52,7 @@ export const getSelectedBillYear = (systemYear?: string): string => {
       if (saved) {
         const yearNum = parseInt(saved, 10);
         const sysYearNum = parseInt(currentSysYear, 10);
-        if (!isNaN(yearNum) && yearNum <= sysYearNum && yearNum >= 2000 && yearNum <= sysYearNum + 2) {
+        if (!isNaN(yearNum) && yearNum <= sysYearNum && yearNum >= 2000) {
           return saved;
         }
       }
@@ -142,8 +142,9 @@ export const getAvailableBillViewYears = (systemYearStr?: string): BillYearOptio
     });
   }
 
-  // Future years (blocked / disabled)
-  for (let y = currentSysYear + 1; y <= currentSysYear + 2; y++) {
+  // Future year (blocked / restricted until system date reaches it)
+  // Dynamically adds next upcoming year (e.g. 2027 when in 2026, 2028 when in 2027, etc.)
+  for (let y = currentSysYear + 1; y <= currentSysYear + 1; y++) {
     options.push({
       year: y.toString(),
       isFuture: true,
