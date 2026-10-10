@@ -27,6 +27,11 @@ import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
 import RequestQuoteRoundedIcon from '@mui/icons-material/RequestQuoteRounded';
+import PriceChangeRoundedIcon from '@mui/icons-material/PriceChangeRounded';
+import ShoppingCartRoundedIcon from '@mui/icons-material/ShoppingCartRounded';
+import AltRouteRoundedIcon from '@mui/icons-material/AltRouteRounded';
+import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
+import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
 import defaultApsaraLogo from '../assets/logo.png';
 import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { HealthApi, API_BASE_URL } from '../services/api';
@@ -36,6 +41,7 @@ import {
   getStandardYearOptions,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
+import { PRODUCT_SUB_PAGES, type ProductSubPage } from '../types/productSubPages';
 
 export type NavTab = 'All Customers' | 'Sales' | 'Estimate' | 'Quotation' | 'Product' | 'GST Bill' | 'Categories' | 'Price List' | 'Settings';
 
@@ -43,6 +49,8 @@ interface NavbarProps {
   activeTab?: NavTab;
   onSelectTab?: (tab: NavTab) => void;
   onLogout?: () => void;
+  productSubPage?: ProductSubPage;
+  onSelectProductSubPage?: (subPage: ProductSubPage) => void;
 }
 
 interface ErpMenuItem {
@@ -55,8 +63,11 @@ export const Navbar: FC<NavbarProps> = ({
   activeTab = 'All Customers',
   onSelectTab,
   onLogout,
+  productSubPage = 'product-Retail sales',
+  onSelectProductSubPage,
 }) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [productMenuAnchorEl, setProductMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [companySettings, setCompanySettings] = useState<CompanySettings>(getStoredSettings);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
@@ -334,6 +345,66 @@ export const Navbar: FC<NavbarProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
           {erpMenuItems.map((item, index) => {
             const isTabActive = item.tabKey && activeTab === item.tabKey;
+            const isProductMaster = item.tabKey === 'Product';
+
+            if (isProductMaster) {
+              return (
+                <Box
+                  key={index}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderRadius: '3px',
+                    backgroundColor: isTabActive ? '#D2E3F5' : 'transparent',
+                    border: isTabActive ? '1px solid #99BBE8' : '1px solid transparent',
+                    '&:hover': {
+                      backgroundColor: '#DCEBFA',
+                      borderColor: '#A8C7EE',
+                    },
+                    transition: 'all 0.1s ease',
+                  }}
+                >
+                  <Box
+                    onClick={() => item.tabKey && handleTabClick(item.tabKey)}
+                    sx={{
+                      cursor: 'pointer',
+                      py: 0.3,
+                      pl: 0.8,
+                      pr: 0.2,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: '12.5px',
+                        fontWeight: isTabActive ? 800 : 600,
+                        color: isTabActive ? '#1E3A8A' : '#0F172A',
+                      }}
+                    >
+                      {item.label}
+                    </Typography>
+                  </Box>
+                  <Tooltip title="Product Master Pages Dropdown" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setProductMenuAnchorEl(e.currentTarget);
+                      }}
+                      sx={{
+                        p: 0.1,
+                        mr: 0.2,
+                        color: isTabActive ? '#1E3A8A' : '#475569',
+                        '&:hover': { color: '#1E3A8A' },
+                      }}
+                    >
+                      <ArrowDropDownRoundedIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              );
+            }
+
             return (
               <Box
                 key={index}
@@ -438,6 +509,70 @@ export const Navbar: FC<NavbarProps> = ({
         </MenuItem>
       </Menu>
 
+      {/* Product Master Sub-Page Dropdown Menu */}
+      <Menu
+        anchorEl={productMenuAnchorEl}
+        open={Boolean(productMenuAnchorEl)}
+        onClose={() => setProductMenuAnchorEl(null)}
+        transformOrigin={{ horizontal: 'left', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'left', vertical: 'bottom' }}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '6px',
+              minWidth: '240px',
+              boxShadow: '0 6px 20px rgba(0, 0, 0, 0.14)',
+              border: '1px solid #B0C4DE',
+              backgroundColor: '#FFFFFF',
+              mt: 0.5,
+              p: 0.5,
+            },
+          },
+        }}
+      >
+        <Box sx={{ px: 1.5, py: 0.5 }}>
+          <Typography sx={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>
+            Product Master Pages
+          </Typography>
+        </Box>
+        <Divider sx={{ my: 0.5, borderColor: '#E2E8F0' }} />
+        {PRODUCT_SUB_PAGES.map((page) => {
+          const isSelected = activeTab === 'Product' && productSubPage === page.id;
+          return (
+            <MenuItem
+              key={page.id}
+              onClick={() => {
+                setProductMenuAnchorEl(null);
+                if (onSelectProductSubPage) onSelectProductSubPage(page.id);
+                handleTabClick('Product');
+              }}
+              sx={{
+                py: 0.8,
+                px: 1.2,
+                borderRadius: '4px',
+                bgcolor: isSelected ? page.badgeBg : 'transparent',
+                '&:hover': { bgcolor: '#F1F5F9' },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: '28px' }}>
+                {page.id === 'pricemap master' && <PriceChangeRoundedIcon sx={{ fontSize: 17, color: '#0284C7' }} />}
+                {page.id === 'product-Retail sales' && <ShoppingCartRoundedIcon sx={{ fontSize: 17, color: '#16A34A' }} />}
+                {page.id === 'product-price map' && <AltRouteRoundedIcon sx={{ fontSize: 17, color: '#EA580C' }} />}
+                {page.id === 'product-whole sales' && <StorefrontRoundedIcon sx={{ fontSize: 17, color: '#7C3AED' }} />}
+              </ListItemIcon>
+              <Box>
+                <Typography sx={{ fontSize: '12.5px', fontWeight: isSelected ? 800 : 600, color: isSelected ? page.badgeText : '#0F172A' }}>
+                  {page.label}
+                </Typography>
+                <Typography sx={{ fontSize: '10.5px', color: '#64748B' }}>
+                  {page.description}
+                </Typography>
+              </Box>
+            </MenuItem>
+          );
+        })}
+      </Menu>
+
       {/* Mobile Drawer */}
       <Drawer
         anchor="right"
@@ -446,7 +581,7 @@ export const Navbar: FC<NavbarProps> = ({
         slotProps={{
           paper: {
             sx: {
-              width: '260px',
+              width: '270px',
               backgroundColor: '#EDF4FB',
               borderLeft: '1px solid #B0C4DE',
             },
@@ -473,23 +608,60 @@ export const Navbar: FC<NavbarProps> = ({
             { label: 'Product Master', tab: 'Product' as NavTab, icon: <Inventory2RoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Settings', tab: 'Settings' as NavTab, icon: <SettingsRoundedIcon sx={{ fontSize: 18 }} /> },
           ].map((item) => (
-            <ListItem key={item.label} disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                onClick={() => handleTabClick(item.tab)}
-                sx={{
-                  borderRadius: '4px',
-                  backgroundColor: activeTab === item.tab ? '#D2E3F5' : 'transparent',
-                  py: 0.8,
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: '32px', color: '#1E3A8A' }}>
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText
-                  primary={<Typography sx={{ fontSize: '13px', fontWeight: activeTab === item.tab ? 800 : 600 }}>{item.label}</Typography>}
-                />
-              </ListItemButton>
-            </ListItem>
+            <Box key={item.label}>
+              <ListItem disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  onClick={() => handleTabClick(item.tab)}
+                  sx={{
+                    borderRadius: '4px',
+                    backgroundColor: activeTab === item.tab ? '#D2E3F5' : 'transparent',
+                    py: 0.8,
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: '32px', color: '#1E3A8A' }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={<Typography sx={{ fontSize: '13px', fontWeight: activeTab === item.tab ? 800 : 600 }}>{item.label}</Typography>}
+                  />
+                </ListItemButton>
+              </ListItem>
+
+              {/* Subpages when item is Product Master */}
+              {item.tab === 'Product' && (
+                <Box sx={{ pl: 3, mb: 0.5 }}>
+                  {PRODUCT_SUB_PAGES.map((sub) => {
+                    const isSubActive = activeTab === 'Product' && productSubPage === sub.id;
+                    return (
+                      <ListItemButton
+                        key={sub.id}
+                        onClick={() => {
+                          if (onSelectProductSubPage) onSelectProductSubPage(sub.id);
+                          handleTabClick('Product');
+                        }}
+                        sx={{
+                          py: 0.4,
+                          px: 1,
+                          borderRadius: '3px',
+                          bgcolor: isSubActive ? sub.badgeBg : 'transparent',
+                          mb: 0.3,
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            fontSize: '11.5px',
+                            fontWeight: isSubActive ? 800 : 600,
+                            color: isSubActive ? sub.badgeText : '#334155',
+                          }}
+                        >
+                          • {sub.label}
+                        </Typography>
+                      </ListItemButton>
+                    );
+                  })}
+                </Box>
+              )}
+            </Box>
           ))}
         </List>
       </Drawer>

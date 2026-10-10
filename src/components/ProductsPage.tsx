@@ -27,7 +27,6 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import DeleteSweepRoundedIcon from '@mui/icons-material/DeleteSweepRounded';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
-import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
@@ -45,6 +44,11 @@ import {
 import { getSelectedBillYear } from '../utils/billYearUtils';
 import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
+import { ProductSubPageHeader } from './ProductSubPageHeader';
+import { PriceMapMasterPage } from './PriceMapMasterPage';
+import { ProductPriceMapPage } from './ProductPriceMapPage';
+import { type ProductSubPage } from '../types/productSubPages';
+
 export type ProductType = 'Retail' | 'Wholesale' | 'Both';
 
 export interface ProductItem {
@@ -60,13 +64,56 @@ export interface ProductItem {
   year?: number;
 }
 
-export const ProductsPage: FC = () => {
+interface ProductsPageProps {
+  initialSubPage?: ProductSubPage;
+  onSubPageChangeProp?: (newPage: ProductSubPage) => void;
+}
+
+export const ProductsPage: FC<ProductsPageProps> = ({
+  initialSubPage,
+  onSubPageChangeProp,
+}) => {
+  const [currentSubPage, setCurrentSubPage] = useState<ProductSubPage>(() => {
+    return (
+      initialSubPage ||
+      (localStorage.getItem('svm_product_subpage') as ProductSubPage) ||
+      'product-Retail sales'
+    );
+  });
+
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<{ name: string; color?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [activeTabType, setActiveTabType] = useState<'Retail' | 'Wholesale' | 'ALL'>('Retail');
+  const [activeTabType, setActiveTabType] = useState<'Retail' | 'Wholesale' | 'ALL'>(() => {
+    if (initialSubPage === 'product-whole sales') return 'Wholesale';
+    return 'Retail';
+  });
+
+  const handleSubPageChange = (newPage: ProductSubPage) => {
+    setCurrentSubPage(newPage);
+    localStorage.setItem('svm_product_subpage', newPage);
+    if (newPage === 'product-Retail sales') {
+      setActiveTabType('Retail');
+    } else if (newPage === 'product-whole sales') {
+      setActiveTabType('Wholesale');
+    }
+    if (onSubPageChangeProp) {
+      onSubPageChangeProp(newPage);
+    }
+  };
+
+  useEffect(() => {
+    if (initialSubPage && initialSubPage !== currentSubPage) {
+      setCurrentSubPage(initialSubPage);
+      if (initialSubPage === 'product-Retail sales') {
+        setActiveTabType('Retail');
+      } else if (initialSubPage === 'product-whole sales') {
+        setActiveTabType('Wholesale');
+      }
+    }
+  }, [initialSubPage]);
 
   // Year state synced with global Navbar/Settings
   const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
@@ -743,6 +790,15 @@ export const ProductsPage: FC = () => {
     printProductsListDirectly(filteredProducts, selectedCategory, activeTabType);
   };
 
+  // If subpage is pricemap master or product-price map, render the dedicated separate page component
+  if (currentSubPage === 'pricemap master') {
+    return <PriceMapMasterPage onSubPageChange={handleSubPageChange} />;
+  }
+
+  if (currentSubPage === 'product-price map') {
+    return <ProductPriceMapPage onSubPageChange={handleSubPageChange} />;
+  }
+
   return (
     <Box sx={{ width: '100%', p: { xs: 1, sm: 1.5 }, bgcolor: '#D9E4F2', minHeight: 'calc(100vh - 70px)' }}>
       {/* Outer Window Card */}
@@ -757,36 +813,19 @@ export const ProductsPage: FC = () => {
           flexDirection: 'column',
         }}
       >
-        {/* Window Title Header Bar */}
-        <Box
-          sx={{
-            background: 'linear-gradient(180deg, #E6F0FA 0%, #D2E4F6 100%)',
-            borderBottom: '1px solid #A8C2DC',
-            px: 1.5,
-            py: 0.8,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 1,
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Inventory2RoundedIcon sx={{ fontSize: 18, color: '#0284C7' }} />
-            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', letterSpacing: '0.01em' }}>
-              Product Master & Price Catalog
-            </Typography>
-          </Box>
-
-          {/* Type Counts Badges & Year Selector */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+        {/* User Requested Subpage Dropdown & Header */}
+        <ProductSubPageHeader
+          currentSubPage={currentSubPage}
+          onSubPageChange={handleSubPageChange}
+          year={selectedYear}
+          extraRightContent={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Chip
                 label={`🛒 Retail: ${retailCount}`}
                 size="small"
                 sx={{
-                  bgcolor: activeTabType === 'Retail' ? '#0284C7' : '#E0F2FE',
-                  color: activeTabType === 'Retail' ? '#FFFFFF' : '#0369A1',
+                  bgcolor: currentSubPage === 'product-Retail sales' ? '#0284C7' : '#E0F2FE',
+                  color: currentSubPage === 'product-Retail sales' ? '#FFFFFF' : '#0369A1',
                   fontWeight: 700,
                   fontSize: '11px',
                   height: '22px',
@@ -796,8 +835,8 @@ export const ProductsPage: FC = () => {
                 label={`🏢 Wholesale: ${wholesaleCount}`}
                 size="small"
                 sx={{
-                  bgcolor: activeTabType === 'Wholesale' ? '#7C3AED' : '#F3E8FF',
-                  color: activeTabType === 'Wholesale' ? '#FFFFFF' : '#6D28D9',
+                  bgcolor: currentSubPage === 'product-whole sales' ? '#7C3AED' : '#F3E8FF',
+                  color: currentSubPage === 'product-whole sales' ? '#FFFFFF' : '#6D28D9',
                   fontWeight: 700,
                   fontSize: '11px',
                   height: '22px',
@@ -815,8 +854,8 @@ export const ProductsPage: FC = () => {
                 }}
               />
             </Box>
-          </Box>
-        </Box>
+          }
+        />
 
         {/* Tab Selector: Retail vs Wholesale vs All */}
         <Box sx={{ bgcolor: '#F8FAFC', borderBottom: '1px solid #CBD5E1', px: 1.5, pt: 0.5 }}>
@@ -825,6 +864,15 @@ export const ProductsPage: FC = () => {
             onChange={(_, val) => {
               setActiveTabType(val);
               setSelectedIds([]);
+              if (val === 'Retail') {
+                setCurrentSubPage('product-Retail sales');
+                localStorage.setItem('svm_product_subpage', 'product-Retail sales');
+                if (onSubPageChangeProp) onSubPageChangeProp('product-Retail sales');
+              } else if (val === 'Wholesale') {
+                setCurrentSubPage('product-whole sales');
+                localStorage.setItem('svm_product_subpage', 'product-whole sales');
+                if (onSubPageChangeProp) onSubPageChangeProp('product-whole sales');
+              }
             }}
             textColor="primary"
             indicatorColor="primary"
@@ -863,6 +911,42 @@ export const ProductsPage: FC = () => {
 
         {/* Inner Content Area */}
         <Box sx={{ p: { xs: 1, sm: 1.5 }, bgcolor: '#F0F5FA' }}>
+          {/* Active Sub-Page Notification Banner */}
+          <Alert
+            severity="info"
+            icon={
+              currentSubPage === 'product-Retail sales' ? (
+                <ShoppingCartRoundedIcon sx={{ fontSize: 18, color: '#16A34A' }} />
+              ) : (
+                <StorefrontRoundedIcon sx={{ fontSize: 18, color: '#7C3AED' }} />
+              )
+            }
+            sx={{
+              mb: 1,
+              py: 0.3,
+              borderRadius: '3px',
+              border: '1px solid',
+              borderColor: currentSubPage === 'product-Retail sales' ? '#BBF7D0' : '#DDD6FE',
+              bgcolor: currentSubPage === 'product-Retail sales' ? '#F0FDF4' : '#F5F3FF',
+              fontSize: '12px',
+            }}
+          >
+            <Typography
+              component="span"
+              sx={{
+                fontWeight: 800,
+                fontSize: '12px',
+                color: currentSubPage === 'product-Retail sales' ? '#15803D' : '#6D28D9',
+              }}
+            >
+              {currentSubPage === 'product-Retail sales'
+                ? '🛒 Product - Retail Sales (product-Retail sales)'
+                : '🏢 Product - Whole Sales (product-whole sales)'}
+            </Typography>
+            <Typography component="span" sx={{ fontSize: '11.5px', color: '#475569', ml: 1 }}>
+              — Active separate page view. Ready for your custom content and configurations.
+            </Typography>
+          </Alert>
           {/* Top Control Bar */}
           <Box
             sx={{
