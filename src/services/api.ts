@@ -171,6 +171,40 @@ export const PriceListsApi = {
   clearAll: () => request<any>('/pricelists/clear/all', { method: 'DELETE' }),
 };
 
+// Price Maps API (for Price Map Master & Product Price Map)
+export interface PriceMapRateItem {
+  productId?: string;
+  code: number | string;
+  productName: string;
+  quantity: number;
+  rate: number;
+}
+
+export interface PriceMapRecord {
+  _id?: string;
+  name: string;
+  description?: string;
+  rates: PriceMapRateItem[];
+  year?: number | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export const PriceMapsApi = {
+  getAll: (year?: number | string) => {
+    const qs = year ? `?year=${year}` : '';
+    return request<PriceMapRecord[]>(`/pricemaps${qs}`);
+  },
+  create: (data: { name: string; rates?: PriceMapRateItem[]; year?: number | string }) =>
+    request<PriceMapRecord>('/pricemaps', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<PriceMapRecord>) =>
+    request<PriceMapRecord>(`/pricemaps/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    request<any>(`/pricemaps/${id}`, { method: 'DELETE' }),
+  saveAll: (priceMaps: PriceMapRecord[], year?: number | string) =>
+    request<PriceMapRecord[]>('/pricemaps/batch-save', { method: 'POST', body: JSON.stringify({ priceMaps, year }) }),
+};
+
 // Particulars API
 export const ParticularsApi = {
   getAll: (customerName?: string, billType?: 'REGULAR' | 'GST' | 'ALL', year?: number | string) => {
