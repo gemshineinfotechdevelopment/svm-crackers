@@ -97,7 +97,9 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
       setLoadingCustomers(true);
       try {
         const [custRes, billNoRes] = await Promise.all([
-          CustomersApi.getAll(selectedYear).catch(() => []),
+          CustomersApi.getAll(selectedYear)
+            .then((res) => (Array.isArray(res) && res.length > 0 ? res : CustomersApi.getAll()))
+            .catch(() => CustomersApi.getAll().catch(() => [])),
           ParticularsApi.getNextBillNo(mode === 'GST' ? 'GST' : (mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR'), selectedYear).catch(() => ({ nextBillNo: '1001' })),
         ]);
 
@@ -116,6 +118,48 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
 
     loadData();
   }, [open, mode, selectedYear]);
+
+  // Helper to extract clean field values from customer object
+  const getCustomerFields = (cust: any) => {
+    if (!cust) return { name: '', phone: '', address: '', gst: '' };
+    const name = cust.name || '';
+    const phone = cust.mobile && cust.mobile !== '-' ? cust.mobile : (cust.phone && cust.phone !== '-' ? cust.phone : '');
+    
+    const addrParts = [];
+    if (cust.address && cust.address !== '-') addrParts.push(cust.address.trim());
+    if (cust.city && cust.city !== '-' && !addrParts.some((p) => p.toLowerCase().includes(cust.city.toLowerCase()))) {
+      addrParts.push(cust.city.trim());
+    }
+    const address = addrParts.join(', ');
+    const gst = cust.gst && cust.gst !== 'N/A' && cust.gst !== '-' ? cust.gst : (cust.aadhar || '');
+
+    return { name, phone, address, gst };
+  };
+
+  // Find matching customer by query (name, mobile, phone, idCode)
+  const findMatchingCustomer = (search: string) => {
+    const term = search.trim().toLowerCase();
+    if (!term) return null;
+    return (
+      existingCustomers.find((c) => {
+        const cName = (c.name || '').trim().toLowerCase();
+        const cMobile = (c.mobile || '').trim().toLowerCase();
+        const cPhone = (c.phone || '').trim().toLowerCase();
+        const cId = (c.idCode || '').trim().toLowerCase();
+        return cName === term || cMobile === term || cPhone === term || cId === term;
+      }) || null
+    );
+  };
+
+  // Autofill fields from matching customer
+  const autofillFromCustomer = (cust: any) => {
+    const fields = getCustomerFields(cust);
+    if (fields.name) setManualName(fields.name);
+    setManualPhone(fields.phone);
+    setManualAddress(fields.address);
+    setManualGst(fields.gst);
+    setSelectedExistingCustomer(cust);
+  };
 
   // Add a single customer to target list
   const handleAddSingleCustomer = () => {
@@ -143,14 +187,53 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
     setErrorMsg('');
   };
 
-  // Add selected from autocomplete
+  // Autocomplete change handler
   const handleSelectAutocomplete = (_: any, opt: any | null) => {
-    setSelectedExistingCustomer(opt);
-    if (opt) {
-      setManualName(opt.name || '');
-      setManualPhone(opt.mobile && opt.mobile !== '-' ? opt.mobile : '');
-      setManualAddress(opt.address && opt.address !== '-' ? opt.address : '');
-      setManualGst(opt.gst && opt.gst !== 'N/A' ? opt.gst : '');
+    if (!opt) {
+      setSelectedExistingCustomer(null);
+      return;
+    }
+    if (typeof opt === 'string') {
+      const match = findMatchingCustomer(opt);
+      if (match) {
+        autofillFromCustomer(match);
+      } else {
+        setManualName(opt);
+        setSelectedExistingCustomer(null);
+      }
+    } else {
+      autofillFromCustomer(opt);
+    }
+  };
+
+  // Name input typing handler with instant match detection
+  const handleNameInputChange = (_: any, val: string, reason: string) => {
+    setManualName(val);
+    if (reason === 'input') {
+      const match = findMatchingCustomer(val);
+      if (match) {
+        autofillFromCustomer(match);
+      } else if (selectedExistingCustomer && val !== selectedExistingCustomer.name) {
+        setSelectedExistingCustomer(null);
+      }
+    }
+  };
+
+  // Name blur handler to auto-populate if exact match found
+  const handleNameInputBlur = () => {
+    if (!selectedExistingCustomer && manualName.trim()) {
+      const match = findMatchingCustomer(manualName);
+      if (match) {
+        autofillFromCustomer(match);
+      }
+    }
+  };
+
+  // Enter key down handler across inputs
+  const handleKeyDownInput = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddSingleCustomer();
     }
   };
 
@@ -221,7 +304,19 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
       if (!isNaN(parsed) && parsed > 0) startNum = parsed;
     }
 
-    return targetCustomers.map((c, idx) => {
+    const listToProject = [...targetCustomers];
+    if (targetCustomers.length === 0 && manualName.trim()) {
+      listToProject.push({
+        id: 'current_typing',
+        name: manualName.trim(),
+        phone: manualPhone.trim(),
+        mobile: manualPhone.trim(),
+        address: manualAddress.trim(),
+        gst: manualGst.trim(),
+      });
+    }
+
+    return listToProject.map((c, idx) => {
       const currentNum = startNum + idx;
       let billNoStr = String(currentNum);
       if (mode === 'GST') {
@@ -232,12 +327,26 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
         projectedBillNo: billNoStr,
       };
     });
-  }, [targetCustomers, startingBillNo, mode]);
+  }, [targetCustomers, startingBillNo, mode, manualName, manualPhone, manualAddress, manualGst]);
 
   // Execute bulk bill generation
   const handleExecuteDuplicate = async () => {
-    if (targetCustomers.length === 0) {
-      setErrorMsg('Please add at least one customer to duplicate the bill for.');
+    const finalTargets: TargetCustomerItem[] = [...targetCustomers];
+
+    // Auto-include currently typed customer if not already added to queue
+    if (manualName.trim()) {
+      finalTargets.push({
+        id: `target_${Date.now()}_${Math.random()}`,
+        name: manualName.trim(),
+        phone: manualPhone.trim(),
+        mobile: manualPhone.trim(),
+        address: manualAddress.trim(),
+        gst: manualGst.trim(),
+      });
+    }
+
+    if (finalTargets.length === 0) {
+      setErrorMsg('Please enter or select at least one customer to duplicate the bill for.');
       return;
     }
 
@@ -247,18 +356,24 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
     try {
       const payload = {
         templateBill,
-        customers: targetCustomers,
+        customers: finalTargets,
         year: selectedYear,
       };
 
-      const res = await ParticularsApi.bulkDuplicate(payload);
-      if (res && res.success) {
+      const res: any = await ParticularsApi.bulkDuplicate(payload);
+      const billsArray = Array.isArray(res) ? res : (res?.data || []);
+      const count = Array.isArray(res) ? res.length : (res?.count || billsArray.length || finalTargets.length);
+      const billNos = Array.isArray(res?.billNos) && res.billNos.length > 0
+        ? res.billNos
+        : billsArray.map((b: any) => b.billNo || '').filter(Boolean);
+
+      if (billsArray.length > 0 || count > 0 || res?.success) {
         setSuccessResult({
-          count: res.count || targetCustomers.length,
-          billNos: res.billNos || [],
+          count,
+          billNos,
         });
         if (onSuccess) {
-          onSuccess(res.data || []);
+          onSuccess(billsArray);
         }
       } else {
         throw new Error(res?.message || 'Failed to create duplicate bills');
@@ -453,7 +568,7 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                     display: 'grid',
                     gridTemplateColumns: {
                       xs: '1fr',
-                      sm: '1.2fr 1fr 1.2fr 1fr auto',
+                      sm: '1.4fr 1fr 1.3fr 1fr auto',
                     },
                     gap: 1,
                     alignItems: 'center',
@@ -463,18 +578,92 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                   <Autocomplete
                     size="small"
                     freeSolo
+                    openOnFocus
+                    autoHighlight
                     options={existingCustomers}
                     getOptionLabel={(opt: any) => (typeof opt === 'string' ? opt : opt.name || '')}
+                    filterOptions={(options, state) => {
+                      const input = state.inputValue.toLowerCase().trim();
+                      if (!input) return options;
+                      const digitsOnly = input.replace(/\D/g, '');
+                      return options.filter((opt) => {
+                        const name = (opt.name || '').toLowerCase();
+                        const mob = (opt.mobile || opt.phone || '').toLowerCase();
+                        const cleanMob = mob.replace(/\D/g, '');
+                        const addr = (opt.address || '').toLowerCase();
+                        const city = (opt.city || '').toLowerCase();
+                        const idCode = (opt.idCode || '').toLowerCase();
+                        const gst = (opt.gst || '').toLowerCase();
+
+                        return (
+                          name.includes(input) ||
+                          mob.includes(input) ||
+                          (digitsOnly.length >= 3 && cleanMob.includes(digitsOnly)) ||
+                          addr.includes(input) ||
+                          city.includes(input) ||
+                          idCode.includes(input) ||
+                          gst.includes(input)
+                        );
+                      });
+                    }}
+                    renderOption={(props, option) => {
+                      const { key, ...otherProps } = props;
+                      const isObj = typeof option === 'object' && option !== null;
+                      const name = isObj ? option.name : option;
+                      const phone = isObj ? (option.mobile || option.phone || '') : '';
+                      const addr = isObj ? (option.address || '') : '';
+                      const city = isObj ? (option.city || '') : '';
+                      const idCode = isObj ? (option.idCode || '') : '';
+
+                      const locationStr = [addr && addr !== '-' ? addr : '', city && city !== '-' ? city : ''].filter(Boolean).join(', ');
+
+                      return (
+                        <li
+                          key={key || (isObj ? option._id || option.id : option)}
+                          {...otherProps}
+                          style={{ padding: '6px 10px', borderBottom: '1px solid #F1F5F9', cursor: 'pointer' }}
+                        >
+                          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 0.2 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                                {idCode && (
+                                  <Typography sx={{ fontSize: '10.5px', fontWeight: 700, color: '#64748B', bgcolor: '#F1F5F9', px: 0.5, py: 0.1, borderRadius: '2px' }}>
+                                    {idCode}
+                                  </Typography>
+                                )}
+                                <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                                  {name}
+                                </Typography>
+                              </Box>
+                              {phone && phone !== '-' && (
+                                <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF', bgcolor: '#EFF6FF', px: 0.6, py: 0.1, borderRadius: '3px', border: '1px solid #BFDBFE' }}>
+                                  📞 {phone}
+                                </Typography>
+                              )}
+                            </Box>
+                            {locationStr && (
+                              <Typography sx={{ fontSize: '10.5px', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                📍 {locationStr}
+                              </Typography>
+                            )}
+                          </Box>
+                        </li>
+                      );
+                    }}
                     value={selectedExistingCustomer}
                     inputValue={manualName}
-                    onInputChange={(_, val) => setManualName(val)}
+                    onInputChange={handleNameInputChange}
                     onChange={handleSelectAutocomplete}
                     renderInput={(params) => (
                       <TextField
                         {...params}
-                        placeholder="Search / Enter Name *"
+                        placeholder="Search customer (Name, Phone, City)... *"
                         label="Customer Name"
-                        slotProps={{ inputLabel: { shrink: true, sx: { fontSize: '11px', fontWeight: 600 } } }}
+                        onBlur={handleNameInputBlur}
+                        onKeyDown={handleKeyDownInput}
+                        slotProps={{
+                          inputLabel: { shrink: true, sx: { fontSize: '11px', fontWeight: 600 } },
+                        }}
                         sx={{
                           '& .MuiOutlinedInput-root': { height: '32px', fontSize: '12px' },
                         }}
@@ -489,6 +678,7 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                     placeholder="Mobile No"
                     value={manualPhone}
                     onChange={(e) => setManualPhone(e.target.value)}
+                    onKeyDown={handleKeyDownInput}
                     slotProps={{ inputLabel: { shrink: true, sx: { fontSize: '11px', fontWeight: 600 } } }}
                     sx={{ '& .MuiOutlinedInput-root': { height: '32px', fontSize: '12px' } }}
                   />
@@ -500,6 +690,7 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                     placeholder="City / Address"
                     value={manualAddress}
                     onChange={(e) => setManualAddress(e.target.value)}
+                    onKeyDown={handleKeyDownInput}
                     slotProps={{ inputLabel: { shrink: true, sx: { fontSize: '11px', fontWeight: 600 } } }}
                     sx={{ '& .MuiOutlinedInput-root': { height: '32px', fontSize: '12px' } }}
                   />
@@ -511,6 +702,7 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                     placeholder="GSTIN (optional)"
                     value={manualGst}
                     onChange={(e) => setManualGst(e.target.value)}
+                    onKeyDown={handleKeyDownInput}
                     slotProps={{ inputLabel: { shrink: true, sx: { fontSize: '11px', fontWeight: 600 } } }}
                     sx={{ '& .MuiOutlinedInput-root': { height: '32px', fontSize: '12px' } }}
                   />
@@ -534,6 +726,18 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                   >
                     + Add
                   </Button>
+                </Box>
+
+                {/* Status / Tip Indicator */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.8, px: 0.5 }}>
+                  <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
+                    💡 Type or select existing customer to auto-fill Mobile, Address & GST. Press <strong style={{ color: '#0F172A' }}>Enter</strong> to quickly add.
+                  </Typography>
+                  {selectedExistingCustomer && (
+                    <Typography sx={{ fontSize: '11px', color: '#059669', fontWeight: 700 }}>
+                      ✓ Existing Customer Selected
+                    </Typography>
+                  )}
                 </Box>
               </Box>
 
@@ -642,9 +846,9 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
         {!successResult && (
           <DialogActions sx={{ px: 2, py: 1.2, bgcolor: '#F1F5F9', borderTop: '1px solid #E2E8F0', justifyContent: 'space-between' }}>
             <Typography sx={{ fontSize: '11.5px', color: '#64748B', fontWeight: 600 }}>
-              {targetCustomers.length > 0
-                ? `Ready to generate ${targetCustomers.length} duplicate bills.`
-                : 'Add one or more customers to enable generation.'}
+              {targetCustomers.length > 0 || manualName.trim()
+                ? `Ready to generate ${targetCustomers.length + (targetCustomers.length === 0 && manualName.trim() ? 1 : (manualName.trim() ? 1 : 0))} duplicate bill(s).`
+                : 'Enter or select a customer to enable generation.'}
             </Typography>
 
             <Box sx={{ display: 'flex', gap: 1 }}>
@@ -662,7 +866,7 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                 variant="contained"
                 size="small"
                 onClick={handleExecuteDuplicate}
-                disabled={submitting || targetCustomers.length === 0}
+                disabled={submitting || (targetCustomers.length === 0 && !manualName.trim())}
                 startIcon={submitting ? <CircularProgress size={14} color="inherit" /> : <ContentCopyRoundedIcon sx={{ fontSize: 15 }} />}
                 sx={{
                   bgcolor: '#1E40AF',
@@ -673,7 +877,9 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                   '&:hover': { bgcolor: '#1D4ED8' },
                 }}
               >
-                {submitting ? 'Generating Bills...' : `Generate ${targetCustomers.length} Bills`}
+                {submitting
+                  ? 'Generating Bills...'
+                  : `Generate ${Math.max(1, targetCustomers.length + (manualName.trim() && targetCustomers.length === 0 ? 1 : (manualName.trim() ? 1 : 0)))} Bill(s)`}
               </Button>
             </Box>
           </DialogActions>

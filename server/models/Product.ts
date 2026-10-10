@@ -29,7 +29,7 @@ const ProductSchema: Schema = new Schema(
       default: 'Retail',
       trim: true,
     },
-    year: { type: Schema.Types.Mixed, default: () => new Date().getFullYear(), index: true },
+    year: { type: Schema.Types.Mixed, default: () => new Date().getFullYear() },
   },
   { timestamps: true, strict: false }
 );

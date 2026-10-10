@@ -32,7 +32,7 @@ const InventorySchema: Schema = new Schema(
     mrp: { type: Number, default: 0 },
     costPrice: { type: Number, default: 0 },
     minStockAlert: { type: Number, default: 0 },
-    year: { type: Number, default: () => new Date().getFullYear(), index: true },
+    year: { type: Number, default: () => new Date().getFullYear() },
   },
   {
     timestamps: true,

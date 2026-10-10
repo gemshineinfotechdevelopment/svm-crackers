@@ -12,365 +12,713 @@ import {
   Paper,
   IconButton,
   Tooltip,
-  Chip,
+  Snackbar,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from '@mui/material';
-import PriceChangeRoundedIcon from '@mui/icons-material/PriceChangeRounded';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
+import TableViewRoundedIcon from '@mui/icons-material/TableViewRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
-import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
-import ModeEditOutlineRoundedIcon from '@mui/icons-material/ModeEditOutlineRounded';
-import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
-import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
+
 import { ProductSubPageHeader } from './ProductSubPageHeader';
 import { type ProductSubPage } from '../types/productSubPages';
 import { getActiveBillingYear, YEAR_CHANGE_EVENT } from '../utils/yearContext';
+import {
+  fetchPriceMaps,
+  syncPriceMaps,
+  DEFAULT_PRICE_MAP_NAMES,
+  REFERENCE_RETAIL_PRODUCTS,
+  PRICEMAP_CHANGE_EVENT,
+} from '../utils/priceMapStorage';
+import { type PriceMapRecord } from '../services/api';
 
 interface PriceMapMasterPageProps {
   onSubPageChange: (newPage: ProductSubPage) => void;
+  onSelectPriceMapForRate?: (priceMapName: string) => void;
 }
 
-interface PriceMapItem {
-  id: string;
-  ruleCode: string;
-  categoryOrItem: string;
-  type: 'Category-Wide' | 'Product-Specific';
-  baseFormula: string;
-  marginPercent: number;
-  mappedRate: number;
-  effectiveDate: string;
-  status: 'Active' | 'Draft';
-}
-
-export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({ onSubPageChange }) => {
+export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({
+  onSubPageChange,
+  onSelectPriceMapForRate,
+}) => {
   const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [priceMaps, setPriceMaps] = useState<PriceMapRecord[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  const [loading, setLoading] = useState(false);
 
-  // Sample initial mapping rules for immediate visual structure
-  const [rules] = useState<PriceMapItem[]>([
-    {
-      id: '1',
-      ruleCode: 'PMR-001',
-      categoryOrItem: 'Single Sound Crackers',
-      type: 'Category-Wide',
-      baseFormula: 'Cost + 25%',
-      marginPercent: 25,
-      mappedRate: 125,
-      effectiveDate: '01/01/2026',
-      status: 'Active',
-    },
-    {
-      id: '2',
-      ruleCode: 'PMR-002',
-      categoryOrItem: 'Ground Chakkars Special',
-      type: 'Product-Specific',
-      baseFormula: 'MRP - 15%',
-      marginPercent: 15,
-      mappedRate: 85,
-      effectiveDate: '01/01/2026',
-      status: 'Active',
-    },
-    {
-      id: '3',
-      ruleCode: 'PMR-003',
-      categoryOrItem: 'Flower Pots Deluxe',
-      type: 'Category-Wide',
-      baseFormula: 'Wholesale Base x 1.30',
-      marginPercent: 30,
-      mappedRate: 195,
-      effectiveDate: '01/01/2026',
-      status: 'Active',
-    },
-    {
-      id: '4',
-      ruleCode: 'PMR-004',
-      categoryOrItem: 'Fancy Aerial Shells 50 Shot',
-      type: 'Product-Specific',
-      baseFormula: 'Fixed Rate Tier A',
-      marginPercent: 20,
-      mappedRate: 650,
-      effectiveDate: '01/01/2026',
-      status: 'Draft',
-    },
-  ]);
+  // New Price Map Dialog
+  const [openAddDialog, setOpenAddDialog] = useState(false);
+  const [newMapName, setNewMapName] = useState('');
+
+  // Editing state
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingValue, setEditingValue] = useState('');
+
+  // Toast notification
+  const [toast, setToast] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
+  // Custom Delete Confirmation Dialog (no localhost alert)
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    open: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const loadData = async (year: number) => {
+    setLoading(true);
+    try {
+      const data = await fetchPriceMaps(year);
+      if (data && data.length > 0) {
+        setPriceMaps(data);
+      } else {
+        const initial = DEFAULT_PRICE_MAP_NAMES.map((name) => ({
+          name,
+          year,
+          rates: REFERENCE_RETAIL_PRODUCTS.map((r) => ({ ...r })),
+        }));
+        setPriceMaps(initial);
+      }
+    } catch (err) {
+      console.error('Error loading price maps:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const handleYearChange = (e: any) => {
-      if (e.detail?.year) setSelectedYear(e.detail.year);
-    };
-    window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
-    return () => window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
-  }, []);
+    loadData(selectedYear);
 
-  const filteredRules = rules.filter(
-    (r) =>
-      r.ruleCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.categoryOrItem.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+    const handleYearChange = (e: any) => {
+      if (e.detail?.year) {
+        setSelectedYear(e.detail.year);
+        loadData(e.detail.year);
+      }
+    };
+
+    const handlePriceMapUpdate = (e: any) => {
+      if (e.detail?.maps) {
+        setPriceMaps(e.detail.maps);
+      }
+    };
+
+    window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+    window.addEventListener(PRICEMAP_CHANGE_EVENT, handlePriceMapUpdate);
+
+    return () => {
+      window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+      window.removeEventListener(PRICEMAP_CHANGE_EVENT, handlePriceMapUpdate);
+    };
+  }, [selectedYear]);
+
+  // Handle Add New
+  const handleAddNew = () => {
+    setNewMapName('');
+    setOpenAddDialog(true);
+  };
+
+  const handleConfirmAdd = async () => {
+    const trimmed = newMapName.trim();
+    if (!trimmed) {
+      setToast({ open: true, message: 'Please enter a valid Price Map name', severity: 'error' });
+      return;
+    }
+
+    if (priceMaps.some((m) => m.name.toLowerCase() === trimmed.toLowerCase())) {
+      setToast({ open: true, message: `Price Map '${trimmed}' already exists`, severity: 'error' });
+      return;
+    }
+
+    const newEntry: PriceMapRecord = {
+      name: trimmed,
+      year: selectedYear,
+      rates: REFERENCE_RETAIL_PRODUCTS.map((r) => ({ ...r })),
+    };
+
+    const updated = [...priceMaps, newEntry];
+    setPriceMaps(updated);
+    setSelectedIndex(updated.length - 1);
+    setOpenAddDialog(false);
+    await syncPriceMaps(updated, selectedYear);
+    setToast({ open: true, message: `Price Map '${trimmed}' added successfully`, severity: 'success' });
+  };
+
+  // Handle Save
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const ok = await syncPriceMaps(priceMaps, selectedYear);
+      if (ok) {
+        setToast({ open: true, message: 'Price Map list saved successfully!', severity: 'success' });
+      } else {
+        setToast({ open: true, message: 'Saved locally (offline mode)', severity: 'info' });
+      }
+    } catch (err: any) {
+      setToast({ open: true, message: err.message || 'Error saving Price Maps', severity: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Delete with custom confirmation dialog
+  const handleDelete = () => {
+    if (priceMaps.length === 0) return;
+    const selectedItem = priceMaps[selectedIndex];
+    if (!selectedItem) return;
+
+    setDeleteConfirmDialog({
+      open: true,
+      title: 'Delete Price Map',
+      message: `Are you sure you want to delete '${selectedItem.name}'? This cannot be undone.`,
+      onConfirm: async () => {
+        const updated = priceMaps.filter((_, idx) => idx !== selectedIndex);
+        setPriceMaps(updated);
+        setSelectedIndex((prev) => Math.max(0, Math.min(prev, updated.length - 1)));
+        await syncPriceMaps(updated, selectedYear);
+        setDeleteConfirmDialog((prev) => ({ ...prev, open: false }));
+        setToast({ open: true, message: `Price Map '${selectedItem.name}' deleted`, severity: 'success' });
+      },
+    });
+  };
+
+  // Handle Double Click to open Product Price Map (Image 2)
+  const handleOpenProductPriceMap = (mapName?: string) => {
+    const targetName = mapName || priceMaps[selectedIndex]?.name || 'SVM';
+    localStorage.setItem('svm_selected_pricemap_name', targetName);
+    if (onSelectPriceMapForRate) {
+      onSelectPriceMapForRate(targetName);
+    }
+    onSubPageChange('product-price map');
+  };
+
+  // Inline edit save
+  const handleInlineEditSave = (index: number) => {
+    const trimmed = editingValue.trim();
+    if (trimmed && trimmed !== priceMaps[index].name) {
+      const updated = [...priceMaps];
+      updated[index] = { ...updated[index], name: trimmed };
+      setPriceMaps(updated);
+      syncPriceMaps(updated, selectedYear);
+    }
+    setEditingIndex(null);
+  };
 
   return (
     <Box sx={{ width: '100%', p: { xs: 1, sm: 1.5 }, bgcolor: '#D9E4F2', minHeight: 'calc(100vh - 70px)' }}>
-      {/* Outer Window Card */}
+      {/* Outer ERP Window Card */}
       <Box
         sx={{
           bgcolor: '#FFFFFF',
           border: '1px solid #9BB3CC',
           borderRadius: '4px',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
+          mb: 2,
         }}
       >
-        {/* Top Header with Dropdown */}
+        {/* Module Subpage Navigation Dropdown Header */}
         <ProductSubPageHeader
           currentSubPage="pricemap master"
           onSubPageChange={onSubPageChange}
           year={selectedYear}
           extraRightContent={
-            <Button
-              startIcon={<AddRoundedIcon sx={{ fontSize: 14 }} />}
-              size="small"
-              sx={{
-                height: '28px',
-                bgcolor: '#0284C7',
-                color: '#FFFFFF',
-                fontSize: '11.5px',
-                fontWeight: 700,
-                px: 1.2,
-                borderRadius: '3px',
-                textTransform: 'none',
-                '&:hover': { bgcolor: '#0369A1' },
-              }}
-            >
-              New Price Map Rule
-            </Button>
-          }
-        />
-
-        {/* Content Area */}
-        <Box sx={{ p: { xs: 1, sm: 1.5 }, bgcolor: '#F0F5FA' }}>
-          {/* User Instruction Info Alert Banner */}
-          <Alert
-            severity="info"
-            icon={<PriceChangeRoundedIcon sx={{ fontSize: 20, color: '#0284C7' }} />}
-            sx={{
-              mb: 1.5,
-              borderRadius: '3px',
-              border: '1px solid #93C5FD',
-              bgcolor: '#EFF6FF',
-              fontSize: '12.5px',
-              py: 0.5,
-              '& .MuiAlert-message': { width: '100%' },
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-              <Box>
-                <Typography sx={{ fontSize: '12.5px', fontWeight: 800, color: '#1E3A8A' }}>
-                  📌 Price Map Master (pricemap master) — Page Ready
-                </Typography>
-                <Typography sx={{ fontSize: '11.5px', color: '#334155' }}>
-                  This is the dedicated separate page for Price Map Master. Ready for your custom content, pricing columns, formula setup and data requirements!
-                </Typography>
-              </Box>
-              <Chip
-                size="small"
-                icon={<CheckCircleRoundedIcon sx={{ fontSize: '14px !important' }} />}
-                label="Module Active"
-                color="primary"
-                sx={{ height: '22px', fontSize: '11px', fontWeight: 700 }}
-              />
-            </Box>
-          </Alert>
-
-          {/* Quick Metrics Bar */}
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(4, 1fr)' },
-              gap: 1,
-              mb: 1.5,
-            }}
-          >
-            {[
-              { label: 'Active Price Maps', value: '4 Rules', color: '#0284C7', bg: '#E0F2FE' },
-              { label: 'Default Margin', value: '+ 25.00 %', color: '#16A34A', bg: '#DCFCE7' },
-              { label: 'Mapped Products', value: '184 Items', color: '#7C3AED', bg: '#F3E8FF' },
-              { label: 'Rate Multiplier', value: 'Standard Tier 1', color: '#EA580C', bg: '#FFEDD5' },
-            ].map((stat, i) => (
-              <Box
-                key={i}
-                sx={{
-                  bgcolor: '#FFFFFF',
-                  border: '1px solid #B0C4DE',
-                  borderRadius: '3px',
-                  p: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <Box>
-                  <Typography sx={{ fontSize: '10.5px', fontWeight: 600, color: '#64748B' }}>
-                    {stat.label}
-                  </Typography>
-                  <Typography sx={{ fontSize: '14px', fontWeight: 800, color: stat.color }}>
-                    {stat.value}
-                  </Typography>
-                </Box>
-                <TuneRoundedIcon sx={{ fontSize: 20, color: stat.color, opacity: 0.8 }} />
-              </Box>
-            ))}
-          </Box>
-
-          {/* Control Bar */}
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 1,
-              mb: 1,
-              bgcolor: '#FFFFFF',
-              border: '1px solid #B0C4DE',
-              borderRadius: '3px',
-              p: 0.8,
-              flexWrap: 'wrap',
-            }}
-          >
-            {/* Search */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SearchRoundedIcon sx={{ fontSize: 16, color: '#64748B' }} />
-              <input
-                type="text"
-                placeholder="Search rule code, category or item..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="erp-input"
-                style={{ width: '280px', fontSize: '12px' }}
-              />
-            </Box>
-
-            {/* Actions */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Button
-                startIcon={<FileDownloadRoundedIcon sx={{ fontSize: 13 }} />}
+                variant="contained"
                 size="small"
+                startIcon={<TableViewRoundedIcon sx={{ fontSize: 15 }} />}
+                onClick={() => handleOpenProductPriceMap()}
                 sx={{
                   height: '28px',
-                  bgcolor: '#F1F5F9',
-                  border: '1px solid #CBD5E1',
-                  color: '#334155',
-                  fontSize: '11px',
+                  bgcolor: '#EA580C',
+                  color: '#FFFFFF',
+                  fontSize: '11.5px',
                   fontWeight: 700,
-                  px: 1,
+                  px: 1.2,
                   borderRadius: '3px',
                   textTransform: 'none',
-                  '&:hover': { bgcolor: '#E2E8F0' },
+                  boxShadow: 'none',
+                  '&:hover': { bgcolor: '#C2410C' },
                 }}
               >
-                Export Excel
+                Open Product Price Map (Image 2)
               </Button>
-              <Tooltip title="Refresh mapping rules" arrow>
-                <IconButton size="small" sx={{ p: 0.4, border: '1px solid #CBD5E1' }}>
+              <Tooltip title="Refresh list" arrow>
+                <IconButton
+                  size="small"
+                  onClick={() => loadData(selectedYear)}
+                  sx={{ p: 0.4, border: '1px solid #CBD5E1', bgcolor: '#F8FAFC' }}
+                >
                   <RefreshRoundedIcon sx={{ fontSize: 16, color: '#1E3A8A' }} />
                 </IconButton>
               </Tooltip>
             </Box>
-          </Box>
+          }
+        />
 
-          {/* Table Container */}
-          <TableContainer
-            component={Paper}
-            elevation={0}
+        {/* Content Body: Centered Classic Windows Dialog Styled as Reference Image 1 */}
+        <Box
+          sx={{
+            p: { xs: 1.5, sm: 3 },
+            bgcolor: '#E4ECF5',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'flex-start',
+            minHeight: '480px',
+          }}
+        >
+          {/* Clean Price Map List Card Container */}
+          <Box
             sx={{
-              border: '1px solid #A8C2DC',
-              borderRadius: '3px',
-              maxHeight: 'calc(100vh - 290px)',
-              overflowY: 'auto',
+              width: { xs: '100%', sm: '420px', md: '460px' },
+              bgcolor: '#ECE9D8',
+              border: '1px solid #7F9DB9',
+              borderRadius: '4px',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              p: 1.5,
+              gap: 1,
             }}
           >
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow sx={{ '& th': { bgcolor: '#1E3A8A', color: '#FFFFFF', fontWeight: 800, fontSize: '11.5px', py: 0.7 } }}>
-                  <TableCell sx={{ width: '80px' }}>Rule ID</TableCell>
-                  <TableCell>Category / Item Target</TableCell>
-                  <TableCell sx={{ width: '150px' }}>Mapping Scope</TableCell>
-                  <TableCell sx={{ width: '180px' }}>Formula / Calculation</TableCell>
-                  <TableCell sx={{ width: '120px', textAlign: 'right' }}>Margin %</TableCell>
-                  <TableCell sx={{ width: '130px', textAlign: 'right' }}>Mapped Rate (₹)</TableCell>
-                  <TableCell sx={{ width: '120px' }}>Effective Date</TableCell>
-                  <TableCell sx={{ width: '100px', textAlign: 'center' }}>Status</TableCell>
-                  <TableCell sx={{ width: '90px', textAlign: 'center' }}>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredRules.map((rule, idx) => (
-                  <TableRow
-                    key={rule.id}
-                    hover
-                    sx={{
-                      bgcolor: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC',
-                      '& td': { fontSize: '11.5px', py: 0.6, borderBottom: '1px solid #E2E8F0' },
-                    }}
-                  >
-                    <TableCell sx={{ fontWeight: 800, color: '#0284C7' }}>{rule.ruleCode}</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: '#0F172A' }}>{rule.categoryOrItem}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={rule.type}
+            {/* Header Label: Price Map list */}
+            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#000000' }}>
+              Price Map list
+            </Typography>
+
+              {/* DataGridView Container (Matching Reference Image 1) */}
+              <TableContainer
+                component={Paper}
+                elevation={0}
+                sx={{
+                  border: '1px solid #7F9DB9',
+                  borderRadius: 0,
+                  bgcolor: '#9AAEC4',
+                  height: '240px',
+                  maxHeight: '240px',
+                  overflowY: 'auto',
+                }}
+              >
+                <Table size="small" stickyHeader sx={{ borderCollapse: 'collapse' }}>
+                  <TableHead>
+                    <TableRow>
+                      {/* Left Indicator Column Header */}
+                      <TableCell
                         sx={{
-                          height: '20px',
-                          fontSize: '10.5px',
-                          fontWeight: 700,
-                          bgcolor: rule.type === 'Category-Wide' ? '#E0F2FE' : '#FEF3C7',
-                          color: rule.type === 'Category-Wide' ? '#0369A1' : '#92400E',
+                          width: '26px',
+                          minWidth: '26px',
+                          p: 0,
+                          bgcolor: '#ECE9D8',
+                          borderRight: '1px solid #999999',
+                          borderBottom: '1px solid #999999',
                         }}
                       />
-                    </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569' }}>
-                      {rule.baseFormula}
-                    </TableCell>
-                    <TableCell sx={{ textAlign: 'right', fontWeight: 700, color: '#16A34A' }}>
-                      +{rule.marginPercent}%
-                    </TableCell>
-                    <TableCell sx={{ textAlign: 'right', fontWeight: 800, color: '#0F172A' }}>
-                      ₹{rule.mappedRate.toFixed(2)}
-                    </TableCell>
-                    <TableCell sx={{ color: '#64748B' }}>{rule.effectiveDate}</TableCell>
-                    <TableCell sx={{ textAlign: 'center' }}>
-                      <Chip
-                        size="small"
-                        label={rule.status}
+                      {/* PriceMapName Header */}
+                      <TableCell
                         sx={{
-                          height: '20px',
-                          fontSize: '10.5px',
-                          fontWeight: 700,
-                          bgcolor: rule.status === 'Active' ? '#DCFCE7' : '#F1F5F9',
-                          color: rule.status === 'Active' ? '#15803D' : '#64748B',
+                          bgcolor: '#ECE9D8',
+                          color: '#000000',
+                          fontWeight: 500,
+                          fontSize: '11.5px',
+                          py: 0.4,
+                          px: 1,
+                          borderBottom: '1px solid #999999',
+                          borderRight: '1px solid #D4D0C8',
                         }}
-                      />
-                    </TableCell>
-                    <TableCell sx={{ textAlign: 'center' }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
-                        <IconButton size="small" sx={{ p: 0.2, color: '#0284C7' }}>
-                          <ModeEditOutlineRoundedIcon sx={{ fontSize: 14 }} />
-                        </IconButton>
-                        <IconButton size="small" sx={{ p: 0.2, color: '#DC2626' }}>
-                          <DeleteOutlineRoundedIcon sx={{ fontSize: 14 }} />
-                        </IconButton>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                      >
+                        PriceMapName
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {priceMaps.map((item, idx) => {
+                      const isSelected = selectedIndex === idx;
+                      const isEditing = editingIndex === idx;
+
+                      return (
+                        <TableRow
+                          key={item.name + idx}
+                          onClick={() => setSelectedIndex(idx)}
+                          onDoubleClick={() => handleOpenProductPriceMap(item.name)}
+                          sx={{
+                            cursor: 'pointer',
+                            bgcolor: isSelected ? '#3399FF' : '#FFFFFF',
+                            '&:hover': {
+                              bgcolor: isSelected ? '#3399FF' : '#F5F5F5',
+                            },
+                          }}
+                        >
+                          {/* Row Indicator Cell with Arrow ▶ */}
+                          <TableCell
+                            sx={{
+                              width: '26px',
+                              minWidth: '26px',
+                              p: 0,
+                              textAlign: 'center',
+                              bgcolor: '#ECE9D8',
+                              borderRight: '1px solid #999999',
+                              borderBottom: '1px solid #E0E0E0',
+                              height: '22px',
+                            }}
+                          >
+                            {isSelected && (
+                              <PlayArrowRoundedIcon
+                                sx={{
+                                  fontSize: 12,
+                                  color: '#000000',
+                                  verticalAlign: 'middle',
+                                }}
+                              />
+                            )}
+                          </TableCell>
+
+                          {/* PriceMapName Value Cell */}
+                          <TableCell
+                            sx={{
+                              py: 0.3,
+                              px: 1,
+                              fontSize: '11.5px',
+                              fontWeight: 500,
+                              color: isSelected ? '#FFFFFF' : '#000000',
+                              borderBottom: '1px solid #E0E0E0',
+                              borderRight: '1px solid #E0E0E0',
+                              height: '22px',
+                              userSelect: 'none',
+                            }}
+                          >
+                            {isEditing ? (
+                              <input
+                                autoFocus
+                                value={editingValue}
+                                onChange={(e) => setEditingValue(e.target.value)}
+                                onBlur={() => handleInlineEditSave(idx)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleInlineEditSave(idx);
+                                  if (e.key === 'Escape') setEditingIndex(null);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  fontSize: '11.5px',
+                                  padding: '1px 3px',
+                                  border: '1px solid #0055EA',
+                                  outline: 'none',
+                                }}
+                              />
+                            ) : (
+                              <Box
+                                sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingIndex(idx);
+                                  setEditingValue(item.name);
+                                }}
+                              >
+                                <span>{item.name}</span>
+                                {isSelected && (
+                                  <Typography sx={{ fontSize: '9.5px', color: '#DCEBFA', fontStyle: 'italic', pr: 0.5 }}>
+                                    (Double-click to map)
+                                  </Typography>
+                                )}
+                              </Box>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+
+                    {/* Empty Fill Area to replicate Windows DataGridView look */}
+                    {Array.from({ length: Math.max(0, 7 - priceMaps.length) }).map((_, i) => (
+                      <TableRow key={`empty-${i}`}>
+                        <TableCell sx={{ width: '26px', bgcolor: '#ECE9D8', borderRight: '1px solid #999999', borderBottom: '1px solid #E0E0E0', height: '22px' }} />
+                        <TableCell sx={{ bgcolor: '#9AAEC4', borderBottom: '1px solid #8FA3BA', height: '22px' }} />
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {/* Action Buttons Row (Matching Image 1: Add New | Save | Delete) */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 1.5,
+                  pt: 1,
+                  pb: 0.5,
+                }}
+              >
+                {/* [ Add New ] Button */}
+                <Button
+                  variant="outlined"
+                  onClick={handleAddNew}
+                  sx={{
+                    minWidth: '78px',
+                    height: '24px',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    color: '#000000',
+                    background: 'linear-gradient(180deg, #F6F6F6 0%, #EAEAEA 50%, #DFDFDF 51%, #D2D2D2 100%)',
+                    border: '1px solid #707070',
+                    borderRadius: '2px',
+                    textTransform: 'none',
+                    '&:hover': {
+                      background: 'linear-gradient(180deg, #FFFFFF 0%, #F0F0F0 100%)',
+                      borderColor: '#3399FF',
+                    },
+                  }}
+                >
+                  Add New
+                </Button>
+
+                {/* [ Save ] Button (Highlighted with default focus box like in Image 1) */}
+                <Button
+                  variant="outlined"
+                  onClick={handleSave}
+                  disabled={loading}
+                  sx={{
+                    minWidth: '78px',
+                    height: '24px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: '#000000',
+                    background: 'linear-gradient(180deg, #F6F6F6 0%, #EAEAEA 50%, #DFDFDF 51%, #D2D2D2 100%)',
+                    border: '1.5px solid #3399FF',
+                    borderRadius: '2px',
+                    textTransform: 'none',
+                    boxShadow: '0 0 2px #3399FF',
+                    outline: '1px dotted #333333',
+                    outlineOffset: '-4px',
+                    '&:hover': {
+                      background: 'linear-gradient(180deg, #FFFFFF 0%, #F0F0F0 100%)',
+                      borderColor: '#0055EA',
+                    },
+                  }}
+                >
+                  Save
+                </Button>
+
+                {/* [ Delete ] Button */}
+                <Button
+                  variant="outlined"
+                  onClick={handleDelete}
+                  disabled={priceMaps.length === 0}
+                  sx={{
+                    minWidth: '78px',
+                    height: '24px',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    color: '#000000',
+                    background: 'linear-gradient(180deg, #F6F6F6 0%, #EAEAEA 50%, #DFDFDF 51%, #D2D2D2 100%)',
+                    border: '1px solid #707070',
+                    borderRadius: '2px',
+                    textTransform: 'none',
+                    '&:hover': {
+                      background: 'linear-gradient(180deg, #FFFFFF 0%, #F0F0F0 100%)',
+                      borderColor: '#DC2626',
+                      color: '#DC2626',
+                    },
+                  }}
+                >
+                  Delete
+                </Button>
+              </Box>
+
+              {/* Primary Button to choose the highlighted shop and open products */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', pt: 0.5 }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  onClick={() => handleOpenProductPriceMap(priceMaps[selectedIndex]?.name)}
+                  sx={{
+                    height: '32px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    bgcolor: '#0855DA',
+                    color: '#FFFFFF',
+                    textTransform: 'none',
+                    borderRadius: '3px',
+                    boxShadow: '0 2px 4px rgba(0, 85, 234, 0.3)',
+                    '&:hover': { bgcolor: '#0045BF' },
+                  }}
+                >
+                  👉 Choose "{priceMaps[selectedIndex]?.name || 'SVM'}" &amp; Open Products
+                </Button>
+              </Box>
+
+              {/* Informative helper footer */}
+              <Box sx={{ textAlign: 'center', pt: 0.5 }}>
+                <Typography sx={{ fontSize: '10.5px', color: '#64748B' }}>
+                  Select a Price Map and click <b>Save</b> or click the button above to view retail products &amp; rates.
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
         </Box>
-      </Box>
+
+      {/* Add New Price Map Modal Dialog */}
+      <Dialog
+        open={openAddDialog}
+        onClose={() => setOpenAddDialog(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '4px',
+              border: '2px solid #0055EA',
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            py: 1,
+            px: 1.5,
+            fontSize: '13px',
+            fontWeight: 700,
+            background: 'linear-gradient(180deg, #3A83F1 0%, #0855DA 100%)',
+            color: '#FFFFFF',
+          }}
+        >
+          Add New Price Map
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2, pb: 1, px: 2 }}>
+          <Typography sx={{ fontSize: '12px', mb: 1, color: '#334155' }}>
+            Enter the name of the new price map list (e.g., SVM, MSK, Retail Promo, Festival):
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            size="small"
+            placeholder="PriceMapName"
+            value={newMapName}
+            onChange={(e) => setNewMapName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleConfirmAdd();
+            }}
+            sx={{
+              '& input': { fontSize: '12.5px', py: 0.8 },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 1.5, pt: 0.5, bgcolor: '#F8FAFC' }}>
+          <Button
+            size="small"
+            onClick={() => setOpenAddDialog(false)}
+            sx={{ fontSize: '11px', textTransform: 'none' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={handleConfirmAdd}
+            sx={{
+              fontSize: '11px',
+              textTransform: 'none',
+              bgcolor: '#0855DA',
+              '&:hover': { bgcolor: '#0045BF' },
+            }}
+          >
+            Add Price Map
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Custom Delete Confirmation Dialog (replacing window.confirm localhost alert) */}
+      <Dialog
+        open={deleteConfirmDialog.open}
+        onClose={() => setDeleteConfirmDialog((prev) => ({ ...prev, open: false }))}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '4px',
+              border: '2px solid #DC2626',
+              boxShadow: '0 8px 24px rgba(220, 38, 38, 0.25)',
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            py: 1,
+            px: 1.5,
+            fontSize: '13px',
+            fontWeight: 700,
+            background: 'linear-gradient(180deg, #EF4444 0%, #DC2626 100%)',
+            color: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+          }}
+        >
+          <WarningAmberRoundedIcon sx={{ fontSize: 18 }} />
+          <span>{deleteConfirmDialog.title}</span>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2, pb: 1, px: 2 }}>
+          <Typography sx={{ fontSize: '12.5px', color: '#1E293B', fontWeight: 500, my: 1 }}>
+            {deleteConfirmDialog.message}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 1.5, pt: 0.5, bgcolor: '#F8FAFC' }}>
+          <Button
+            size="small"
+            onClick={() => setDeleteConfirmDialog((prev) => ({ ...prev, open: false }))}
+            sx={{ fontSize: '11px', textTransform: 'none', color: '#64748B' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={deleteConfirmDialog.onConfirm}
+            sx={{
+              fontSize: '11px',
+              textTransform: 'none',
+              bgcolor: '#DC2626',
+              '&:hover': { bgcolor: '#B91C1C' },
+            }}
+          >
+            Yes, Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Toast Feedback */}
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={3000}
+        onClose={() => setToast((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setToast((prev) => ({ ...prev, open: false }))}
+          severity={toast.severity}
+          sx={{ width: '100%', fontSize: '12px' }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
