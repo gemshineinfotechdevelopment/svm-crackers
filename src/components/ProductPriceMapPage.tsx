@@ -45,6 +45,7 @@ interface ProductPriceMapPageProps {
   onSubPageChange: (newPage: ProductSubPage) => void;
   initialPriceMapName?: string;
   currentSubPage?: ProductSubPage;
+  onSelectPriceMapForRate?: (priceMapName: string) => void;
 }
 
 interface DisplayRetailRow {

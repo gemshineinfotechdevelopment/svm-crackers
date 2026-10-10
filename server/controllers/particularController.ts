@@ -1108,6 +1108,11 @@ export const bulkDuplicateParticulars = async (req: Request, res: Response, next
           name: { $regex: new RegExp(`^${escapeRegex(trimmedCustName)}$`, 'i') },
         });
 
+        const custMobile = (cust.mobile || cust.phone || '').trim();
+        const custAddress = (cust.address || '').trim();
+        const custGst = (cust.gst || '').trim();
+        const custAadhar = (cust.aadhar || '').trim();
+
         if (!existingCustomer) {
           const allCusts = await Customer.find().sort({ createdAt: 1 });
           let maxId = 0;
@@ -1133,16 +1138,34 @@ export const bulkDuplicateParticulars = async (req: Request, res: Response, next
 
           await Customer.create({
             name: trimmedCustName,
-            mobile: cust.mobile || cust.phone || '-',
-            address: cust.address || '-',
-            gst: cust.gst || 'N/A',
-            aadhar: cust.aadhar || '',
-            avatarLetter: trimmedCustName.charAt(0).toUpperCase(),
+            mobile: custMobile || '-',
+            address: custAddress || '-',
+            gst: custGst || 'N/A',
+            aadhar: custAadhar || '',
+            avatarLetter: trimmedCustName.charAt(0).toUpperCase() || 'C',
             avatarBg: colorPair.bg,
             avatarColor: colorPair.color,
             idCode: `#${(maxId + 1).toString().padStart(4, '0')}`,
-            year: currentSystemYear,
+            year: targetYear || currentSystemYear,
           });
+        } else {
+          // If customer already exists, enrich missing phone/address/gst
+          let updated = false;
+          if (custMobile && (!existingCustomer.mobile || existingCustomer.mobile === '-')) {
+            existingCustomer.mobile = custMobile;
+            updated = true;
+          }
+          if (custAddress && (!existingCustomer.address || existingCustomer.address === '-')) {
+            existingCustomer.address = custAddress;
+            updated = true;
+          }
+          if (custGst && (!existingCustomer.gst || existingCustomer.gst === 'N/A' || existingCustomer.gst === '-')) {
+            existingCustomer.gst = custGst;
+            updated = true;
+          }
+          if (updated) {
+            await existingCustomer.save();
+          }
         }
       } catch (custSyncErr) {
         console.warn('[Bulk Customer Sync Error]:', custSyncErr);

@@ -372,6 +372,7 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
           count,
           billNos,
         });
+        window.dispatchEvent(new CustomEvent('apsara_customers_updated'));
         if (onSuccess) {
           onSuccess(billsArray);
         }

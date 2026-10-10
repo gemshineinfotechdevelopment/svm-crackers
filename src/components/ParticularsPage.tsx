@@ -148,11 +148,11 @@ interface ParticularsPageProps {
   onConvertToEstimate?: (billData?: any) => void;
 }
 
-const getInitialDateStr = (targetYear?: number) => {
+const getInitialDateStr = () => {
   const d = new Date();
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = targetYear || d.getFullYear();
+  const year = d.getFullYear();
   return `${day}-${month}-${year}`;
 };
 
@@ -199,7 +199,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
   // 1. Customer Info Left Box State
   const [customerNo, setCustomerNo] = useState<string>(() => initialDraft?.customerNo || '');
-  const [billDate, setBillDate] = useState<string>(() => initialDraft?.billDate || getInitialDateStr(selectedYear));
+  const [billDate, setBillDate] = useState<string>(() => initialDraft?.billDate || getInitialDateStr());
   const [billNo, setBillNo] = useState<string>(() => initialDraft?.billNo || '');
   const [rateType, setRateType] = useState<string>(() => initialDraft?.rateType || 'Befor Rate');
   const [customerGst, setCustomerGst] = useState<string>(() => initialDraft?.customerGst || '');
@@ -241,7 +241,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   // Session Helper: Apply session data to form inputs
   const applySessionToForm = (sess: ParticularDraftSession) => {
     setCustomerNo(sess.customerNo || '');
-    setBillDate(sess.billDate || getInitialDateStr(selectedYear));
+    setBillDate(sess.billDate || getInitialDateStr());
     setBillNo(sess.billNo || '');
     setRateType(sess.rateType || 'Befor Rate');
     setCustomerGst(sess.customerGst || '');
@@ -333,7 +333,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       title: `${mode === 'QUOTATION' ? 'Quotation' : 'Bill'} ${newIndex}`,
       mode,
       customerNo: '',
-      billDate: getInitialDateStr(selectedYear),
+      billDate: getInitialDateStr(),
       billNo: nextNum,
       rateType: 'Befor Rate',
       customerGst: '',
@@ -570,7 +570,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     const handleGlobalYear = (e: any) => {
       if (e.detail?.year && e.detail.year !== selectedYear) {
         setSelectedYear(e.detail.year);
-        setBillDate(getInitialDateStr(e.detail.year));
+        setBillDate(getInitialDateStr());
         loadOptions(e.detail.year);
       }
     };
@@ -580,6 +580,19 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Re-sync sessions if mode changes (ESTIMATE <-> QUOTATION)
+  useEffect(() => {
+    if (!editBillData) {
+      const data = getParticularSessions(mode);
+      setSessions(data.sessions);
+      setActiveSessionId(data.activeId);
+      const activeSess = data.sessions.find((s) => s.id === data.activeId) || data.sessions[0];
+      if (activeSess) {
+        applySessionToForm(activeSess);
+      }
+    }
+  }, [mode]);
 
   // Handle Edit Mode population
   useEffect(() => {

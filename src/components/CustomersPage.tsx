@@ -129,11 +129,17 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
       }
     };
 
+    const handleCustomersRefresh = () => {
+      fetchCustomers();
+    };
+
     window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
     window.addEventListener('apsara_bill_year_changed', handleYearChange);
+    window.addEventListener('apsara_customers_updated', handleCustomersRefresh);
     return () => {
       window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
       window.removeEventListener('apsara_bill_year_changed', handleYearChange);
+      window.removeEventListener('apsara_customers_updated', handleCustomersRefresh);
     };
   }, []);
 

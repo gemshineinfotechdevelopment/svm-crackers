@@ -17,7 +17,6 @@ import {
   LinearProgress,
 } from '@mui/material';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
-import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';

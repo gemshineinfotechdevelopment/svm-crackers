@@ -15,6 +15,7 @@ export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({
     <ProductPriceMapPage
       currentSubPage="pricemap master"
       onSubPageChange={onSubPageChange}
+      onSelectPriceMapForRate={onSelectPriceMapForRate}
     />
   );
 };

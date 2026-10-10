@@ -67,6 +67,14 @@ export interface GstDraftSession {
 const PARTICULAR_SESSIONS_PREFIX = 'svm_particular_sessions_';
 const GST_SESSIONS_PREFIX = 'svm_gst_sessions_';
 
+const getTodayDateStr = (): string => {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
 // Particular / Quotation Sessions
 export const getParticularSessions = (mode: 'ESTIMATE' | 'QUOTATION'): { sessions: ParticularDraftSession[]; activeId: string } => {
   try {
@@ -74,9 +82,13 @@ export const getParticularSessions = (mode: 'ESTIMATE' | 'QUOTATION'): { session
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.sessions) && parsed.sessions.length > 0) {
+        const enrichedSessions = parsed.sessions.map((s: ParticularDraftSession) => ({
+          ...s,
+          billDate: s.billDate || getTodayDateStr(),
+        }));
         return {
-          sessions: parsed.sessions,
-          activeId: parsed.activeId || parsed.sessions[0].id,
+          sessions: enrichedSessions,
+          activeId: parsed.activeId || enrichedSessions[0].id,
         };
       }
     }
@@ -89,7 +101,7 @@ export const getParticularSessions = (mode: 'ESTIMATE' | 'QUOTATION'): { session
     title: mode === 'QUOTATION' ? 'Quotation 1' : 'Bill 1',
     mode,
     customerNo: '',
-    billDate: '',
+    billDate: getTodayDateStr(),
     billNo: '',
     rateType: 'Befor Rate',
     customerGst: '',
@@ -128,9 +140,13 @@ export const getGstSessions = (): { sessions: GstDraftSession[]; activeId: strin
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.sessions) && parsed.sessions.length > 0) {
+        const enrichedGst = parsed.sessions.map((s: GstDraftSession) => ({
+          ...s,
+          billDate: s.billDate || getTodayDateStr(),
+        }));
         return {
-          sessions: parsed.sessions,
-          activeId: parsed.activeId || parsed.sessions[0].id,
+          sessions: enrichedGst,
+          activeId: parsed.activeId || enrichedGst[0].id,
         };
       }
     }
@@ -142,7 +158,7 @@ export const getGstSessions = (): { sessions: GstDraftSession[]; activeId: strin
     id: `gst_session_${Date.now()}_1`,
     title: 'Tax Bill 1',
     billNo: '',
-    billDate: '',
+    billDate: getTodayDateStr(),
     customerName: '',
     customerPhone: '',
     customerMobile: '',
