@@ -16,7 +16,6 @@ import {
   Chip,
 } from '@mui/material';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
-import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
@@ -35,13 +34,18 @@ export interface ProductSaleStat {
   productName: string;
   category: string;
   totalQuantity: number;      // Units sold
-  balanceQty: number;         // Balance remaining unit/stock
-  unit: string;               // Unit (Box, Case, Pkt, etc.)
   totalRevenue: number;
-  averageRate: number;
   billsCount: number;
   years: number[];
 }
+
+export const isQuotationBill = (bill: any): boolean => {
+  if (!bill) return false;
+  const bType = String(bill.billType || '').trim().toUpperCase();
+  const bNo = String(bill.billNo || '').trim().toUpperCase();
+  const invTitle = String(bill.invoiceTitle || '').trim().toUpperCase();
+  return bType === 'QUOTATION' || bNo.startsWith('QUO') || invTitle === 'QUOTATION';
+};
 
 export const extractBillYear = (bill: any): number => {
   if (bill.year) {
@@ -66,7 +70,7 @@ export const extractBillYear = (bill: any): number => {
 export const StockPage: FC = () => {
   const currentYear = getActiveBillingYear() || new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<string | number>(currentYear);
-  const [sortBy, setSortBy] = useState<'quantity' | 'balance' | 'revenue' | 'bills'>('quantity');
+  const [sortBy, setSortBy] = useState<'quantity' | 'revenue' | 'bills'>('quantity');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [loading, setLoading] = useState<boolean>(true);
@@ -78,6 +82,7 @@ export const StockPage: FC = () => {
   const availableYears = useMemo(() => {
     const yrs = new Set<number>();
     rawBills.forEach((b: any) => {
+      if (isQuotationBill(b)) return;
       const y = extractBillYear(b);
       if (y) yrs.add(y);
     });
@@ -106,7 +111,10 @@ export const StockPage: FC = () => {
       const billsList = Array.isArray(billsData) ? billsData : ((billsData as any)?.data || []);
       const prodsList = Array.isArray(productsData) ? productsData : ((productsData as any)?.data || []);
 
-      setRawBills(billsList);
+      // User requirement: Quotation should NEVER reflect in Stock! Only Estimate bills reflect in Stock.
+      const estimateBillsOnly = billsList.filter((b: any) => !isQuotationBill(b));
+
+      setRawBills(estimateBillsOnly);
       setRawProducts(prodsList);
 
       // Extract unique categories from real products
@@ -145,19 +153,9 @@ export const StockPage: FC = () => {
     }
   };
 
-  // Compute aggregated product sales statistics per year with real Balance Units
+  // Compute aggregated product sales statistics per year (ONLY for Estimate bills)
   const productStats = useMemo<ProductSaleStat[]>(() => {
-    // 1. Catalog map for balance quantity and unit of each product
-    const productCatalogMap = new Map<
-      string,
-      {
-        productName: string;
-        category: string;
-        balanceQty: number;
-        unit: string;
-        rate: number;
-      }
-    >();
+    const productCatalogMap = new Map<string, { productName: string; category: string }>();
 
     rawProducts.forEach((p: any) => {
       const rawName = String(p.name || '').trim();
@@ -167,9 +165,6 @@ export const StockPage: FC = () => {
         productCatalogMap.set(key, {
           productName: rawName,
           category: p.category || 'General',
-          balanceQty: typeof p.qty === 'number' ? p.qty : 1,
-          unit: p.unit || 'Box',
-          rate: Number(p.rate) || 0,
         });
       }
     });
@@ -180,16 +175,16 @@ export const StockPage: FC = () => {
         productName: string;
         category: string;
         totalQuantity: number;
-        balanceQty: number;
-        unit: string;
         totalRevenue: number;
         billsCount: number;
         years: Set<number>;
       }
     >();
 
-    // 2. Process actual bills from database
+    // Process actual Estimate bills from database (Quotation is strictly excluded)
     rawBills.forEach((bill: any) => {
+      if (isQuotationBill(bill)) return;
+
       const billYear = extractBillYear(bill);
       if (selectedYear !== 'ALL' && billYear !== Number(selectedYear)) {
         return;
@@ -211,8 +206,6 @@ export const StockPage: FC = () => {
             productName: catalogItem?.productName || name,
             category: catalogItem?.category || p.category || 'General',
             totalQuantity: 0,
-            balanceQty: catalogItem ? catalogItem.balanceQty : 0,
-            unit: catalogItem ? catalogItem.unit : (p.pktUnit || p.unit || 'Box'),
             totalRevenue: 0,
             billsCount: 0,
             years: new Set<number>(),
@@ -227,33 +220,13 @@ export const StockPage: FC = () => {
       }
     });
 
-    // 3. Also include catalog products so store owner sees all inventory balance units
-    productCatalogMap.forEach((catalogItem, key) => {
-      if (!statsMap.has(key)) {
-        statsMap.set(key, {
-          productName: catalogItem.productName,
-          category: catalogItem.category,
-          totalQuantity: 0,
-          balanceQty: catalogItem.balanceQty,
-          unit: catalogItem.unit,
-          totalRevenue: 0,
-          billsCount: 0,
-          years: new Set<number>(),
-        });
-      }
-    });
-
     const list = Array.from(statsMap.values()).map((item) => {
-      const avgRate = item.totalQuantity > 0 ? Math.round(item.totalRevenue / item.totalQuantity) : 0;
       return {
         rank: 1,
         productName: item.productName,
         category: item.category,
         totalQuantity: item.totalQuantity,
-        balanceQty: item.balanceQty,
-        unit: item.unit,
         totalRevenue: item.totalRevenue,
-        averageRate: avgRate,
         billsCount: item.billsCount,
         years: Array.from(item.years).sort((a, b) => b - a),
       };
@@ -262,7 +235,6 @@ export const StockPage: FC = () => {
     // Sort according to user preference
     list.sort((a, b) => {
       if (sortBy === 'quantity') return b.totalQuantity - a.totalQuantity;
-      if (sortBy === 'balance') return b.balanceQty - a.balanceQty;
       if (sortBy === 'revenue') return b.totalRevenue - a.totalRevenue;
       return b.billsCount - a.billsCount;
     });
@@ -286,39 +258,38 @@ export const StockPage: FC = () => {
     });
   }, [productStats, searchTerm, selectedCategory]);
 
-  // Summary Metrics including Total Balance Units
+  // Summary Metrics
   const summaryMetrics = useMemo(() => {
     const totalQty = productStats.reduce((sum, item) => sum + item.totalQuantity, 0);
     const totalRev = productStats.reduce((sum, item) => sum + item.totalRevenue, 0);
     const totalBills = productStats.reduce((sum, item) => sum + item.billsCount, 0);
-    const totalBalance = productStats.reduce((sum, item) => sum + item.balanceQty, 0);
     const topProduct = productStats[0] || null;
 
     return {
       totalQty,
       totalRev,
       totalBills,
-      totalBalance,
       topProduct,
       totalProductsCount: productStats.length,
     };
   }, [productStats]);
 
-  // Top seller per year overview cards (Only for years that actually exist in the database)
+  // Top seller per year overview cards (Only for Estimate bills in real database)
   const yearlyTopSellers = useMemo(() => {
     const yearsWithBills = availableYears.filter((yr) => {
-      return rawBills.some((b: any) => extractBillYear(b) === yr);
+      return rawBills.some((b: any) => !isQuotationBill(b) && extractBillYear(b) === yr);
     });
 
     const targetYears = yearsWithBills.length > 0 ? yearsWithBills : [getActiveBillingYear() || new Date().getFullYear()];
 
     return targetYears.map((yr) => {
-      let topName = 'No bills';
+      let topName = 'No sales recorded';
       let topQty = 0;
       let topRev = 0;
 
       const yearMap = new Map<string, { qty: number; rev: number }>();
       rawBills.forEach((b: any) => {
+        if (isQuotationBill(b)) return;
         const bYear = extractBillYear(b);
         if (bYear === yr && Array.isArray(b.products)) {
           b.products.forEach((p: any) => {
@@ -355,15 +326,13 @@ export const StockPage: FC = () => {
     });
   }, [rawBills, availableYears]);
 
-  // Export to Excel with Balance Unit
+  // Export to Excel
   const handleExportExcel = () => {
     const exportData = filteredStats.map((item) => ({
       Rank: item.rank,
       'Product Name': item.productName,
       Category: item.category,
       'Units Sold (Qty)': item.totalQuantity,
-      'Balance Unit': `${item.balanceQty} ${item.unit}`,
-      'Avg Rate (₹)': item.averageRate,
       'Total Revenue (₹)': item.totalRevenue,
       'Orders / Bills': item.billsCount,
       Year: selectedYear === 'ALL' ? 'All Years' : selectedYear,
@@ -375,7 +344,7 @@ export const StockPage: FC = () => {
     XLSX.writeFile(wb, `SVM_Crackers_Stock_Report_${selectedYear}.xlsx`);
   };
 
-  // Direct Print Report with Balance Unit
+  // Direct Print Report
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -407,8 +376,6 @@ export const StockPage: FC = () => {
                 <th>Product Name</th>
                 <th>Category</th>
                 <th class="text-right">Units Sold</th>
-                <th class="text-right">Balance Unit</th>
-                <th class="text-right">Avg Rate (₹)</th>
                 <th class="text-right">Total Revenue (₹)</th>
                 <th class="text-center">Orders</th>
               </tr>
@@ -422,8 +389,6 @@ export const StockPage: FC = () => {
                   <td><b>${item.productName}</b></td>
                   <td>${item.category}</td>
                   <td class="text-right"><b>${item.totalQuantity.toLocaleString('en-IN')}</b></td>
-                  <td class="text-right"><b>${item.balanceQty.toLocaleString('en-IN')} ${item.unit}</b></td>
-                  <td class="text-right">₹${item.averageRate.toLocaleString('en-IN')}</td>
                   <td class="text-right">₹${item.totalRevenue.toLocaleString('en-IN')}</td>
                   <td class="text-center">${item.billsCount}</td>
                 </tr>
@@ -574,11 +539,64 @@ export const StockPage: FC = () => {
         {/* Content Container */}
         <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: '#F4F7FB', display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* 1. Year Highlights Row (Top Selling product for real years) */}
-          <Box>
-            <Typography sx={{ fontSize: '12px', fontWeight: 800, color: '#334155', mb: 1, textTransform: 'uppercase' }}>
-              📅 Year-Wise Top Sold Product Snapshot (Click to Filter)
-            </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: `repeat(${Math.min(yearlyTopSellers.length, 3)}, 1fr)` }, gap: 1.5 }}>
+          <Box
+            sx={{
+              bgcolor: '#FFFFFF',
+              border: '1px solid #CBD5E1',
+              borderRadius: '8px',
+              p: 2,
+              boxShadow: '0 1px 4px rgba(15, 23, 42, 0.05)',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: '6px',
+                    bgcolor: '#FEF3C7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '16px',
+                  }}
+                >
+                  🏆
+                </Box>
+                <Box>
+                  <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                    Top Sold Products by Year
+                  </Typography>
+                  <Typography sx={{ fontSize: '11px', color: '#64748B', fontWeight: 500 }}>
+                    Click any year card below to filter sales analytics
+                  </Typography>
+                </Box>
+              </Box>
+              <Chip
+                label="Estimate Bills Only"
+                size="small"
+                sx={{
+                  bgcolor: '#ECFDF5',
+                  color: '#047857',
+                  border: '1px solid #A7F3D0',
+                  fontWeight: 700,
+                  fontSize: '10.5px',
+                  height: '22px',
+                }}
+              />
+            </Box>
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: `repeat(${Math.min(yearlyTopSellers.length, 3)}, 1fr)`,
+                },
+                gap: 1.5,
+              }}
+            >
               {yearlyTopSellers.map((item) => {
                 const isSelected = selectedYear === item.year;
                 return (
@@ -586,39 +604,101 @@ export const StockPage: FC = () => {
                     key={item.year}
                     onClick={() => handleYearChangeFromDropdown(item.year)}
                     sx={{
-                      bgcolor: isSelected ? '#EFF6FF' : '#FFFFFF',
-                      border: isSelected ? '2px solid #2563EB' : '1px solid #CBD5E1',
-                      borderRadius: '4px',
-                      p: 1.2,
+                      bgcolor: isSelected ? '#EFF6FF' : '#F8FAFC',
+                      border: isSelected ? '2px solid #1E40AF' : '1px solid #E2E8F0',
+                      borderRadius: '8px',
+                      p: 1.8,
                       cursor: 'pointer',
-                      boxShadow: isSelected ? '0 2px 8px rgba(37, 99, 235, 0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
-                      transition: 'all 0.15s ease',
+                      boxShadow: isSelected ? '0 4px 12px rgba(30, 64, 175, 0.12)' : '0 1px 3px rgba(0,0,0,0.03)',
+                      transition: 'all 0.2s ease',
+                      position: 'relative',
+                      overflow: 'hidden',
                       '&:hover': {
                         borderColor: '#2563EB',
-                        transform: 'translateY(-1px)',
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 6px 16px rgba(37, 99, 235, 0.12)',
                       },
                     }}
                   >
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                      <Chip
-                        size="small"
-                        label={`Year ${item.year}`}
-                        sx={{
-                          height: '20px',
-                          fontSize: '11px',
-                          fontWeight: 800,
-                          bgcolor: isSelected ? '#2563EB' : '#E2E8F0',
-                          color: isSelected ? '#FFFFFF' : '#334155',
-                        }}
-                      />
-                      <EmojiEventsRoundedIcon sx={{ fontSize: 16, color: '#F59E0B' }} />
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                        <Chip
+                          size="small"
+                          label={`Year ${item.year}`}
+                          sx={{
+                            height: '22px',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            bgcolor: isSelected ? '#1E40AF' : '#E2E8F0',
+                            color: isSelected ? '#FFFFFF' : '#334155',
+                          }}
+                        />
+                        {isSelected && (
+                          <Chip
+                            size="small"
+                            label="Active Filter ✓"
+                            sx={{
+                              height: '20px',
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              bgcolor: '#DBEAFE',
+                              color: '#1E40AF',
+                            }}
+                          />
+                        )}
+                      </Box>
+                      <EmojiEventsRoundedIcon sx={{ fontSize: 20, color: '#F59E0B' }} />
                     </Box>
-                    <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+
+                    <Typography
+                      sx={{
+                        fontSize: '14px',
+                        fontWeight: 800,
+                        color: '#0F172A',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        mb: 1.2,
+                      }}
+                      title={item.topName}
+                    >
                       {item.topName}
                     </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5, fontSize: '11.5px' }}>
-                      <span style={{ color: '#64748B' }}>Sold: <b style={{ color: '#16A34A' }}>{item.topQty.toLocaleString('en-IN')} units</b></span>
-                      <span style={{ color: '#64748B' }}>Revenue: <b style={{ color: '#1E40AF' }}>₹{item.topRev.toLocaleString('en-IN')}</b></span>
+
+                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+                      <Box
+                        sx={{
+                          bgcolor: '#ECFDF5',
+                          border: '1px solid #A7F3D0',
+                          borderRadius: '6px',
+                          p: '6px 8px',
+                          textAlign: 'center',
+                        }}
+                      >
+                        <Typography sx={{ fontSize: '10px', color: '#047857', fontWeight: 600, textTransform: 'uppercase' }}>
+                          Units Sold
+                        </Typography>
+                        <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#065F46' }}>
+                          🔥 {item.topQty.toLocaleString('en-IN')}
+                        </Typography>
+                      </Box>
+
+                      <Box
+                        sx={{
+                          bgcolor: '#EFF6FF',
+                          border: '1px solid #BFDBFE',
+                          borderRadius: '6px',
+                          p: '6px 8px',
+                          textAlign: 'center',
+                        }}
+                      >
+                        <Typography sx={{ fontSize: '10px', color: '#1D4ED8', fontWeight: 600, textTransform: 'uppercase' }}>
+                          Revenue
+                        </Typography>
+                        <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#1E40AF' }}>
+                          ₹{item.topRev.toLocaleString('en-IN')}
+                        </Typography>
+                      </Box>
                     </Box>
                   </Box>
                 );
@@ -626,29 +706,29 @@ export const StockPage: FC = () => {
             </Box>
           </Box>
 
-          {/* 2. Key Performance Metric Cards (Now including Total Balance Units) */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, gap: 1.5 }}>
+          {/* 2. Key Performance Metric Cards */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
             {/* 🏆 Top Product */}
             <Box
               sx={{
                 bgcolor: '#FFFFFF',
                 border: '1px solid #BFDBFE',
-                borderRadius: '4px',
-                p: 1.5,
+                borderRadius: '8px',
+                p: 1.8,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1.5,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
               }}
             >
-              <Box sx={{ p: 1, bgcolor: '#FEF3C7', borderRadius: '4px', display: 'flex' }}>
-                <EmojiEventsRoundedIcon sx={{ fontSize: 24, color: '#D97706' }} />
+              <Box sx={{ p: 1.2, bgcolor: '#FEF3C7', borderRadius: '8px', display: 'flex' }}>
+                <EmojiEventsRoundedIcon sx={{ fontSize: 26, color: '#D97706' }} />
               </Box>
               <Box sx={{ overflow: 'hidden' }}>
                 <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
-                  #1 Most Sold Product
+                  #1 Top Sold Product
                 </Typography>
-                <Typography sx={{ fontSize: '13.5px', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <Typography sx={{ fontSize: '14px', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {summaryMetrics.topProduct?.productName || 'None'}
                 </Typography>
                 <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#16A34A' }}>
@@ -662,55 +742,26 @@ export const StockPage: FC = () => {
               sx={{
                 bgcolor: '#FFFFFF',
                 border: '1px solid #BBF7D0',
-                borderRadius: '4px',
-                p: 1.5,
+                borderRadius: '8px',
+                p: 1.8,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1.5,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
               }}
             >
-              <Box sx={{ p: 1, bgcolor: '#DCFCE7', borderRadius: '4px', display: 'flex' }}>
-                <ShoppingBagRoundedIcon sx={{ fontSize: 24, color: '#16A34A' }} />
+              <Box sx={{ p: 1.2, bgcolor: '#DCFCE7', borderRadius: '8px', display: 'flex' }}>
+                <ShoppingBagRoundedIcon sx={{ fontSize: 26, color: '#16A34A' }} />
               </Box>
               <Box>
                 <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
                   Total Units Sold
                 </Typography>
-                <Typography sx={{ fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
+                <Typography sx={{ fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>
                   {summaryMetrics.totalQty.toLocaleString('en-IN')}
                 </Typography>
                 <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
                   Across {summaryMetrics.totalProductsCount} products
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* 🏬 Total Balance Units (Stock Available) */}
-            <Box
-              sx={{
-                bgcolor: '#FFFFFF',
-                border: '1px solid #93C5FD',
-                borderRadius: '4px',
-                p: 1.5,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-              }}
-            >
-              <Box sx={{ p: 1, bgcolor: '#EFF6FF', borderRadius: '4px', display: 'flex' }}>
-                <Inventory2RoundedIcon sx={{ fontSize: 24, color: '#1E40AF' }} />
-              </Box>
-              <Box>
-                <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
-                  Total Balance Units
-                </Typography>
-                <Typography sx={{ fontSize: '16px', fontWeight: 800, color: '#1E40AF' }}>
-                  {summaryMetrics.totalBalance.toLocaleString('en-IN')}
-                </Typography>
-                <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
-                  In stock across inventory
                 </Typography>
               </Box>
             </Box>
@@ -720,22 +771,22 @@ export const StockPage: FC = () => {
               sx={{
                 bgcolor: '#FFFFFF',
                 border: '1px solid #DDD6FE',
-                borderRadius: '4px',
-                p: 1.5,
+                borderRadius: '8px',
+                p: 1.8,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1.5,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
               }}
             >
-              <Box sx={{ p: 1, bgcolor: '#F3E8FF', borderRadius: '4px', display: 'flex' }}>
-                <MonetizationOnRoundedIcon sx={{ fontSize: 24, color: '#7C3AED' }} />
+              <Box sx={{ p: 1.2, bgcolor: '#F3E8FF', borderRadius: '8px', display: 'flex' }}>
+                <MonetizationOnRoundedIcon sx={{ fontSize: 26, color: '#7C3AED' }} />
               </Box>
               <Box>
                 <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
                   Total Sales Revenue
                 </Typography>
-                <Typography sx={{ fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
+                <Typography sx={{ fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>
                   ₹{summaryMetrics.totalRev.toLocaleString('en-IN')}
                 </Typography>
                 <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
@@ -749,26 +800,26 @@ export const StockPage: FC = () => {
               sx={{
                 bgcolor: '#FFFFFF',
                 border: '1px solid #FED7AA',
-                borderRadius: '4px',
-                p: 1.5,
+                borderRadius: '8px',
+                p: 1.8,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1.5,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
               }}
             >
-              <Box sx={{ p: 1, bgcolor: '#FFEDD5', borderRadius: '4px', display: 'flex' }}>
-                <ReceiptLongRoundedIcon sx={{ fontSize: 24, color: '#EA580C' }} />
+              <Box sx={{ p: 1.2, bgcolor: '#FFEDD5', borderRadius: '8px', display: 'flex' }}>
+                <ReceiptLongRoundedIcon sx={{ fontSize: 26, color: '#EA580C' }} />
               </Box>
               <Box>
                 <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
-                  Total Invoices Analyzed
+                  Total Estimate Bills
                 </Typography>
-                <Typography sx={{ fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
+                <Typography sx={{ fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>
                   {summaryMetrics.totalBills.toLocaleString('en-IN')}
                 </Typography>
                 <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
-                  Regular, Estimate &amp; GST bills
+                  Estimate bills only
                 </Typography>
               </Box>
             </Box>
@@ -866,7 +917,6 @@ export const StockPage: FC = () => {
                 }}
               >
                 <option value="quantity">🔥 Most Sold Units (Qty)</option>
-                <option value="balance">📦 Highest Balance Unit</option>
                 <option value="revenue">💰 Highest Revenue (₹)</option>
                 <option value="bills">🧾 Most Bills / Orders</option>
               </select>
@@ -894,18 +944,16 @@ export const StockPage: FC = () => {
                 <TableRow sx={{ '& th': { bgcolor: '#E2E8F0', color: '#0F172A', fontWeight: 800, fontSize: '11.5px', py: 0.8 } }}>
                   <TableCell align="center" sx={{ width: '60px' }}>Rank</TableCell>
                   <TableCell>Product Name</TableCell>
-                  <TableCell>Category</TableCell>
-                  <TableCell align="right" sx={{ width: '150px' }}>Units Sold (Qty)</TableCell>
-                  <TableCell align="right" sx={{ width: '140px' }}>Balance Unit</TableCell>
-                  <TableCell align="right" sx={{ width: '120px' }}>Avg Rate (₹)</TableCell>
-                  <TableCell align="right" sx={{ width: '140px' }}>Total Sales (₹)</TableCell>
-                  <TableCell align="center" sx={{ width: '100px' }}>Orders</TableCell>
+                  <TableCell sx={{ width: '150px' }}>Category</TableCell>
+                  <TableCell align="right" sx={{ width: '160px' }}>Units Sold (Qty)</TableCell>
+                  <TableCell align="right" sx={{ width: '160px' }}>Total Sales (₹)</TableCell>
+                  <TableCell align="center" sx={{ width: '110px' }}>Orders</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredStats.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#64748B', fontSize: '13px' }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#64748B', fontSize: '13px' }}>
                       No product sales records found matching the filter.
                     </TableCell>
                   </TableRow>
@@ -986,43 +1034,9 @@ export const StockPage: FC = () => {
                           </Typography>
                         </TableCell>
 
-                        {/* Balance Unit */}
-                        <TableCell align="right">
-                          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.6 }}>
-                            <Typography
-                              sx={{
-                                fontSize: '13px',
-                                fontWeight: 800,
-                                color: item.balanceQty > 0 ? '#1E40AF' : '#DC2626',
-                              }}
-                            >
-                              {item.balanceQty.toLocaleString('en-IN')}
-                            </Typography>
-                            <Chip
-                              size="small"
-                              label={item.unit}
-                              sx={{
-                                height: '18px',
-                                fontSize: '10px',
-                                fontWeight: 700,
-                                bgcolor: item.balanceQty > 0 ? '#EFF6FF' : '#FEF2F2',
-                                color: item.balanceQty > 0 ? '#1E40AF' : '#DC2626',
-                                border: item.balanceQty > 0 ? '1px solid #BFDBFE' : '1px solid #FECACA',
-                              }}
-                            />
-                          </Box>
-                        </TableCell>
-
-                        {/* Average Rate */}
-                        <TableCell align="right">
-                          <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>
-                            ₹{item.averageRate.toLocaleString('en-IN')}
-                          </Typography>
-                        </TableCell>
-
                         {/* Total Revenue */}
                         <TableCell align="right">
-                          <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#1E40AF' }}>
+                          <Typography sx={{ fontSize: '13.5px', fontWeight: 800, color: '#1E40AF' }}>
                             ₹{item.totalRevenue.toLocaleString('en-IN')}
                           </Typography>
                         </TableCell>
