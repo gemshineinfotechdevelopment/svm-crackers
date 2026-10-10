@@ -44,6 +44,7 @@ import {
 interface ProductPriceMapPageProps {
   onSubPageChange: (newPage: ProductSubPage) => void;
   initialPriceMapName?: string;
+  currentSubPage?: ProductSubPage;
 }
 
 interface DisplayRetailRow {
@@ -57,6 +58,7 @@ interface DisplayRetailRow {
 export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
   onSubPageChange,
   initialPriceMapName,
+  currentSubPage: propSubPage = 'pricemap master',
 }) => {
   const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
   const [priceMaps, setPriceMaps] = useState<PriceMapRecord[]>([]);
@@ -581,7 +583,7 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
       >
         {/* Module Subpage Navigation Dropdown Header */}
         <ProductSubPageHeader
-          currentSubPage="product-price map"
+          currentSubPage={propSubPage}
           onSubPageChange={onSubPageChange}
           year={selectedYear}
           extraRightContent={
@@ -605,7 +607,7 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
                     '&:hover': { bgcolor: '#EBF3FB', borderColor: '#0055EA' },
                   }}
                 >
-                  Choose Another Shop (Image 1)
+                  ← Back to Price Map List
                 </Button>
               ) : (
                 <Button
@@ -726,7 +728,10 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
                         return (
                           <TableRow
                             key={shopName + idx}
-                            onClick={() => setSelectedShopIndex(idx)}
+                            onClick={() => {
+                              setSelectedShopIndex(idx);
+                              handleSelectShop(shopName);
+                            }}
                             onDoubleClick={() => handleSelectShop(shopName)}
                             sx={{
                               cursor: 'pointer',
