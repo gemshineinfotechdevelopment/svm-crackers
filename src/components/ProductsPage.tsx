@@ -17,8 +17,6 @@ import {
   CircularProgress,
   Checkbox,
   Chip,
-  Tabs,
-  Tab,
   Snackbar,
   Alert,
 } from '@mui/material';
@@ -32,7 +30,6 @@ import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import ShoppingCartRoundedIcon from '@mui/icons-material/ShoppingCartRounded';
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
-import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
 import CategoryRoundedIcon from '@mui/icons-material/CategoryRounded';
 import * as XLSX from 'xlsx';
 import { ProductsApi, CategoriesApi } from '../services/api';
@@ -86,19 +83,12 @@ export const ProductsPage: FC<ProductsPageProps> = ({
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [activeTabType, setActiveTabType] = useState<'Retail' | 'Wholesale' | 'ALL'>(() => {
-    if (initialSubPage === 'product-whole sales') return 'Wholesale';
-    return 'Retail';
-  });
+  const activeTabType: 'Retail' | 'Wholesale' =
+    currentSubPage === 'product-whole sales' ? 'Wholesale' : 'Retail';
 
   const handleSubPageChange = (newPage: ProductSubPage) => {
     setCurrentSubPage(newPage);
     localStorage.setItem('svm_product_subpage', newPage);
-    if (newPage === 'product-Retail sales') {
-      setActiveTabType('Retail');
-    } else if (newPage === 'product-whole sales') {
-      setActiveTabType('Wholesale');
-    }
     if (onSubPageChangeProp) {
       onSubPageChangeProp(newPage);
     }
@@ -107,11 +97,6 @@ export const ProductsPage: FC<ProductsPageProps> = ({
   useEffect(() => {
     if (initialSubPage && initialSubPage !== currentSubPage) {
       setCurrentSubPage(initialSubPage);
-      if (initialSubPage === 'product-Retail sales') {
-        setActiveTabType('Retail');
-      } else if (initialSubPage === 'product-whole sales') {
-        setActiveTabType('Wholesale');
-      }
     }
   }, [initialSubPage]);
 
@@ -293,7 +278,6 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         p.name.toLowerCase().includes(term) ||
         (p.category && p.category.toLowerCase().includes(term)) ||
         String(p.slNo).includes(term) ||
-        String(p.rate).includes(term) ||
         (p.productType && p.productType.toLowerCase().includes(term));
       return matchesCategory && matchesSearch;
     });
@@ -749,15 +733,13 @@ export const ProductsPage: FC<ProductsPageProps> = ({
 
   // Download Sample Template with S.No starting from 1
   const handleDownloadSampleExcel = () => {
-    const currentMode = activeTabType === 'ALL' ? 'Retail' : activeTabType;
+    const currentMode = activeTabType;
     const sampleData = [
       {
         'S.No': 1,
         'Product Name': `${currentMode} 28 Chorsa Crackers`,
         'Category': 'Sound Crackers',
         'Unit': 'Box',
-        'MRP': 120,
-        'Rate': 95,
         'Product Type': currentMode,
       },
       {
@@ -765,8 +747,6 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         'Product Name': `${currentMode} Ground Chakkar Special (10 Pcs)`,
         'Category': 'Chakkars',
         'Unit': 'Box',
-        'MRP': 180,
-        'Rate': 140,
         'Product Type': currentMode,
       },
       {
@@ -774,8 +754,6 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         'Product Name': `${currentMode} Flower Pots Giant (10 Pcs)`,
         'Category': 'Flower Pots',
         'Unit': 'Box',
-        'MRP': 350,
-        'Rate': 280,
         'Product Type': currentMode,
       },
     ];
@@ -857,57 +835,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
           }
         />
 
-        {/* Tab Selector: Retail vs Wholesale vs All */}
-        <Box sx={{ bgcolor: '#F8FAFC', borderBottom: '1px solid #CBD5E1', px: 1.5, pt: 0.5 }}>
-          <Tabs
-            value={activeTabType}
-            onChange={(_, val) => {
-              setActiveTabType(val);
-              setSelectedIds([]);
-              if (val === 'Retail') {
-                setCurrentSubPage('product-Retail sales');
-                localStorage.setItem('svm_product_subpage', 'product-Retail sales');
-                if (onSubPageChangeProp) onSubPageChangeProp('product-Retail sales');
-              } else if (val === 'Wholesale') {
-                setCurrentSubPage('product-whole sales');
-                localStorage.setItem('svm_product_subpage', 'product-whole sales');
-                if (onSubPageChangeProp) onSubPageChangeProp('product-whole sales');
-              }
-            }}
-            textColor="primary"
-            indicatorColor="primary"
-            sx={{
-              minHeight: '36px',
-              '& .MuiTab-root': {
-                minHeight: '36px',
-                py: 0.5,
-                px: 2,
-                fontSize: '12px',
-                fontWeight: 700,
-                textTransform: 'none',
-              },
-            }}
-          >
-            <Tab
-              value="Retail"
-              icon={<ShoppingCartRoundedIcon sx={{ fontSize: 16 }} />}
-              iconPosition="start"
-              label={`🛒 Retail Products (S.No 1 to ${retailCount || 0})`}
-            />
-            <Tab
-              value="Wholesale"
-              icon={<StorefrontRoundedIcon sx={{ fontSize: 16 }} />}
-              iconPosition="start"
-              label={`🏢 Wholesale Products (S.No 1 to ${wholesaleCount || 0})`}
-            />
-            <Tab
-              value="ALL"
-              icon={<ViewListRoundedIcon sx={{ fontSize: 16 }} />}
-              iconPosition="start"
-              label={`📋 All Products (${products.length})`}
-            />
-          </Tabs>
-        </Box>
+
 
         {/* Inner Content Area */}
         <Box sx={{ p: { xs: 1, sm: 1.5 }, bgcolor: '#F0F5FA' }}>
@@ -1180,12 +1108,6 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                     <TableCell sx={{ width: '100px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Type
                     </TableCell>
-                    <TableCell sx={{ width: '90px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
-                      MRP (₹)
-                    </TableCell>
-                    <TableCell sx={{ width: '100px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
-                      Rate (₹)
-                    </TableCell>
                     <TableCell align="center" sx={{ width: '120px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Actions
                     </TableCell>
@@ -1194,13 +1116,13 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
+                      <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                         <CircularProgress size={24} sx={{ color: '#1E40AF' }} />
                       </TableCell>
                     </TableRow>
                   ) : filteredProducts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
+                      <TableCell colSpan={7} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
                         {searchTerm ? 'No products match your search.' : `No ${activeTabType} products found for year ${selectedYear}. Click "+ Add Product" or "Bulk Upload" to add.`}
                       </TableCell>
                     </TableRow>
@@ -1267,14 +1189,6 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                                       : '#15803D',
                               }}
                             />
-                          </TableCell>
-
-                          <TableCell sx={{ textAlign: 'right', fontSize: '12px', color: '#64748B' }}>
-                            {p.mrp ? `₹${p.mrp}` : '-'}
-                          </TableCell>
-
-                          <TableCell sx={{ textAlign: 'right', fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
-                            ₹{p.rate || 0}
                           </TableCell>
 
                           <TableCell align="center">
@@ -1512,38 +1426,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
               </select>
             </Box>
 
-            {/* Rates */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-              <Box>
-                <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
-                  MRP (₹):
-                </Typography>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={productMrp}
-                  onChange={(e) => setProductMrp(e.target.value)}
-                  className="erp-input"
-                  style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
-                />
-              </Box>
 
-              <Box>
-                <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
-                  Rate / Price (₹): *
-                </Typography>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={productRate}
-                  onChange={(e) => setProductRate(e.target.value)}
-                  className="erp-input"
-                  style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
-                />
-              </Box>
-            </Box>
           </Box>
         </DialogContent>
 
@@ -1806,7 +1689,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                 {uploadFileName ? `Selected: ${uploadFileName}` : 'Click here or Drag & Drop Excel/CSV File'}
               </Typography>
               <Typography sx={{ fontSize: '11px', color: '#64748B', mt: 0.5 }}>
-                Supports .xlsx, .xls, .csv files with columns: S.No, Product Name, Category, Unit, MRP, Rate
+                Supports .xlsx, .xls, .csv files with columns: S.No, Product Name, Category, Unit
               </Typography>
             </label>
           </Box>
@@ -1833,8 +1716,6 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                       <TableCell sx={{ fontSize: '11px', fontWeight: 700 }}>Name</TableCell>
                       <TableCell sx={{ fontSize: '11px', fontWeight: 700, width: '130px' }}>Category</TableCell>
                       <TableCell sx={{ fontSize: '11px', fontWeight: 700, width: '60px' }}>Unit</TableCell>
-                      <TableCell sx={{ fontSize: '11px', fontWeight: 700, width: '70px', textAlign: 'right' }}>MRP</TableCell>
-                      <TableCell sx={{ fontSize: '11px', fontWeight: 700, width: '70px', textAlign: 'right' }}>Rate</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1844,8 +1725,6 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                         <TableCell sx={{ fontWeight: 600 }}>{item.name}</TableCell>
                         <TableCell sx={{ color: '#1E40AF' }}>{item.category}</TableCell>
                         <TableCell>{item.unit}</TableCell>
-                        <TableCell sx={{ textAlign: 'right' }}>{item.mrp ? `₹${item.mrp}` : '-'}</TableCell>
-                        <TableCell sx={{ textAlign: 'right', fontWeight: 700 }}>₹{item.rate}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
