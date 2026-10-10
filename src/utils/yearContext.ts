@@ -182,3 +182,48 @@ export const validateDateMatchesYear = (dateStr: string, targetYear: number | st
 
   return true;
 };
+
+/**
+ * Calculates the Indian Financial Year start year (April 1 to March 31).
+ * Example: 01-04-2026 to 31-03-2027 => 2026
+ * On 01-04-2027, advances to 2027 and restarts bill numbering from 1.
+ */
+export const getCurrentFinancialYear = (dateInput?: string | Date): number => {
+  let d: Date;
+  if (!dateInput) {
+    d = new Date();
+  } else if (dateInput instanceof Date) {
+    d = dateInput;
+  } else {
+    const clean = String(dateInput).trim();
+    const dmy = clean.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);
+    if (dmy) {
+      let yr = parseInt(dmy[3], 10);
+      if (yr < 100) yr += 2000;
+      const mo = parseInt(dmy[2], 10) - 1;
+      const day = parseInt(dmy[1], 10);
+      d = new Date(yr, mo, day);
+    } else {
+      const ymd = clean.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+      if (ymd) {
+        const yr = parseInt(ymd[1], 10);
+        const mo = parseInt(ymd[2], 10) - 1;
+        const day = parseInt(ymd[3], 10);
+        d = new Date(yr, mo, day);
+      } else {
+        const parsed = Date.parse(clean);
+        d = isNaN(parsed) ? new Date() : new Date(parsed);
+      }
+    }
+  }
+
+  if (isNaN(d.getTime())) d = new Date();
+
+  const year = d.getFullYear();
+  const month = d.getMonth(); // 0 = Jan, 1 = Feb, 2 = Mar, 3 = Apr
+  // Before April 1st, belongs to previous year's FY
+  if (month < 3) {
+    return year - 1;
+  }
+  return year;
+};

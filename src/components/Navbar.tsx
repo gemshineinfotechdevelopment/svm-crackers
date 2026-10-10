@@ -27,6 +27,7 @@ import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
 import RequestQuoteRoundedIcon from '@mui/icons-material/RequestQuoteRounded';
+import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded';
 import defaultApsaraLogo from '../assets/logo.png';
 import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { HealthApi, API_BASE_URL } from '../services/api';
@@ -37,7 +38,7 @@ import {
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
 
-export type NavTab = 'All Customers' | 'Sales' | 'Product' | 'Quotation' | 'GST Bill' | 'Categories' | 'Price List' | 'Settings';
+export type NavTab = 'All Customers' | 'Sales' | 'Product' | 'Quotation' | 'GST Bill' | 'Despatch' | 'Categories' | 'Price List' | 'Settings';
 
 interface NavbarProps {
   activeTab?: NavTab;
@@ -137,6 +138,7 @@ export const Navbar: FC<NavbarProps> = ({
     { label: 'Price List', tabKey: 'Price List' },
     { label: 'Categories', tabKey: 'Categories' },
     { label: 'Tax Bill', tabKey: 'GST Bill' },
+    { label: 'Despatch', tabKey: 'Despatch' },
     { label: 'Settings', tabKey: 'Settings' },
   ];
 
@@ -466,9 +468,10 @@ export const Navbar: FC<NavbarProps> = ({
             { label: 'Sales (Quotation Bills)', tab: 'Sales' as NavTab, icon: <ReceiptLongRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Product Master', tab: 'Product' as NavTab, icon: <Inventory2RoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Quotation', tab: 'Quotation' as NavTab, icon: <RequestQuoteRoundedIcon sx={{ fontSize: 18 }} /> },
-            { label: 'Tax Bill (GST)', tab: 'GST Bill' as NavTab, icon: <DescriptionRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Price List', tab: 'Price List' as NavTab, icon: <FormatListNumberedRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Categories', tab: 'Categories' as NavTab, icon: <CategoryRoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Tax Bill (GST)', tab: 'GST Bill' as NavTab, icon: <DescriptionRoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Despatch', tab: 'Despatch' as NavTab, icon: <LocalShippingRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Settings', tab: 'Settings' as NavTab, icon: <SettingsRoundedIcon sx={{ fontSize: 18 }} /> },
           ].map((item) => (
             <ListItem key={item.label} disablePadding sx={{ mb: 0.5 }}>

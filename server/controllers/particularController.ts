@@ -7,7 +7,7 @@ import { Product } from '../models/Product';
 import { Inventory } from '../models/Inventory';
 import { escapeRegex, recalculateCustomerBalance } from '../utils/ledgerUtils';
 import { isCloudinaryConfigured, uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
-import { extractYearFromDate } from '../utils/yearUtils';
+import { extractYearFromDate, getFinancialYear } from '../utils/yearUtils';
 
 // Stock tracking is disabled
 const adjustStock = async (_products: any[], _multiplier: number): Promise<void> => {
@@ -85,7 +85,7 @@ export const getCustomerBillingHistory = async (req: Request, res: Response, nex
 
     const yearCounts = new Map<number, number>();
     for (const b of bills) {
-      const bYear = Number(b.year) || extractYearFromDate(b.date || b.createdAt, currentYear);
+      const bYear = Number(b.year) || getFinancialYear(b.date || b.createdAt, currentYear);
       if (bYear < currentYear) {
         yearCounts.set(bYear, (yearCounts.get(bYear) || 0) + 1);
       }
@@ -124,17 +124,23 @@ export const getParticularById = async (req: Request, res: Response, next: NextF
 export const getNextBillNo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const type = (req.query.type as string || '').toUpperCase();
-    const year = req.query.year ? parseInt(String(req.query.year), 10) : undefined;
-    const yearQuery = year && !isNaN(year) ? { year } : {};
+    const rawDate = req.query.date as string | undefined;
+    const inputYear = req.query.year ? parseInt(String(req.query.year), 10) : undefined;
+
+    // Determine target financial year (April 1 to March 31)
+    const financialYear = inputYear && !isNaN(inputYear)
+      ? inputYear
+      : getFinancialYear(rawDate || new Date());
 
     if (type === 'GST') {
-      const gstParticulars = await Particular.find({
-        ...yearQuery,
+      const allGstBills = await Particular.find({
         $or: [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }]
-      }, 'billNo');
+      }, 'billNo date year createdAt');
+
       let maxNum = 0;
-      for (const p of gstParticulars) {
-        if (p.billNo) {
+      for (const p of allGstBills) {
+        const billFY = p.year ? Number(p.year) : getFinancialYear(p.date || p.createdAt);
+        if (billFY === financialYear && p.billNo) {
           const match = p.billNo.match(/\d+/);
           if (match) {
             const num = parseInt(match[0], 10);
@@ -142,21 +148,23 @@ export const getNextBillNo = async (req: Request, res: Response, next: NextFunct
           }
         }
       }
+      // Starts from 1 (i.e. '0001') when April 01 arrives or for any fresh financial year
       const nextBillNo = (maxNum + 1).toString().padStart(4, '0');
-      res.status(200).json({ success: true, data: { nextBillNo } });
+      res.status(200).json({ success: true, data: { nextBillNo, financialYear } });
       return;
     }
 
-    const regularParticulars = await Particular.find({
-      ...yearQuery,
+    const allRegularBills = await Particular.find({
       $and: [
         { billType: { $ne: 'GST' } },
         { billNo: { $not: { $regex: /^GST/i } } }
       ]
-    }, 'billNo');
+    }, 'billNo date year createdAt');
+
     let maxNum = 0;
-    for (const p of regularParticulars) {
-      if (p.billNo) {
+    for (const p of allRegularBills) {
+      const billFY = p.year ? Number(p.year) : getFinancialYear(p.date || p.createdAt);
+      if (billFY === financialYear && p.billNo) {
         const match = p.billNo.match(/\d+/);
         if (match) {
           const num = parseInt(match[0], 10);
@@ -165,7 +173,7 @@ export const getNextBillNo = async (req: Request, res: Response, next: NextFunct
       }
     }
     const nextBillNo = (maxNum + 1).toString().padStart(4, '0');
-    res.status(200).json({ success: true, data: { nextBillNo } });
+    res.status(200).json({ success: true, data: { nextBillNo, financialYear } });
   } catch (error) {
     next(error);
   }
@@ -207,15 +215,20 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       roundOff,
     } = req.body;
 
+    const rawDate = date || new Date().toISOString().split('T')[0];
+    const dateFY = getFinancialYear(rawDate);
+    const targetYear = req.body.year ? Number(req.body.year) : dateFY;
+
     let finalBillNo = billNo ? String(billNo).trim() : '';
     if (!finalBillNo) {
       if (billType === 'GST') {
         const gstParticulars = await Particular.find({
           $or: [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }]
-        }, 'billNo');
+        }, 'billNo date year createdAt');
         let maxNum = 0;
         for (const p of gstParticulars) {
-          if (p.billNo) {
+          const bFY = p.year ? Number(p.year) : getFinancialYear(p.date || p.createdAt);
+          if (bFY === targetYear && p.billNo) {
             const match = p.billNo.match(/\d+/);
             if (match) {
               const num = parseInt(match[0], 10);
@@ -230,10 +243,11 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
             { billType: { $ne: 'GST' } },
             { billNo: { $not: { $regex: /^GST/i } } }
           ]
-        }, 'billNo');
+        }, 'billNo date year createdAt');
         let maxNum = 0;
         for (const p of regularParticulars) {
-          if (p.billNo) {
+          const bFY = p.year ? Number(p.year) : getFinancialYear(p.date || p.createdAt);
+          if (bFY === targetYear && p.billNo) {
             const match = p.billNo.match(/\d+/);
             if (match) {
               const num = parseInt(match[0], 10);
@@ -321,14 +335,10 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       computedStatus = 'PARTIAL';
     }
 
-    const rawDate = date || new Date().toISOString().split('T')[0];
-    const dateYear = extractYearFromDate(rawDate);
-    const targetYear = req.body.year ? Number(req.body.year) : dateYear;
-
-    if (req.body.year && dateYear !== Number(req.body.year)) {
+    if (req.body.year && dateFY !== Number(req.body.year)) {
       res.status(400).json({
         success: false,
-        error: `Bill date does not belong to the selected year (${req.body.year}). Please select a date from ${req.body.year}.`,
+        error: `Bill date does not belong to the selected financial year (${req.body.year}). Please select a date from financial year ${req.body.year}.`,
       });
       return;
     }

@@ -43,6 +43,7 @@ import { numberToIndianWords } from '../utils/numberToWords';
 import {
   getActiveBillingYear,
   validateDateMatchesYear,
+  getCurrentFinancialYear,
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
 import { getSelectedBillYear } from '../utils/billYearUtils';
@@ -149,7 +150,7 @@ export const GstBillPage: FC = () => {
   const [productOptions, setProductOptions] = useState<ProductCatalogOption[]>([]);
 
   // 1. Bill Info State (Top Left Box)
-  const [billNo, setBillNo] = useState<string>('292');
+  const [billNo, setBillNo] = useState<string>('0001');
   const [billDate, setBillDate] = useState<string>(getTodayDateStr);
   const billDatePickerRef = useRef<HTMLInputElement>(null);
   const lrDatePickerRef = useRef<HTMLInputElement>(null);
@@ -366,19 +367,26 @@ export const GstBillPage: FC = () => {
     }
   };
 
-  const fetchNextGstBillNo = async (targetYear: number | string = selectedYear) => {
+  const fetchNextGstBillNo = async (targetYear?: number | string, targetDate?: string) => {
     try {
-      const res = await ParticularsApi.getNextBillNo('GST', targetYear);
+      const dateForFY = targetDate || billDate || getTodayDateStr();
+      const effectiveFY = targetYear || getCurrentFinancialYear(dateForFY);
+      const res = await ParticularsApi.getNextBillNo('GST', effectiveFY);
       const rawNo = (res && typeof res === 'object' && 'nextBillNo' in res) ? res.nextBillNo : res;
       if (typeof rawNo === 'string' && rawNo.trim()) {
         const cleanNo = rawNo.replace(/^GST[-_ ]*/i, '');
-        setBillNo(cleanNo || '292');
+        setBillNo(cleanNo || '0001');
       } else {
-        setBillNo('292');
+        setBillNo('0001');
       }
     } catch {
-      setBillNo('292');
+      setBillNo('0001');
     }
+  };
+
+  const handleBillDateChange = (newDateStr: string) => {
+    setBillDate(newDateStr);
+    fetchNextGstBillNo(undefined, newDateStr);
   };
 
   // Fetch History Bills
@@ -1078,7 +1086,7 @@ export const GstBillPage: FC = () => {
                       <input
                         type="text"
                         value={billDate}
-                        onChange={(e) => setBillDate(e.target.value)}
+                        onChange={(e) => handleBillDateChange(e.target.value)}
                         placeholder="DD-MM-YYYY"
                         style={{
                           border: 'none',
@@ -1113,7 +1121,7 @@ export const GstBillPage: FC = () => {
                         value={toIsoDate(billDate)}
                         onChange={(e) => {
                           if (e.target.value) {
-                            setBillDate(fromIsoDate(e.target.value));
+                            handleBillDateChange(fromIsoDate(e.target.value));
                           }
                         }}
                         tabIndex={-1}

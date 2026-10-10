@@ -11,6 +11,7 @@ import { AllCustomersPage } from './components/AllCustomersPage';
 import { AddCustomerPage } from './components/AddCustomerPage';
 import { ParticularsPage } from './components/ParticularsPage';
 import { GstBillPage } from './components/GstBillPage';
+import { DespatchPage } from './components/DespatchPage';
 import { SettingsPage, getStoredSettings, DEFAULT_COMPANY_SETTINGS } from './components/SettingsPage';
 import { SettingsApi } from './services/api';
 import { YearRestrictionDialog } from './components/YearRestrictionDialog';
@@ -18,7 +19,7 @@ import { YearRestrictionDialog } from './components/YearRestrictionDialog';
 const ACTIVE_TAB_KEY = 'apsara_active_tab';
 const CUSTOMER_SUBVIEW_KEY = 'apsara_customer_subview';
 
-const VALID_TABS = ['All Customers', 'Sales', 'Product', 'Quotation', 'GST Bill', 'Categories', 'Price List', 'Settings'] as const;
+const VALID_TABS = ['All Customers', 'Sales', 'Product', 'Quotation', 'GST Bill', 'Despatch', 'Categories', 'Price List', 'Settings'] as const;
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -201,6 +202,9 @@ function App() {
 
           {/* GST Bill Tab */}
           {activeTab === 'GST Bill' && <GstBillPage />}
+
+          {/* Despatch Tab */}
+          {activeTab === 'Despatch' && <DespatchPage />}
 
           {/* Categories Tab */}
           {activeTab === 'Categories' && <CategoriesPage />}
