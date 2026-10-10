@@ -302,7 +302,7 @@ export const QuotationPage: FC<QuotationPageProps> = ({
             <RequestQuoteRoundedIcon sx={{ fontSize: 22 }} />
           </Box>
           <Box>
-            <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 1 }}>
               Quotation Management
               <Chip
                 label="Sample Pricing / No Sales Impact"
@@ -315,7 +315,7 @@ export const QuotationPage: FC<QuotationPageProps> = ({
                   height: '20px',
                 }}
               />
-            </Typography>
+            </Box>
             <Typography sx={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>
               Add sample products & calculate prices for customers. Does NOT add to Sales until converted to Estimate / Bill.
             </Typography>
