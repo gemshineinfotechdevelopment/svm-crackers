@@ -16,6 +16,7 @@ import {
   Chip,
 } from '@mui/material';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
+import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
@@ -33,7 +34,9 @@ export interface ProductSaleStat {
   rank: number;
   productName: string;
   category: string;
-  totalQuantity: number;
+  totalQuantity: number;      // Units sold
+  balanceQty: number;         // Balance remaining unit/stock
+  unit: string;               // Unit (Box, Case, Pkt, etc.)
   totalRevenue: number;
   averageRate: number;
   billsCount: number;
@@ -63,11 +66,12 @@ export const extractBillYear = (bill: any): number => {
 export const StockPage: FC = () => {
   const currentYear = getActiveBillingYear() || new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<string | number>(currentYear);
-  const [sortBy, setSortBy] = useState<'quantity' | 'revenue' | 'bills'>('quantity');
+  const [sortBy, setSortBy] = useState<'quantity' | 'balance' | 'revenue' | 'bills'>('quantity');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [loading, setLoading] = useState<boolean>(true);
   const [rawBills, setRawBills] = useState<any[]>([]);
+  const [rawProducts, setRawProducts] = useState<any[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
 
   // Dynamically resolve only real years present in actual bills
@@ -99,18 +103,19 @@ export const StockPage: FC = () => {
         ProductsApi.getAll().catch(() => []),
       ]);
 
-      const billsList = Array.isArray(billsData) ? billsData : [];
+      const billsList = Array.isArray(billsData) ? billsData : (billsData?.data || []);
+      const prodsList = Array.isArray(productsData) ? productsData : (productsData?.data || []);
+
       setRawBills(billsList);
+      setRawProducts(prodsList);
 
       // Extract unique categories from real products
       const cats = new Set<string>();
-      if (Array.isArray(productsData)) {
-        productsData.forEach((p: any) => {
-          if (p.category && String(p.category).trim() !== '') {
-            cats.add(String(p.category).trim());
-          }
-        });
-      }
+      prodsList.forEach((p: any) => {
+        if (p.category && String(p.category).trim() !== '') {
+          cats.add(String(p.category).trim());
+        }
+      });
       setAllCategories(Array.from(cats));
     } catch (err) {
       console.error('Error loading stock sales data:', err);
@@ -140,21 +145,50 @@ export const StockPage: FC = () => {
     }
   };
 
-  // Compute aggregated product sales statistics per year (from REAL bills only)
+  // Compute aggregated product sales statistics per year with real Balance Units
   const productStats = useMemo<ProductSaleStat[]>(() => {
+    // 1. Catalog map for balance quantity and unit of each product
+    const productCatalogMap = new Map<
+      string,
+      {
+        productName: string;
+        category: string;
+        balanceQty: number;
+        unit: string;
+        rate: number;
+      }
+    >();
+
+    rawProducts.forEach((p: any) => {
+      const rawName = String(p.name || '').trim();
+      if (!rawName) return;
+      const key = rawName.toLowerCase();
+      if (!productCatalogMap.has(key)) {
+        productCatalogMap.set(key, {
+          productName: rawName,
+          category: p.category || 'General',
+          balanceQty: typeof p.qty === 'number' ? p.qty : 1,
+          unit: p.unit || 'Box',
+          rate: Number(p.rate) || 0,
+        });
+      }
+    });
+
     const statsMap = new Map<
       string,
       {
         productName: string;
         category: string;
         totalQuantity: number;
+        balanceQty: number;
+        unit: string;
         totalRevenue: number;
         billsCount: number;
         years: Set<number>;
       }
     >();
 
-    // Process actual bills from database
+    // 2. Process actual bills from database
     rawBills.forEach((bill: any) => {
       const billYear = extractBillYear(bill);
       if (selectedYear !== 'ALL' && billYear !== Number(selectedYear)) {
@@ -171,10 +205,14 @@ export const StockPage: FC = () => {
           const amount = Number(p.amount) || qty * rate;
 
           const key = name.toLowerCase();
+          const catalogItem = productCatalogMap.get(key);
+
           const existing = statsMap.get(key) || {
-            productName: name,
-            category: p.category || 'General',
+            productName: catalogItem?.productName || name,
+            category: catalogItem?.category || p.category || 'General',
             totalQuantity: 0,
+            balanceQty: catalogItem ? catalogItem.balanceQty : 0,
+            unit: catalogItem ? catalogItem.unit : (p.pktUnit || p.unit || 'Box'),
             totalRevenue: 0,
             billsCount: 0,
             years: new Set<number>(),
@@ -189,6 +227,22 @@ export const StockPage: FC = () => {
       }
     });
 
+    // 3. Also include catalog products so store owner sees all inventory balance units
+    productCatalogMap.forEach((catalogItem, key) => {
+      if (!statsMap.has(key)) {
+        statsMap.set(key, {
+          productName: catalogItem.productName,
+          category: catalogItem.category,
+          totalQuantity: 0,
+          balanceQty: catalogItem.balanceQty,
+          unit: catalogItem.unit,
+          totalRevenue: 0,
+          billsCount: 0,
+          years: new Set<number>(),
+        });
+      }
+    });
+
     const list = Array.from(statsMap.values()).map((item) => {
       const avgRate = item.totalQuantity > 0 ? Math.round(item.totalRevenue / item.totalQuantity) : 0;
       return {
@@ -196,6 +250,8 @@ export const StockPage: FC = () => {
         productName: item.productName,
         category: item.category,
         totalQuantity: item.totalQuantity,
+        balanceQty: item.balanceQty,
+        unit: item.unit,
         totalRevenue: item.totalRevenue,
         averageRate: avgRate,
         billsCount: item.billsCount,
@@ -203,9 +259,10 @@ export const StockPage: FC = () => {
       };
     });
 
-    // Sort according to user preference (Default: Quantity Sold descending)
+    // Sort according to user preference
     list.sort((a, b) => {
       if (sortBy === 'quantity') return b.totalQuantity - a.totalQuantity;
+      if (sortBy === 'balance') return b.balanceQty - a.balanceQty;
       if (sortBy === 'revenue') return b.totalRevenue - a.totalRevenue;
       return b.billsCount - a.billsCount;
     });
@@ -215,7 +272,7 @@ export const StockPage: FC = () => {
       ...item,
       rank: index + 1,
     }));
-  }, [rawBills, selectedYear, sortBy]);
+  }, [rawBills, rawProducts, selectedYear, sortBy]);
 
   // Filtered stats by search term and category
   const filteredStats = useMemo(() => {
@@ -229,17 +286,19 @@ export const StockPage: FC = () => {
     });
   }, [productStats, searchTerm, selectedCategory]);
 
-  // Summary Metrics
+  // Summary Metrics including Total Balance Units
   const summaryMetrics = useMemo(() => {
     const totalQty = productStats.reduce((sum, item) => sum + item.totalQuantity, 0);
     const totalRev = productStats.reduce((sum, item) => sum + item.totalRevenue, 0);
     const totalBills = productStats.reduce((sum, item) => sum + item.billsCount, 0);
+    const totalBalance = productStats.reduce((sum, item) => sum + item.balanceQty, 0);
     const topProduct = productStats[0] || null;
 
     return {
       totalQty,
       totalRev,
       totalBills,
+      totalBalance,
       topProduct,
       totalProductsCount: productStats.length,
     };
@@ -296,13 +355,14 @@ export const StockPage: FC = () => {
     });
   }, [rawBills, availableYears]);
 
-  // Export to Excel (Without Sales Share)
+  // Export to Excel with Balance Unit
   const handleExportExcel = () => {
     const exportData = filteredStats.map((item) => ({
       Rank: item.rank,
       'Product Name': item.productName,
       Category: item.category,
       'Units Sold (Qty)': item.totalQuantity,
+      'Balance Unit': `${item.balanceQty} ${item.unit}`,
       'Avg Rate (₹)': item.averageRate,
       'Total Revenue (₹)': item.totalRevenue,
       'Orders / Bills': item.billsCount,
@@ -311,11 +371,11 @@ export const StockPage: FC = () => {
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Top Selling Products');
-    XLSX.writeFile(wb, `SVM_Crackers_Stock_Sales_Report_${selectedYear}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, 'Stock Report', ws);
+    XLSX.writeFile(wb, `SVM_Crackers_Stock_Report_${selectedYear}.xlsx`);
   };
 
-  // Direct Print Report (Without Sales Share)
+  // Direct Print Report with Balance Unit
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -324,7 +384,7 @@ export const StockPage: FC = () => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>SVM Crackers - Top Selling Products Stock Report (${selectedYear})</title>
+          <title>SVM Crackers - Stock Report (${selectedYear})</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; color: #111; }
             h2 { margin: 0 0 4px; text-transform: uppercase; color: #1E3A8A; }
@@ -338,7 +398,7 @@ export const StockPage: FC = () => {
           </style>
         </head>
         <body>
-          <h2>S.V.M FIREWORKS AGENCIES - STOCK SALES REPORT</h2>
+          <h2>S.V.M FIREWORKS AGENCIES - STOCK REPORT</h2>
           <div class="sub">Year: <b>${selectedYear}</b> | Total Products: ${filteredStats.length} | Generated: ${new Date().toLocaleDateString('en-IN')}</div>
           <table>
             <thead>
@@ -347,6 +407,7 @@ export const StockPage: FC = () => {
                 <th>Product Name</th>
                 <th>Category</th>
                 <th class="text-right">Units Sold</th>
+                <th class="text-right">Balance Unit</th>
                 <th class="text-right">Avg Rate (₹)</th>
                 <th class="text-right">Total Revenue (₹)</th>
                 <th class="text-center">Orders</th>
@@ -361,6 +422,7 @@ export const StockPage: FC = () => {
                   <td><b>${item.productName}</b></td>
                   <td>${item.category}</td>
                   <td class="text-right"><b>${item.totalQuantity.toLocaleString('en-IN')}</b></td>
+                  <td class="text-right"><b>${item.balanceQty.toLocaleString('en-IN')} ${item.unit}</b></td>
                   <td class="text-right">₹${item.averageRate.toLocaleString('en-IN')}</td>
                   <td class="text-right">₹${item.totalRevenue.toLocaleString('en-IN')}</td>
                   <td class="text-center">${item.billsCount}</td>
@@ -420,7 +482,7 @@ export const StockPage: FC = () => {
               </Typography>
               <Typography sx={{ fontSize: '13.5px', fontWeight: 600, color: '#64748B' }}>/</Typography>
               <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#1E40AF' }}>
-                Top Selling Products List
+                Inventory &amp; Sold Products
               </Typography>
             </Box>
 
@@ -496,7 +558,7 @@ export const StockPage: FC = () => {
               Print Report
             </Button>
 
-            <Tooltip title="Refresh Sales Data" arrow>
+            <Tooltip title="Refresh Stock Data" arrow>
               <IconButton
                 size="small"
                 onClick={loadData}
@@ -564,8 +626,8 @@ export const StockPage: FC = () => {
             </Box>
           </Box>
 
-          {/* 2. Key Performance Metric Cards */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
+          {/* 2. Key Performance Metric Cards (Now including Total Balance Units) */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, gap: 1.5 }}>
             {/* 🏆 Top Product */}
             <Box
               sx={{
@@ -620,6 +682,35 @@ export const StockPage: FC = () => {
                 </Typography>
                 <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
                   Across {summaryMetrics.totalProductsCount} products
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* 🏬 Total Balance Units (Stock Available) */}
+            <Box
+              sx={{
+                bgcolor: '#FFFFFF',
+                border: '1px solid #93C5FD',
+                borderRadius: '4px',
+                p: 1.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              }}
+            >
+              <Box sx={{ p: 1, bgcolor: '#EFF6FF', borderRadius: '4px', display: 'flex' }}>
+                <Inventory2RoundedIcon sx={{ fontSize: 24, color: '#1E40AF' }} />
+              </Box>
+              <Box>
+                <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
+                  Total Balance Units
+                </Typography>
+                <Typography sx={{ fontSize: '16px', fontWeight: 800, color: '#1E40AF' }}>
+                  {summaryMetrics.totalBalance.toLocaleString('en-IN')}
+                </Typography>
+                <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
+                  In stock across inventory
                 </Typography>
               </Box>
             </Box>
@@ -775,6 +866,7 @@ export const StockPage: FC = () => {
                 }}
               >
                 <option value="quantity">🔥 Most Sold Units (Qty)</option>
+                <option value="balance">📦 Highest Balance Unit</option>
                 <option value="revenue">💰 Highest Revenue (₹)</option>
                 <option value="bills">🧾 Most Bills / Orders</option>
               </select>
@@ -785,7 +877,7 @@ export const StockPage: FC = () => {
             </Box>
           </Box>
 
-          {/* 4. Main Product Sales Ranking Table (Sales Share column removed) */}
+          {/* 4. Main Product Sales & Inventory Ranking Table */}
           <TableContainer
             component={Paper}
             elevation={0}
@@ -803,7 +895,8 @@ export const StockPage: FC = () => {
                   <TableCell align="center" sx={{ width: '60px' }}>Rank</TableCell>
                   <TableCell>Product Name</TableCell>
                   <TableCell>Category</TableCell>
-                  <TableCell align="right" sx={{ width: '160px' }}>Units Sold (Qty)</TableCell>
+                  <TableCell align="right" sx={{ width: '150px' }}>Units Sold (Qty)</TableCell>
+                  <TableCell align="right" sx={{ width: '140px' }}>Balance Unit</TableCell>
                   <TableCell align="right" sx={{ width: '120px' }}>Avg Rate (₹)</TableCell>
                   <TableCell align="right" sx={{ width: '140px' }}>Total Sales (₹)</TableCell>
                   <TableCell align="center" sx={{ width: '100px' }}>Orders</TableCell>
@@ -812,7 +905,7 @@ export const StockPage: FC = () => {
               <TableBody>
                 {filteredStats.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4, color: '#64748B', fontSize: '13px' }}>
+                    <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#64748B', fontSize: '13px' }}>
                       No product sales records found matching the filter.
                     </TableCell>
                   </TableRow>
@@ -889,8 +982,35 @@ export const StockPage: FC = () => {
                             {item.totalQuantity.toLocaleString('en-IN')}
                           </Typography>
                           <Typography sx={{ fontSize: '10px', color: '#64748B' }}>
-                            units
+                            sold
                           </Typography>
+                        </TableCell>
+
+                        {/* Balance Unit */}
+                        <TableCell align="right">
+                          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.6 }}>
+                            <Typography
+                              sx={{
+                                fontSize: '13px',
+                                fontWeight: 800,
+                                color: item.balanceQty > 0 ? '#1E40AF' : '#DC2626',
+                              }}
+                            >
+                              {item.balanceQty.toLocaleString('en-IN')}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              label={item.unit}
+                              sx={{
+                                height: '18px',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                bgcolor: item.balanceQty > 0 ? '#EFF6FF' : '#FEF2F2',
+                                color: item.balanceQty > 0 ? '#1E40AF' : '#DC2626',
+                                border: item.balanceQty > 0 ? '1px solid #BFDBFE' : '1px solid #FECACA',
+                              }}
+                            />
+                          </Box>
                         </TableCell>
 
                         {/* Average Rate */}
@@ -924,7 +1044,7 @@ export const StockPage: FC = () => {
           {/* Bottom Info Footer */}
           <Box sx={{ textAlign: 'center', py: 0.5 }}>
             <Typography sx={{ fontSize: '11.5px', color: '#64748B' }}>
-              ℹ️ Displaying highest sold products list for billing year: <b>{selectedYear === 'ALL' ? 'All Years' : selectedYear}</b>. Aggregated from customer sales &amp; billing invoices.
+              ℹ️ Displaying stock inventory balance &amp; sales analytics for billing year: <b>{selectedYear === 'ALL' ? 'All Years' : selectedYear}</b>. Aggregated from customer sales &amp; product inventory.
             </Typography>
           </Box>
         </Box>
