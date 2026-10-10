@@ -1124,7 +1124,7 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
 
                                 {/* Quantity */}
                                 <TableCell align="center" sx={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
-                                  {row.quantity}
+                                  {row.quantity && row.quantity > 0 ? row.quantity : 1}
                                 </TableCell>
 
                                 {/* Rate */}

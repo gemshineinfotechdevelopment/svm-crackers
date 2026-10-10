@@ -57,6 +57,7 @@ export interface ProductItem {
   rate?: number;
   mrp?: number;
   unit?: string;
+  qty?: number;
   productType?: ProductType | string;
   year?: number;
 }
@@ -111,6 +112,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
   const [productName, setProductName] = useState('');
   const [productCategory, setProductCategory] = useState('General');
   const [productUnit, setProductUnit] = useState('Box');
+  const [productQty, setProductQty] = useState<number>(1);
   const [productRate, setProductRate] = useState<string>('0');
   const [productMrp, setProductMrp] = useState<string>('0');
   const [modalLoading, setModalLoading] = useState(false);
@@ -363,6 +365,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
       selectedCategory && selectedCategory !== 'ALL' ? selectedCategory : (categories[0]?.name || 'General')
     );
     setProductUnit('Box');
+    setProductQty(1);
     setProductRate('0');
     setProductMrp('0');
     setOpenModal(true);
@@ -396,6 +399,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
     setProductName(product.name);
     setProductCategory(product.category || 'General');
     setProductUnit(product.unit || 'Box');
+    setProductQty(product.qty !== undefined && product.qty !== null && product.qty > 0 ? product.qty : 1);
     setProductRate(String(product.rate || 0));
     setProductMrp(String(product.mrp || 0));
     setOpenModal(true);
@@ -428,6 +432,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         name: productName.trim(),
         category: productCategory || 'General',
         unit: productUnit || 'Box',
+        qty: Number(productQty) > 0 ? Number(productQty) : 1,
         rate: Number(productRate) || 0,
         mrp: Number(productMrp) || 0,
         productType: productType,
@@ -593,6 +598,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
               else if (c.includes('product') || c.includes('item') || c.includes('name') || c.includes('particular')) nameCol = idx;
               else if (c.includes('cat') || c.includes('group') || (c.includes('type') && !c.includes('product type'))) catCol = idx;
               else if (c.includes('unit') || c.includes('pkg') || c.includes('packing') || c.includes('per')) unitCol = idx;
+              else if (c.includes('qty') || c.includes('quantity') || c.includes('stock')) qtyCol = idx;
               else if (c.includes('mrp') || c.includes('m.r.p')) mrpCol = idx;
               else if (c.includes('rate') || c.includes('price') || c.includes('net') || c.includes('selling')) rateCol = idx;
               else if (c.includes('product type') || c.includes('mode') || c === 'type') typeCol = idx;
@@ -613,6 +619,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
           let pName = '';
           let pCat = currentCategory;
           let pUnit = 'Box';
+          let pQty = 1;
           let pMrp = 0;
           let pRate = 0;
           let pSlNo = startingSl + parsedList.length + 1;
@@ -626,6 +633,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
               currentCategory = pCat;
             }
             if (unitCol !== -1 && row[unitCol] && String(row[unitCol]).trim()) pUnit = String(row[unitCol]).trim();
+            if (qtyCol !== -1 && row[qtyCol]) pQty = Math.max(1, Number(String(row[qtyCol]).replace(/[^\d.]/g, '')) || 1);
             if (mrpCol !== -1 && row[mrpCol]) pMrp = Number(String(row[mrpCol]).replace(/[^\d.]/g, '')) || 0;
             if (rateCol !== -1 && row[rateCol]) pRate = Number(String(row[rateCol]).replace(/[^\d.]/g, '')) || 0;
             if (typeCol !== -1 && row[typeCol]) {
@@ -664,6 +672,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
               name: pName,
               category: pCat || 'General',
               unit: pUnit || 'Box',
+              qty: pQty || 1,
               mrp: pMrp,
               rate: pRate,
               productType: pType,
@@ -740,6 +749,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         'Product Name': `${currentMode} 28 Chorsa Crackers`,
         'Category': 'Sound Crackers',
         'Unit': 'Box',
+        'Qty': 1,
         'Product Type': currentMode,
       },
       {
@@ -747,6 +757,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         'Product Name': `${currentMode} Ground Chakkar Special (10 Pcs)`,
         'Category': 'Chakkars',
         'Unit': 'Box',
+        'Qty': 1,
         'Product Type': currentMode,
       },
       {
@@ -754,6 +765,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         'Product Name': `${currentMode} Flower Pots Giant (10 Pcs)`,
         'Category': 'Flower Pots',
         'Unit': 'Box',
+        'Qty': 1,
         'Product Type': currentMode,
       },
     ];
@@ -1105,8 +1117,8 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                     <TableCell sx={{ width: '70px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Unit
                     </TableCell>
-                    <TableCell sx={{ width: '100px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
-                      Type
+                    <TableCell sx={{ width: '80px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Qty
                     </TableCell>
                     <TableCell align="center" sx={{ width: '120px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Actions
@@ -1130,7 +1142,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                     filteredProducts.map((p, idx) => {
                       const pId = p._id || p.id || '';
                       const isChecked = selectedIds.includes(pId);
-                      const typeVal = p.productType || 'Retail';
+                      const displayQty = p.qty !== undefined && p.qty !== null && p.qty > 0 ? p.qty : 1;
 
                       return (
                         <TableRow
@@ -1166,29 +1178,11 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                             {p.unit || 'Box'}
                           </TableCell>
 
-                          {/* Product Type Badge */}
+                          {/* Qty Column (defaults to 1) */}
                           <TableCell sx={{ textAlign: 'center' }}>
-                            <Chip
-                              label={typeVal}
-                              size="small"
-                              sx={{
-                                height: '20px',
-                                fontSize: '10.5px',
-                                fontWeight: 700,
-                                bgcolor:
-                                  typeVal === 'Retail'
-                                    ? '#E0F2FE'
-                                    : typeVal === 'Wholesale'
-                                      ? '#F3E8FF'
-                                      : '#DCFCE7',
-                                color:
-                                  typeVal === 'Retail'
-                                    ? '#0369A1'
-                                    : typeVal === 'Wholesale'
-                                      ? '#7C3AED'
-                                      : '#15803D',
-                              }}
-                            />
+                            <Typography sx={{ fontSize: '12.5px', fontWeight: 800, color: '#16A34A' }}>
+                              {displayQty}
+                            </Typography>
                           </TableCell>
 
                           <TableCell align="center">
@@ -1426,7 +1420,20 @@ export const ProductsPage: FC<ProductsPageProps> = ({
               </select>
             </Box>
 
-
+            {/* Quantity / Stock Qty (Default 1) */}
+            <Box>
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                Qty (எண்ணிக்கை): *
+              </Typography>
+              <input
+                type="number"
+                min="1"
+                value={productQty}
+                onChange={(e) => setProductQty(Math.max(1, Number(e.target.value) || 1))}
+                className="erp-input"
+                style={{ width: '100%', fontSize: '12px', padding: '6px 8px', fontWeight: 700 }}
+              />
+            </Box>
           </Box>
         </DialogContent>
 

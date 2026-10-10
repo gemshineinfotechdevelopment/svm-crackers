@@ -8,6 +8,7 @@ export interface IProduct extends Document {
   rate?: number;
   mrp?: number;
   unit?: string;
+  qty?: number;
   productType?: 'Retail' | 'Wholesale' | 'Both' | string;
   year?: number | string;
   createdAt: Date;
@@ -23,6 +24,7 @@ const ProductSchema: Schema = new Schema(
     rate: { type: Number, default: 0 },
     mrp: { type: Number, default: 0 },
     unit: { type: String, default: 'Box' },
+    qty: { type: Number, default: 1, min: 0 },
     productType: {
       type: String,
       enum: ['Retail', 'Wholesale', 'Both'],

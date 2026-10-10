@@ -750,8 +750,10 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           }
         }
 
-        const q = parseFloat(field === 'quantity' ? val : updated.quantity) || 0;
+        const rawQty = field === 'quantity' ? (val === '0' ? '1' : val) : updated.quantity;
+        const q = parseFloat(rawQty) || 1;
         const r = parseFloat(field === 'rate' ? val : updated.rate) || 0;
+        updated.quantity = rawQty || '1';
         updated.amount = String(Math.round(q * r));
         return updated;
       })
@@ -1751,7 +1753,8 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                         <TableCell sx={{ textAlign: 'center', p: 0.5 }}>
                           <input
                             type="number"
-                            value={row.quantity}
+                            min="1"
+                            value={row.quantity === '0' || !row.quantity ? '1' : row.quantity}
                             onChange={(e) => handleRowChange(row.id, 'quantity', e.target.value)}
                             onWheel={(e) => (e.target as HTMLElement).blur()}
                             style={{

@@ -9,9 +9,55 @@ import { escapeRegex, recalculateCustomerBalance } from '../utils/ledgerUtils';
 import { isCloudinaryConfigured, uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
 import { extractYearFromDate, getFinancialYear } from '../utils/yearUtils';
 
-// Stock tracking is disabled
-const adjustStock = async (_products: any[], _multiplier: number): Promise<void> => {
-  // No-op
+// Stock adjustment helper: Deduct (-1) or Restore (+1)
+// User requirement: Stock should never be negative (epavume stock negative la iruka kudathu)
+const adjustStock = async (products: any[], multiplier: number): Promise<void> => {
+  if (!products || !Array.isArray(products) || products.length === 0) return;
+
+  for (const item of products) {
+    const rawName = String(item.particular || item.name || '').trim();
+    if (!rawName) continue;
+    const soldQty = parseFloat(String(item.quantity || 0)) || 0;
+    if (soldQty <= 0) continue;
+
+    try {
+      // Find matching product in Product collection (case-insensitive name match)
+      const escaped = escapeRegex(rawName);
+      const product = await Product.findOne({
+        name: { $regex: new RegExp(`^${escaped}$`, 'i') },
+      });
+
+      if (product) {
+        const currentQty = typeof product.qty === 'number' ? product.qty : 1;
+        let newQty: number;
+
+        if (multiplier < 0) {
+          // Deduct stock for Estimate/Regular bill - NEVER go negative
+          newQty = Math.max(0, currentQty - soldQty);
+        } else {
+          // Restore stock on bill delete
+          newQty = currentQty + soldQty;
+        }
+
+        product.qty = newQty;
+        await product.save();
+      }
+
+      // Also adjust Inventory collection if document exists
+      const invItem = await Inventory.findOne({
+        productName: { $regex: new RegExp(`^${escaped}$`, 'i') },
+      });
+      if (invItem) {
+        const curStock = typeof invItem.totalStock === 'number' ? invItem.totalStock : (typeof invItem.stock === 'number' ? invItem.stock : 0);
+        const updatedStock = multiplier < 0 ? Math.max(0, curStock - soldQty) : curStock + soldQty;
+        invItem.totalStock = updatedStock;
+        invItem.stock = updatedStock;
+        await invItem.save();
+      }
+    } catch (err) {
+      console.warn(`[Stock Adjustment Warning] Could not adjust stock for "${rawName}":`, err);
+    }
+  }
 };
 
 export const getParticulars = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -476,8 +522,10 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       }
     }
 
-    // 3. Automatically Deduct Sold Quantities from Stock (PriceList & Product collections)
-    if (products && Array.isArray(products) && products.length > 0) {
+    // 3. Automatically Deduct Sold Quantities from Stock (ONLY FOR ESTIMATE / REGULAR BILLS, NEVER FOR QUOTATION)
+    // User requirement: Quotation should NEVER affect stock! Only Estimate / Regular bills reduce stock.
+    const isQuotation = particular.billType === 'QUOTATION' || String(particular.billNo || '').toUpperCase().startsWith('QUO');
+    if (!isQuotation && products && Array.isArray(products) && products.length > 0) {
       await adjustStock(products, -1);
     }
 
@@ -720,6 +768,27 @@ export const updateParticular = async (req: Request, res: Response, next: NextFu
       await recalculateCustomerBalance(updatedParticular.customerName);
     }
 
+    // Stock adjustment on update: Quotations never affect stock, only Estimate/Regular bills
+    const wasQuotation = existing.billType === 'QUOTATION' || String(existing.billNo || '').toUpperCase().startsWith('QUO');
+    const isNowQuotation = updatedParticular.billType === 'QUOTATION' || String(updatedParticular.billNo || '').toUpperCase().startsWith('QUO');
+
+    if (!wasQuotation && !isNowQuotation) {
+      if (existing.products && Array.isArray(existing.products)) {
+        await adjustStock(existing.products, 1);
+      }
+      if (updatedParticular.products && Array.isArray(updatedParticular.products)) {
+        await adjustStock(updatedParticular.products, -1);
+      }
+    } else if (wasQuotation && !isNowQuotation) {
+      if (updatedParticular.products && Array.isArray(updatedParticular.products)) {
+        await adjustStock(updatedParticular.products, -1);
+      }
+    } else if (!wasQuotation && isNowQuotation) {
+      if (existing.products && Array.isArray(existing.products)) {
+        await adjustStock(existing.products, 1);
+      }
+    }
+
     res.status(200).json({ success: true, data: updatedParticular });
   } catch (error) {
     next(error);
@@ -741,8 +810,9 @@ export const deleteParticular = async (req: Request, res: Response, next: NextFu
       await deleteFromCloudinary(particular.pdfPublicId);
     }
 
-    // 2. Restore Stock for items in the deleted bill
-    if (particular.products && Array.isArray(particular.products) && particular.products.length > 0) {
+    // 2. Restore Stock for items in the deleted bill (ONLY IF NOT QUOTATION)
+    const isQuotation = particular.billType === 'QUOTATION' || String(particular.billNo || '').toUpperCase().startsWith('QUO');
+    if (!isQuotation && particular.products && Array.isArray(particular.products) && particular.products.length > 0) {
       await adjustStock(particular.products, 1);
     }
 
@@ -924,6 +994,11 @@ export const convertQuotationToBill = async (req: Request, res: Response, next: 
 
     if (billTotalNum > 0 || paidNum > 0) {
       await recalculateCustomerBalance(quotation.customerName);
+    }
+
+    // When quotation is converted to real bill, deduct stock now!
+    if (quotation.products && Array.isArray(quotation.products) && quotation.products.length > 0) {
+      await adjustStock(quotation.products, -1);
     }
 
     res.status(200).json({
