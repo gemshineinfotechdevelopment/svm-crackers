@@ -1139,7 +1139,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                   '&:hover': { bgcolor: '#580e34' },
                 }}
               >
-                + Add {activeTabType === 'ALL' ? 'Retail' : activeTabType} Product
+                Add Product
               </Button>
             </Box>
           </Box>
@@ -1353,7 +1353,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
             color: '#0F172A',
           }}
         >
-          {editingProduct ? 'Edit Product Details' : `Add New ${productType} Product (தனி பதிவு)`}
+          {editingProduct ? 'Edit Product Details' : 'Add New Product (தனி பதிவு)'}
         </DialogTitle>
 
         <DialogContent sx={{ p: 2, bgcolor: '#F8FAFC' }}>

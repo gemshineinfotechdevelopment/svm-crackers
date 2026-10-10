@@ -171,6 +171,11 @@ export const GstBillPage: FC = () => {
   const [totalCasesManual, setTotalCasesManual] = useState<boolean>(false);
 
   // 4. Product Quick Entry Bar
+  const quickCodeInputRef = useRef<HTMLInputElement>(null);
+  const quickQtyInputRef = useRef<HTMLInputElement>(null);
+  const quickUnitInputRef = useRef<HTMLInputElement>(null);
+  const quickRateInputRef = useRef<HTMLInputElement>(null);
+
   const [quickCode, setQuickCode] = useState<string>('');
   const [selectedCatalogProduct, setSelectedCatalogProduct] = useState<ProductCatalogOption | null>(null);
   const [quickQty, setQuickQty] = useState<string>('1');
@@ -638,6 +643,70 @@ export const GstBillPage: FC = () => {
     setQuickCode('');
     setQuickQty('1');
     setQuickRate('0');
+    setTimeout(() => {
+      quickCodeInputRef.current?.focus();
+    }, 50);
+  };
+
+  // Trigger Add Product from Bar or Enter on Rate
+  const handleTriggerAddProduct = (specificProd?: ProductCatalogOption) => {
+    const prod = specificProd || selectedCatalogProduct || findProductByCode(quickCode);
+    if (prod) {
+      handleAddProductFromBar(prod);
+    } else if (quickCode.trim() || parseFloat(quickRate) > 0) {
+      const qNum = parseFloat(quickQty) || 1;
+      const rNum = parseFloat(quickRate) || 0;
+      const amt = (qNum * rNum).toFixed(2);
+      const itemCode = quickCode.trim();
+
+      const existingBlankIdx = productRows.findIndex((r) => !r.particular.trim());
+      if (existingBlankIdx !== -1) {
+        setProductRows((prev) =>
+          prev.map((r, idx) => {
+            if (idx === existingBlankIdx) {
+              return {
+                ...r,
+                code: itemCode,
+                particular: itemCode || 'Product Item',
+                hsnCode: '3604',
+                quantity: String(qNum),
+                unit: quickUnit || 'Case',
+                rate: String(rNum),
+                amount: amt,
+              };
+            }
+            return r;
+          })
+        );
+      } else {
+        setProductRows((prev) => [
+          ...prev,
+          {
+            id: String(Date.now()),
+            code: itemCode,
+            particular: itemCode || 'Product Item',
+            hsnCode: '3604',
+            quantity: String(qNum),
+            unit: quickUnit || 'Case',
+            rate: String(rNum),
+            amount: amt,
+          },
+        ]);
+      }
+
+      setSelectedCatalogProduct(null);
+      setQuickCode('');
+      setQuickQty('1');
+      setQuickRate('0');
+      setTimeout(() => {
+        quickCodeInputRef.current?.focus();
+      }, 50);
+    } else {
+      handleAddItem();
+      setTimeout(() => {
+        quickCodeInputRef.current?.focus();
+      }, 50);
+    }
   };
 
   // Filter products in catalog modal
@@ -1357,6 +1426,7 @@ export const GstBillPage: FC = () => {
                 Code
               </Typography>
               <input
+                ref={quickCodeInputRef}
                 type="text"
                 value={quickCode}
                 onChange={(e) => {
@@ -1374,10 +1444,8 @@ export const GstBillPage: FC = () => {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    const matched = findProductByCode(quickCode) || selectedCatalogProduct;
-                    if (matched) {
-                      handleAddProductFromBar(matched);
-                    }
+                    quickQtyInputRef.current?.focus();
+                    quickQtyInputRef.current?.select();
                   }
                 }}
                 placeholder="Code"
@@ -1419,7 +1487,10 @@ export const GstBillPage: FC = () => {
                     setQuickCode(opt.code || (opt.slNo !== undefined ? String(opt.slNo) : ''));
                     setQuickUnit(opt.unit || 'Case');
                     setQuickRate(String(opt.rate || 0));
-                    handleAddProductFromBar(opt);
+                    setTimeout(() => {
+                      quickQtyInputRef.current?.focus();
+                      quickQtyInputRef.current?.select();
+                    }, 50);
                   }
                 }}
                 renderInput={(params) => (
@@ -1442,10 +1513,18 @@ export const GstBillPage: FC = () => {
                 Qty
               </Typography>
               <input
+                ref={quickQtyInputRef}
                 type="number"
                 value={quickQty}
                 onChange={(e) => setQuickQty(e.target.value)}
                 onWheel={(e) => (e.target as HTMLElement).blur()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    quickRateInputRef.current?.focus();
+                    quickRateInputRef.current?.select();
+                  }
+                }}
                 className="erp-input"
                 style={{ width: '60px', textAlign: 'center' }}
               />
@@ -1454,9 +1533,17 @@ export const GstBillPage: FC = () => {
                 Unit
               </Typography>
               <input
+                ref={quickUnitInputRef}
                 type="text"
                 value={quickUnit}
                 onChange={(e) => setQuickUnit(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    quickRateInputRef.current?.focus();
+                    quickRateInputRef.current?.select();
+                  }
+                }}
                 className="erp-input"
                 style={{ width: '65px' }}
               />
@@ -1465,27 +1552,23 @@ export const GstBillPage: FC = () => {
                 Rate
               </Typography>
               <input
+                ref={quickRateInputRef}
                 type="number"
                 value={quickRate}
                 onChange={(e) => setQuickRate(e.target.value)}
                 onWheel={(e) => (e.target as HTMLElement).blur()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleTriggerAddProduct();
+                  }
+                }}
                 className="erp-input"
                 style={{ width: '75px', textAlign: 'right' }}
               />
 
               <Button
-                onClick={() => {
-                  if (selectedCatalogProduct) {
-                    handleAddProductFromBar(selectedCatalogProduct);
-                  } else {
-                    const matched = findProductByCode(quickCode);
-                    if (matched) {
-                      handleAddProductFromBar(matched);
-                    } else {
-                      handleAddItem();
-                    }
-                  }
-                }}
+                onClick={() => handleTriggerAddProduct()}
                 startIcon={<AddRoundedIcon sx={{ fontSize: 14 }} />}
                 size="small"
                 sx={{
@@ -1499,7 +1582,7 @@ export const GstBillPage: FC = () => {
                   '&:hover': { bgcolor: '#DCE7F5' },
                 }}
               >
-                Add Row
+                Add Product
               </Button>
             </Box>
 
@@ -2251,8 +2334,15 @@ export const GstBillPage: FC = () => {
                         size="small"
                         variant="contained"
                         onClick={() => {
-                          handleAddProductFromBar(prod);
+                          setSelectedCatalogProduct(prod);
+                          setQuickCode(prod.code || (prod.slNo !== undefined ? String(prod.slNo) : ''));
+                          setQuickUnit(prod.unit || 'Case');
+                          setQuickRate(String(prod.rate || 0));
                           setProductCatalogModalOpen(false);
+                          setTimeout(() => {
+                            quickQtyInputRef.current?.focus();
+                            quickQtyInputRef.current?.select();
+                          }, 50);
                         }}
                         sx={{ fontSize: '11px', py: 0.2, px: 1, bgcolor: '#1E40AF' }}
                       >

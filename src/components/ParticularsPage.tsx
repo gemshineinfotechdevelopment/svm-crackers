@@ -442,28 +442,6 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     return Math.max(0, subtotal - discountAmount + packingAmount);
   }, [subtotal, discountAmount, packingAmount]);
 
-  // Rate Type Change Handler - auto adjusts all table row rates
-  const handleRateTypeChange = (newType: string) => {
-    setRateType(newType);
-    setProductRows((prev) =>
-      prev.map((row) => {
-        if (!row.particular.trim()) return row;
-        const match = productOptions.find(
-          (p) => p.name.trim().toLowerCase() === row.particular.trim().toLowerCase()
-        );
-        if (match) {
-          const newRate = getRateForType(match, newType);
-          const q = parseFloat(row.quantity) || 1;
-          return {
-            ...row,
-            rate: String(newRate),
-            amount: String(Math.round(q * newRate)),
-          };
-        }
-        return row;
-      })
-    );
-  };
 
   // Row Management
   const handleRowChange = (id: string, field: keyof ProductRowItem, val: string) => {
@@ -857,37 +835,6 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                   />
                 </Box>
 
-                {/* Rate Type */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '75px' }}>
-                    Rate Type
-                  </Typography>
-                  <select
-                    value={rateType}
-                    onChange={(e) => handleRateTypeChange(e.target.value)}
-                    className="erp-input"
-                    style={{ width: '120px', fontSize: '11.5px', fontWeight: 700, color: '#1E40AF' }}
-                  >
-                    <option value="Befor Rate">Befor Rate</option>
-                    <option value="Net Rate">Net Rate</option>
-                    <option value="Wholesale Rate">Wholesale Rate</option>
-                    <option value="Retail Rate">Retail Rate</option>
-                  </select>
-                </Box>
-
-                {/* GST No */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '75px' }}>
-                    GST No
-                  </Typography>
-                  <input
-                    type="text"
-                    value={customerGst}
-                    onChange={(e) => setCustomerGst(e.target.value)}
-                    className="erp-input"
-                    style={{ width: '120px' }}
-                  />
-                </Box>
               </Box>
             </fieldset>
 
@@ -1196,13 +1143,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                           color: '#1E40AF',
                         }}
                       >
-                        {rateType === 'Befor Rate' || rateType === 'Before Rate'
-                          ? 'Before Rate'
-                          : rateType === 'Net Rate'
-                          ? 'Net Rate'
-                          : rateType === 'Wholesale Rate'
-                          ? 'Wholesale Rate'
-                          : 'Retail Rate'}
+                        Rate (Rs.)
                       </TableCell>
                       <TableCell sx={{ width: '70px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5' }}>
                         Qty
@@ -1613,13 +1554,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Category</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Unit</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, textAlign: 'right', color: '#1E40AF', whiteSpace: 'nowrap', minWidth: '120px' }}>
-                    {rateType === 'Befor Rate' || rateType === 'Before Rate'
-                      ? 'Before Rate'
-                      : rateType === 'Net Rate'
-                      ? 'Net Rate'
-                      : rateType === 'Wholesale Rate'
-                      ? 'Wholesale Rate'
-                      : 'Retail Rate'}
+                    Rate (Rs.)
                   </TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, textAlign: 'center' }}>Action</TableCell>
                 </TableRow>
