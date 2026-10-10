@@ -26,7 +26,6 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import CircularProgress from '@mui/material/CircularProgress';
-import defaultProjectLogo from '../assets/logo.png';
 import { SettingsApi } from '../services/api';
 import {
   getSelectedBillYear,
@@ -81,7 +80,7 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   gstin: '33ADBFS7999E1ZO',
   licNo: 'E/SS/TN/24/83 (E86652)',
   pan: '',
-  logoUrl: defaultProjectLogo,
+  logoUrl: '',
   enableTax: false,
   defaultTaxRate: '18',
   gstTurnoverBaseline: '726900.00',
@@ -205,8 +204,8 @@ export const getStoredSettings = (): CompanySettings => {
       if (!parsed.companyName || typeof parsed.companyName !== 'string' || parsed.companyName === 'false' || parsed.companyName === 'true' || parsed.companyName.toLowerCase().includes('varun') || parsed.companyName.toLowerCase().includes('dheeksha') || parsed.companyName.toLowerCase().includes('apsara') || parsed.companyName.toLowerCase().includes('manjula')) {
         parsed.companyName = 'S.V.M Fireworks Agencies';
       }
-      if (!parsed.logoUrl || typeof parsed.logoUrl !== 'string' || parsed.logoUrl.includes('varun-traders.png')) {
-        parsed.logoUrl = defaultProjectLogo;
+      if (parsed.logoUrl && typeof parsed.logoUrl === 'string' && parsed.logoUrl.includes('varun-traders.png')) {
+        parsed.logoUrl = '';
       }
       if (!parsed.phone || typeof parsed.phone !== 'string') {
         parsed.phone = '9843067073';
@@ -302,9 +301,9 @@ export const SettingsPage: React.FC = () => {
             ? 'S.V.M Fireworks Agencies'
             : data.companyName;
 
-          const logo = (!data.logoUrl || typeof data.logoUrl !== 'string' || data.logoUrl.includes('varun-traders.png'))
-            ? defaultProjectLogo
-            : data.logoUrl;
+          const logo = (data.logoUrl && typeof data.logoUrl === 'string' && !data.logoUrl.includes('varun-traders.png'))
+            ? data.logoUrl
+            : '';
 
           const address = (!data.address || typeof data.address !== 'string' || data.address === 'false' || data.address === 'true' || data.address.toLowerCase().includes('tirupur') || data.address.toLowerCase().includes('varun') || data.address.toLowerCase().includes('rajivgandhi') || data.address.toLowerCase().includes('67 - h/e'))
             ? 'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road, Keela Thiruthangal - 626 130. Tamil Nadu'

@@ -787,7 +787,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
   }
 
   if (currentSubPage === 'product-price map') {
-    return <ProductPriceMapPage onSubPageChange={handleSubPageChange} />;
+    return <ProductPriceMapPage currentSubPage="product-price map" onSubPageChange={handleSubPageChange} />;
   }
 
   return (

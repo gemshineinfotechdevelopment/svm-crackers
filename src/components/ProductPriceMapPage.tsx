@@ -58,18 +58,16 @@ interface DisplayRetailRow {
 export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
   onSubPageChange,
   initialPriceMapName,
-  currentSubPage: propSubPage = 'pricemap master',
+  currentSubPage: propSubPage = 'product-price map',
 }) => {
   const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
   const [priceMaps, setPriceMaps] = useState<PriceMapRecord[]>([]);
 
-  // Step 1 vs Step 2 view mode
-  const [viewMode, setViewMode] = useState<'shop-list' | 'products'>(() => {
-    return initialPriceMapName ? 'products' : 'shop-list';
-  });
+  // Step 1 vs Step 2 view mode: Product Price Map defaults to products view
+  const [viewMode, setViewMode] = useState<'shop-list' | 'products'>('products');
 
   const [selectedPriceMap, setSelectedPriceMap] = useState<string>(() => {
-    return initialPriceMapName || 'SVM';
+    return localStorage.getItem('svm_selected_pricemap_name') || initialPriceMapName || 'SVM';
   });
 
   // Shop list selection index for Step 1
@@ -133,7 +131,11 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
       
       setRetailProducts(retailOnly);
 
-      const activeShop = selectedPriceMap || mapsData[0]?.name || 'SVM';
+      const storedShop = localStorage.getItem('svm_selected_pricemap_name');
+      const activeShop = storedShop || selectedPriceMap || mapsData[0]?.name || 'SVM';
+      if (activeShop !== selectedPriceMap) {
+        setSelectedPriceMap(activeShop);
+      }
       buildRowsForPriceMap(activeShop, mapsData, retailOnly);
     } catch (err) {
       console.error('Error loading data for ProductPriceMapPage:', err);
@@ -593,7 +595,7 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
                   variant="outlined"
                   size="small"
                   startIcon={<ArrowBackRoundedIcon sx={{ fontSize: 14 }} />}
-                  onClick={() => setViewMode('shop-list')}
+                  onClick={() => onSubPageChange('pricemap master')}
                   sx={{
                     height: '28px',
                     color: '#0055EA',
@@ -958,7 +960,7 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
                     size="small"
                     variant="outlined"
                     startIcon={<ArrowBackRoundedIcon sx={{ fontSize: 13 }} />}
-                    onClick={() => setViewMode('shop-list')}
+                    onClick={() => onSubPageChange('pricemap master')}
                     sx={{
                       height: '26px',
                       fontSize: '11px',

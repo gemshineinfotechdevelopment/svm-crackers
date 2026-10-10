@@ -194,7 +194,7 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const ganeshaImgUrl = `${origin}/ganesha.jpg`;
-  const companyLogoUrl = bill.logoUrl || storeSettings.logoUrl || `${origin}/logo.png`;
+  const companyLogoUrl = bill.logoUrl || storeSettings.logoUrl || '';
 
   const copyLabels = ['ORIGINAL', 'DUPLICATE', 'TRIPLICATE', 'EXTRA COPY'];
   const invoiceTitle = bill.invoiceTitle || (taxRate > 0 ? 'TAX INVOICE' : 'ESTIMATE');
