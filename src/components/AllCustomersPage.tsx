@@ -51,13 +51,17 @@ export interface CustomerItem {
 
 interface AllCustomersPageProps {
   onAddNewCustomer?: () => void;
-  onSelectCustomerForParticular?: (customerName: string, subTab?: 'Account Details' | 'Create Particular') => void;
+  onSelectCustomerForParticular?: (customerName: string, subTab?: 'Account Details' | 'Create Particular' | 'Estimate' | 'Quotation') => void;
+  onSelectCustomerForEstimate?: (customerName: string) => void;
+  onSelectCustomerForQuotation?: (customerName: string) => void;
   onEditBill?: (bill: any) => void;
 }
 
 export const AllCustomersPage: FC<AllCustomersPageProps> = ({
   onAddNewCustomer,
   onSelectCustomerForParticular,
+  onSelectCustomerForEstimate,
+  onSelectCustomerForQuotation,
   onEditBill,
 }) => {
   const [storeSettings, setStoreSettings] = useState(() => getStoredSettings());
@@ -792,6 +796,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                               <TableCell align="center">
                                 <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
                                   {/* Statement / Bill */}
+                                  {/* Estimate */}
                                   <Button
                                     size="small"
                                     onClick={() => {
@@ -800,11 +805,15 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                                         triggerYearRestrictionDialog({
                                           selectedYear: String(selectedYear),
                                           currentSystemYear: String(currentSystemYear),
-                                          onProceed: () => onSelectCustomerForParticular?.(customer.name, 'Create Particular'),
+                                          onProceed: () => {
+                                            if (onSelectCustomerForEstimate) onSelectCustomerForEstimate(customer.name);
+                                            else onSelectCustomerForParticular?.(customer.name, 'Estimate');
+                                          },
                                         });
                                         return;
                                       }
-                                      onSelectCustomerForParticular?.(customer.name, 'Create Particular');
+                                      if (onSelectCustomerForEstimate) onSelectCustomerForEstimate(customer.name);
+                                      else onSelectCustomerForParticular?.(customer.name, 'Estimate');
                                     }}
                                     sx={{
                                       height: '24px',
@@ -818,6 +827,42 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                                       textTransform: 'none',
                                       borderRadius: '2px',
                                       '&:hover': { bgcolor: '#D9E4F2' },
+                                    }}
+                                  >
+                                    Estimate
+                                  </Button>
+
+                                  {/* Quotation */}
+                                  <Button
+                                    size="small"
+                                    onClick={() => {
+                                      const currentSystemYear = new Date().getFullYear();
+                                      if (Number(selectedYear) !== currentSystemYear) {
+                                        triggerYearRestrictionDialog({
+                                          selectedYear: String(selectedYear),
+                                          currentSystemYear: String(currentSystemYear),
+                                          onProceed: () => {
+                                            if (onSelectCustomerForQuotation) onSelectCustomerForQuotation(customer.name);
+                                            else onSelectCustomerForParticular?.(customer.name, 'Quotation');
+                                          },
+                                        });
+                                        return;
+                                      }
+                                      if (onSelectCustomerForQuotation) onSelectCustomerForQuotation(customer.name);
+                                      else onSelectCustomerForParticular?.(customer.name, 'Quotation');
+                                    }}
+                                    sx={{
+                                      height: '24px',
+                                      px: 1,
+                                      py: 0,
+                                      bgcolor: '#FEF3C7',
+                                      border: '1px solid #F59E0B',
+                                      color: '#B45309',
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      textTransform: 'none',
+                                      borderRadius: '2px',
+                                      '&:hover': { bgcolor: '#FDE68A' },
                                     }}
                                   >
                                     Quotation

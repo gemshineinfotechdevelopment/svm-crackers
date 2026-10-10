@@ -41,16 +41,20 @@ export const getParticulars = async (req: Request, res: Response, next: NextFunc
       });
     }
 
-    // 3. Bill Type Filter (GST / REGULAR)
+    // 3. Bill Type Filter (GST / REGULAR / QUOTATION)
     if (billType && typeof billType === 'string' && billType.trim() !== '' && billType.toLowerCase() !== 'all') {
       const bType = billType.trim().toUpperCase();
       if (bType === 'GST') {
         andConditions.push({
           $or: [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }],
         });
-      } else if (bType === 'REGULAR') {
+      } else if (bType === 'QUOTATION') {
         andConditions.push({
-          billType: { $ne: 'GST' },
+          billType: 'QUOTATION',
+        });
+      } else if (bType === 'REGULAR' || bType === 'ESTIMATE') {
+        andConditions.push({
+          billType: { $nin: ['GST', 'QUOTATION'] },
           billNo: { $not: { $regex: /^GST/i } },
         });
       } else {
@@ -154,9 +158,29 @@ export const getNextBillNo = async (req: Request, res: Response, next: NextFunct
       return;
     }
 
+    if (type === 'QUOTATION') {
+      const allQuotationBills = await Particular.find({
+        billType: 'QUOTATION',
+      }, 'billNo date year createdAt');
+      let maxNum = 0;
+      for (const p of allQuotationBills) {
+        const billFY = p.year ? Number(p.year) : getFinancialYear(p.date || p.createdAt);
+        if (billFY === financialYear && p.billNo) {
+          const match = p.billNo.match(/\d+/);
+          if (match) {
+            const num = parseInt(match[0], 10);
+            if (num > maxNum) maxNum = num;
+          }
+        }
+      }
+      const nextBillNo = (maxNum > 0 ? maxNum + 1 : 1001).toString();
+      res.status(200).json({ success: true, data: { nextBillNo, financialYear } });
+      return;
+    }
+
     const allRegularBills = await Particular.find({
       $and: [
-        { billType: { $ne: 'GST' } },
+        { billType: { $nin: ['GST', 'QUOTATION'] } },
         { billNo: { $not: { $regex: /^GST/i } } }
       ]
     }, 'billNo date year createdAt');
@@ -172,7 +196,7 @@ export const getNextBillNo = async (req: Request, res: Response, next: NextFunct
         }
       }
     }
-    const nextBillNo = (maxNum + 1).toString().padStart(4, '0');
+    const nextBillNo = (maxNum > 0 ? maxNum + 1 : 1001).toString();
     res.status(200).json({ success: true, data: { nextBillNo, financialYear } });
   } catch (error) {
     next(error);
@@ -237,10 +261,25 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
           }
         }
         finalBillNo = (maxNum + 1).toString().padStart(4, '0');
+      } else if (billType === 'QUOTATION') {
+        const quotationParticulars = await Particular.find({
+          billType: 'QUOTATION'
+        }, 'billNo');
+        let maxNum = 0;
+        for (const p of quotationParticulars) {
+          if (p.billNo) {
+            const match = p.billNo.match(/\d+/);
+            if (match) {
+              const num = parseInt(match[0], 10);
+              if (num > maxNum) maxNum = num;
+            }
+          }
+        }
+        finalBillNo = (maxNum > 0 ? maxNum + 1 : 1001).toString();
       } else {
         const regularParticulars = await Particular.find({
           $and: [
-            { billType: { $ne: 'GST' } },
+            { billType: { $nin: ['GST', 'QUOTATION'] } },
             { billNo: { $not: { $regex: /^GST/i } } }
           ]
         }, 'billNo date year createdAt');
@@ -255,7 +294,7 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
             }
           }
         }
-        finalBillNo = (maxNum + 1).toString().padStart(4, '0');
+        finalBillNo = (maxNum > 0 ? maxNum + 1 : 1001).toString();
       }
     }
 
@@ -376,7 +415,7 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       date: rawDate,
       year: targetYear,
       products: products || [],
-      billType: billType === 'GST' ? 'GST' : 'REGULAR',
+      billType: billType === 'GST' ? 'GST' : (billType === 'QUOTATION' ? 'QUOTATION' : 'REGULAR'),
       placeOfSupply: placeOfSupply || '',
       reverseCharge: reverseCharge || 'No',
       vehicleNo: vehicleNo || '',
@@ -401,8 +440,8 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       billFlag: req.body.billFlag || '',
     });
 
-    // 1. Automatically log Bill DEBIT to Account Ledger (Regular Bills ONLY, never for GST)
-    if (particular.billType !== 'GST') {
+    // 1. Automatically log Bill DEBIT to Account Ledger (Regular / Estimate Bills ONLY, never for GST or QUOTATION)
+    if (particular.billType !== 'GST' && particular.billType !== 'QUOTATION') {
       if (billTotalNum > 0) {
         await AccountLedger.create({
           particularId: String(particular._id),
@@ -605,8 +644,8 @@ export const updateParticular = async (req: Request, res: Response, next: NextFu
       }
     }
 
-    // Update or re-sync AccountLedger entries (BILL and PAYMENT) - ONLY FOR REGULAR BILLS
-    if (updatedParticular.billType === 'GST') {
+    // Update or re-sync AccountLedger entries (BILL and PAYMENT) - ONLY FOR REGULAR / ESTIMATE BILLS (NEVER GST or QUOTATION)
+    if (updatedParticular.billType === 'GST' || updatedParticular.billType === 'QUOTATION') {
       await AccountLedger.deleteMany({ particularId: String(id) });
       if (oldCustomerName && oldCustomerName !== updatedParticular.customerName) {
         await recalculateCustomerBalance(oldCustomerName);
@@ -810,6 +849,319 @@ export const deleteParticularPdf = async (req: Request, res: Response, next: Nex
     await particular.save();
 
     res.status(200).json({ success: true, message: 'PDF deleted successfully', data: particular });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const convertQuotationToBill = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const quotation = await Particular.findById(id);
+    if (!quotation) {
+      res.status(404).json({ success: false, error: 'Quotation not found' });
+      return;
+    }
+
+    const currentYear = quotation.year || new Date().getFullYear();
+    const regularParticulars = await Particular.find({
+      year: currentYear,
+      billType: { $nin: ['GST', 'QUOTATION'] },
+      billNo: { $not: { $regex: /^GST/i } },
+    }, 'billNo');
+
+    let maxNum = 0;
+    for (const p of regularParticulars) {
+      if (p.billNo) {
+        const match = p.billNo.match(/\d+/);
+        if (match) {
+          const num = parseInt(match[0], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      }
+    }
+    const newBillNo = (maxNum > 0 ? maxNum + 1 : 1001).toString();
+
+    quotation.billType = 'REGULAR';
+    quotation.billNo = newBillNo;
+    quotation.isConverted = true;
+    quotation.convertedBillNo = newBillNo;
+    quotation.convertedAt = new Date();
+    await quotation.save();
+
+    const billTotalNum = parseFloat(String(quotation.total || quotation.amount || '0').replace(/,/g, '')) || 0;
+    const paidNum = parseFloat(String(quotation.paidAmount || (quotation.paymentStatus === 'PAID' ? billTotalNum : '0')).replace(/,/g, '')) || 0;
+
+    // 1. Automatically log Bill DEBIT to Account Ledger
+    if (billTotalNum > 0) {
+      await AccountLedger.create({
+        particularId: String(quotation._id),
+        billNo: quotation.billNo,
+        customerName: quotation.customerName,
+        date: quotation.date,
+        companyName: quotation.companyName,
+        debit: billTotalNum.toFixed(2),
+        credit: '0.00',
+        balance: '0.00',
+        type: 'BILL',
+      });
+    }
+
+    // 2. If paid, log Payment CREDIT to Account Ledger
+    if (paidNum > 0) {
+      await AccountLedger.create({
+        particularId: String(quotation._id),
+        billNo: quotation.billNo,
+        customerName: quotation.customerName,
+        date: quotation.date,
+        companyName: quotation.companyName,
+        debit: '0.00',
+        credit: paidNum.toFixed(2),
+        balance: '0.00',
+        type: 'PAYMENT',
+      });
+    }
+
+    if (billTotalNum > 0 || paidNum > 0) {
+      await recalculateCustomerBalance(quotation.customerName);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Quotation converted to Estimate Bill #${newBillNo} successfully!`,
+      data: quotation,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const bulkDuplicateParticulars = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const currentSystemYear = new Date().getFullYear();
+    const { templateBill, customers, year } = req.body;
+
+    if (!templateBill || !Array.isArray(customers) || customers.length === 0) {
+      res.status(400).json({ success: false, error: 'templateBill and customers list are required' });
+      return;
+    }
+
+    const bType = templateBill.billType === 'GST' ? 'GST' : (templateBill.billType === 'QUOTATION' ? 'QUOTATION' : 'REGULAR');
+    const targetYear = year ? Number(year) : (templateBill.year ? Number(templateBill.year) : currentSystemYear);
+    const yearQuery = targetYear && !isNaN(targetYear) ? { year: targetYear } : {};
+
+    // Find current max bill number for this billType and year
+    let maxNum = 0;
+    if (bType === 'GST') {
+      const gstParticulars = await Particular.find({
+        ...yearQuery,
+        $or: [{ billType: 'GST' }, { billNo: { $regex: /^GST/i } }],
+      }, 'billNo');
+      for (const p of gstParticulars) {
+        if (p.billNo) {
+          const match = p.billNo.match(/\d+/);
+          if (match) {
+            const num = parseInt(match[0], 10);
+            if (num > maxNum) maxNum = num;
+          }
+        }
+      }
+    } else if (bType === 'QUOTATION') {
+      const quotationParticulars = await Particular.find({
+        ...yearQuery,
+        billType: 'QUOTATION',
+      }, 'billNo');
+      for (const p of quotationParticulars) {
+        if (p.billNo) {
+          const match = p.billNo.match(/\d+/);
+          if (match) {
+            const num = parseInt(match[0], 10);
+            if (num > maxNum) maxNum = num;
+          }
+        }
+      }
+      if (maxNum === 0) maxNum = 1000;
+    } else {
+      const regularParticulars = await Particular.find({
+        ...yearQuery,
+        $and: [
+          { billType: { $nin: ['GST', 'QUOTATION'] } },
+          { billNo: { $not: { $regex: /^GST/i } } },
+        ],
+      }, 'billNo');
+      for (const p of regularParticulars) {
+        if (p.billNo) {
+          const match = p.billNo.match(/\d+/);
+          if (match) {
+            const num = parseInt(match[0], 10);
+            if (num > maxNum) maxNum = num;
+          }
+        }
+      }
+      if (maxNum === 0) maxNum = 1000;
+    }
+
+    const createdBills = [];
+    const billTotalNum = parseFloat(String(templateBill.total || templateBill.amount || '0').replace(/,/g, '')) || 0;
+    const paidNum = parseFloat(String(templateBill.paidAmount || (templateBill.paymentStatus === 'PAID' ? billTotalNum : '0')).replace(/,/g, '')) || 0;
+
+    let computedStatus: 'PAID' | 'UNPAID' | 'PARTIAL' = 'UNPAID';
+    if (templateBill.paymentStatus === 'PAID' || (paidNum >= billTotalNum && billTotalNum > 0)) {
+      computedStatus = 'PAID';
+    } else if (paidNum > 0 && paidNum < billTotalNum) {
+      computedStatus = 'PARTIAL';
+    }
+
+    const rawDate = templateBill.date || new Date().toISOString().split('T')[0];
+
+    for (const cust of customers) {
+      const trimmedCustName = (cust.name || 'General').trim();
+      if (!trimmedCustName) continue;
+
+      // Increment bill number
+      maxNum++;
+      let finalBillNo = '';
+      if (bType === 'GST') {
+        finalBillNo = maxNum.toString().padStart(4, '0');
+      } else {
+        finalBillNo = maxNum.toString();
+      }
+
+      // Auto-create / update Customer in database if needed
+      try {
+        const existingCustomer = await Customer.findOne({
+          name: { $regex: new RegExp(`^${escapeRegex(trimmedCustName)}$`, 'i') },
+        });
+
+        if (!existingCustomer) {
+          const allCusts = await Customer.find().sort({ createdAt: 1 });
+          let maxId = 0;
+          allCusts.forEach((c) => {
+            if (c.idCode) {
+              const m = c.idCode.match(/\d+/);
+              if (m) {
+                const n = parseInt(m[0], 10);
+                if (n > maxId) maxId = n;
+              }
+            }
+          });
+
+          const avatarColors = [
+            { bg: '#EFF6FF', color: '#1D4ED8' },
+            { bg: '#ECFDF5', color: '#047857' },
+            { bg: '#FEF3C7', color: '#B45309' },
+            { bg: '#FDF2F8', color: '#BE185D' },
+            { bg: '#F5F3FF', color: '#6D28D9' },
+            { bg: '#FFF1F2', color: '#BE123C' },
+          ];
+          const colorPair = avatarColors[trimmedCustName.length % avatarColors.length];
+
+          await Customer.create({
+            name: trimmedCustName,
+            mobile: cust.mobile || cust.phone || '-',
+            address: cust.address || '-',
+            gst: cust.gst || 'N/A',
+            aadhar: cust.aadhar || '',
+            avatarLetter: trimmedCustName.charAt(0).toUpperCase(),
+            avatarBg: colorPair.bg,
+            avatarColor: colorPair.color,
+            idCode: `#${(maxId + 1).toString().padStart(4, '0')}`,
+            year: currentSystemYear,
+          });
+        }
+      } catch (custSyncErr) {
+        console.warn('[Bulk Customer Sync Error]:', custSyncErr);
+      }
+
+      const bill = await Particular.create({
+        customerName: trimmedCustName,
+        customerPhone: cust.phone || cust.mobile || templateBill.customerPhone || '',
+        customerAddress: cust.address || templateBill.customerAddress || '',
+        customerGst: cust.gst || templateBill.customerGst || '',
+        customerAadhar: cust.aadhar || templateBill.customerAadhar || '',
+        caseCount: templateBill.caseCount || '0',
+        companyName: templateBill.companyName || 'General',
+        discount: templateBill.discount || '0',
+        transport: templateBill.transport || '-',
+        packing: templateBill.packing || '0',
+        billNo: finalBillNo,
+        tax: templateBill.tax || '0',
+        amount: templateBill.amount || templateBill.total || '0.00',
+        total: templateBill.total || templateBill.amount || '0.00',
+        paymentStatus: computedStatus,
+        paymentMode: templateBill.paymentMode || (computedStatus === 'PAID' ? 'CASH' : 'CREDIT'),
+        paidAmount: paidNum > 0 ? paidNum.toFixed(2) : '0.00',
+        notes: templateBill.notes || '',
+        date: rawDate,
+        year: targetYear,
+        products: templateBill.products || [],
+        billType: bType,
+        placeOfSupply: templateBill.placeOfSupply || '',
+        reverseCharge: templateBill.reverseCharge || 'No',
+        vehicleNo: templateBill.vehicleNo || '',
+        ewayBillNo: templateBill.ewayBillNo || '',
+        gstRate: templateBill.gstRate || '18',
+        cgstTotal: templateBill.cgstTotal || '0.00',
+        sgstTotal: templateBill.sgstTotal || '0.00',
+        igstTotal: templateBill.igstTotal || '0.00',
+        roundOff: templateBill.roundOff || '0.00',
+        despatchTo: cust.address || templateBill.despatchTo || '',
+        lorryTransport: templateBill.lorryTransport || templateBill.transport || '',
+        lrNo: templateBill.lrNo || '',
+        lrDate: templateBill.lrDate || '',
+        taxType: templateBill.taxType || 'IGST',
+        taxPercent: templateBill.taxPercent || templateBill.gstRate || '18',
+        cgstPercent: templateBill.cgstPercent || '0',
+        sgstPercent: templateBill.sgstPercent || '0',
+        igstPercent: templateBill.igstPercent || '18',
+        subTotal: templateBill.subTotal || '0.00',
+        netAmount: templateBill.netAmount || templateBill.total || '0.00',
+        inWords: templateBill.inWords || '',
+        billFlag: templateBill.billFlag || '',
+      });
+
+      if (bType !== 'GST' && bType !== 'QUOTATION') {
+        if (billTotalNum > 0) {
+          await AccountLedger.create({
+            particularId: String(bill._id),
+            billNo: bill.billNo,
+            customerName: bill.customerName,
+            date: bill.date,
+            companyName: bill.companyName,
+            debit: billTotalNum.toFixed(2),
+            credit: '0.00',
+            balance: '0.00',
+            type: 'BILL',
+          });
+        }
+        if (paidNum > 0) {
+          await AccountLedger.create({
+            particularId: String(bill._id),
+            billNo: bill.billNo,
+            customerName: bill.customerName,
+            date: bill.date,
+            companyName: bill.companyName,
+            debit: '0.00',
+            credit: paidNum.toFixed(2),
+            balance: '0.00',
+            type: 'PAYMENT',
+          });
+        }
+        if (billTotalNum > 0 || paidNum > 0) {
+          await recalculateCustomerBalance(bill.customerName);
+        }
+      }
+
+      createdBills.push(bill);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `Successfully created ${createdBills.length} bills`,
+      count: createdBills.length,
+      data: createdBills,
+      billNos: createdBills.map((b) => b.billNo),
+    });
   } catch (error) {
     next(error);
   }

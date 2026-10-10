@@ -20,9 +20,11 @@ import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { ParticularsApi } from '../services/api';
 import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
+import { DuplicateBillModal } from './DuplicateBillModal';
 import { DateRangePrintModal } from './DateRangePrintModal';
 import { printParticularsListDirectly } from '../utils/printUtils';
 import { getStoredSettings } from './SettingsPage';
@@ -35,11 +37,12 @@ import {
 import { getSelectedBillYear } from '../utils/billYearUtils';
 
 interface SalesPageProps {
+  onNewEstimate?: () => void;
   onNewQuotation?: () => void;
   onEditBill?: (bill: any) => void;
 }
 
-export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) => {
+export const SalesPage: FC<SalesPageProps> = ({ onNewEstimate, onNewQuotation, onEditBill }) => {
   const [storeSettings, setStoreSettings] = useState(() => getStoredSettings());
   const [bills, setBills] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -57,6 +60,10 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
 
   // Date Range Print Modal State
   const [openDatePrintModal, setOpenDatePrintModal] = useState<boolean>(false);
+
+  // Duplicate for Multiple Customers state
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState<boolean>(false);
+  const [billToDuplicate, setBillToDuplicate] = useState<any | null>(null);
 
   const fetchBills = async (yearToFetch?: number | string) => {
     try {
@@ -241,7 +248,7 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
                 letterSpacing: '0.01em',
               }}
             >
-              Sales Register (Quotation Bills)
+              Sales Register (Estimate Bills)
             </Typography>
             <Box
               sx={{
@@ -345,10 +352,10 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
               Refresh
             </Button>
 
-            {/* New Quotation Button */}
-            {onNewQuotation && (
+            {/* New Estimate Button */}
+            {(onNewEstimate || onNewQuotation) && (
               <Button
-                onClick={onNewQuotation}
+                onClick={onNewEstimate || onNewQuotation}
                 startIcon={<AddRoundedIcon sx={{ fontSize: 15 }} />}
                 size="small"
                 sx={{
@@ -363,7 +370,7 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
                   '&:hover': { bgcolor: '#1E3A8A' },
                 }}
               >
-                + New Quotation
+                + New Estimate
               </Button>
             )}
           </Box>
@@ -489,8 +496,8 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
                           {searchTerm
                             ? 'No sales bills matching your search.'
                             : selectedYear === 'ALL'
-                              ? 'No quotation bills found in database.'
-                              : `No quotation bills created for Year ${selectedYear}.`}
+? 'No sales bills found in database.'
+                              : `No sales bills created for Year ${selectedYear}.`}
                         </Typography>
                         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', mt: 1.5 }}>
                           {selectedYear !== 'ALL' && (
@@ -503,14 +510,14 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
                               Show All Years
                             </Button>
                           )}
-                          {onNewQuotation && !searchTerm && (
+                          {(onNewEstimate || onNewQuotation) && !searchTerm && (
                             <Button
-                              onClick={onNewQuotation}
+                              onClick={onNewEstimate || onNewQuotation}
                               size="small"
                               variant="contained"
                               sx={{ bgcolor: '#1E40AF', textTransform: 'none', fontWeight: 700 }}
                             >
-                              + Create First Quotation
+                              + Create First Estimate Bill
                             </Button>
                           )}
                         </Box>
@@ -617,9 +624,36 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
                                 </Button>
                               </Tooltip>
 
+                              {/* Duplicate to Multiple Customers Button */}
+                              <Tooltip title="Duplicate for Multiple Customers">
+                                <Button
+                                  size="small"
+                                  onClick={() => {
+                                    setBillToDuplicate(bill);
+                                    setDuplicateModalOpen(true);
+                                  }}
+                                  startIcon={<ContentCopyRoundedIcon sx={{ fontSize: 13 }} />}
+                                  sx={{
+                                    height: '24px',
+                                    px: 1,
+                                    py: 0,
+                                    bgcolor: '#ECFDF5',
+                                    border: '1px solid #A7F3D0',
+                                    color: '#047857',
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    textTransform: 'none',
+                                    borderRadius: '2px',
+                                    '&:hover': { bgcolor: '#D1FAE5' },
+                                  }}
+                                >
+                                  Duplicate
+                                </Button>
+                              </Tooltip>
+
                               {/* Edit Button */}
                               {onEditBill && (
-                                <Tooltip title="Edit Bill in Quotation Page">
+                                <Tooltip title="Edit Estimate Bill">
                                   <Button
                                     size="small"
                                     onClick={() => onEditBill(bill)}
@@ -685,12 +719,29 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
         <DateRangePrintModal
           open={openDatePrintModal}
           onClose={() => setOpenDatePrintModal(false)}
-          title="Sales Quotation Bills Report"
-          subtitle="Filter and print Quotation Bills list on standard A4 format"
+          title="Sales Estimate Bills Report"
+          subtitle="Filter and print Estimate Bills list on standard A4 format"
           items={filteredBills}
           getDateFromItem={(item) => item.date || item.createdAt || ''}
           onConfirmPrint={(items, dateRangeText) => {
             printParticularsListDirectly(items, dateRangeText);
+          }}
+        />
+      )}
+
+      {/* Duplicate Bill to Multiple Customers Modal */}
+      {duplicateModalOpen && billToDuplicate && (
+        <DuplicateBillModal
+          open={duplicateModalOpen}
+          onClose={() => {
+            setDuplicateModalOpen(false);
+            setBillToDuplicate(null);
+          }}
+          templateBill={billToDuplicate}
+          mode="ESTIMATE"
+          selectedYear={selectedYear === 'ALL' ? new Date().getFullYear() : Number(selectedYear)}
+          onSuccess={() => {
+            fetchBills(selectedYear);
           }}
         />
       )}

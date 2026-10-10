@@ -10,16 +10,19 @@ import { SalesPage } from './components/SalesPage';
 import { AllCustomersPage } from './components/AllCustomersPage';
 import { AddCustomerPage } from './components/AddCustomerPage';
 import { ParticularsPage } from './components/ParticularsPage';
+import { QuotationPage } from './components/QuotationPage';
 import { GstBillPage } from './components/GstBillPage';
 import { DespatchPage } from './components/DespatchPage';
 import { SettingsPage, getStoredSettings, DEFAULT_COMPANY_SETTINGS } from './components/SettingsPage';
 import { SettingsApi } from './services/api';
 import { YearRestrictionDialog } from './components/YearRestrictionDialog';
+import { type ProductSubPage } from './types/productSubPages';
 
 const ACTIVE_TAB_KEY = 'apsara_active_tab';
 const CUSTOMER_SUBVIEW_KEY = 'apsara_customer_subview';
+const PRODUCT_SUBPAGE_KEY = 'svm_product_subpage';
 
-const VALID_TABS = ['All Customers', 'Sales', 'Product', 'Quotation', 'GST Bill', 'Despatch', 'Categories', 'Price List', 'Settings'] as const;
+const VALID_TABS = ['All Customers', 'Sales', 'Estimate', 'Product', 'Quotation', 'Price List', 'Categories', 'GST Bill', 'Despatch', 'Settings'] as const;
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -27,19 +30,37 @@ function App() {
   });
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
     const saved = localStorage.getItem(ACTIVE_TAB_KEY);
-    if (saved === 'Billing') return 'Quotation';
+    if (saved === 'Billing') return 'Estimate';
     if (saved && VALID_TABS.includes(saved as NavTab)) {
       return saved as NavTab;
     }
     return 'All Customers';
   });
+  const [productSubPage, setProductSubPage] = useState<ProductSubPage>(() => {
+    const saved = localStorage.getItem(PRODUCT_SUBPAGE_KEY);
+    if (
+      saved === 'pricemap master' ||
+      saved === 'product-Retail sales' ||
+      saved === 'product-price map' ||
+      saved === 'product-whole sales'
+    ) {
+      return saved as ProductSubPage;
+    }
+    return 'product-Retail sales';
+  });
   const [customerSubView, setCustomerSubView] = useState<'list' | 'add'>(() => {
     const saved = localStorage.getItem(CUSTOMER_SUBVIEW_KEY);
-    // Never restore 'add' subview on refresh - go back to list on refresh for add page
     return saved === 'list' ? 'list' : 'list';
   });
   const [selectedCustomerName, setSelectedCustomerName] = useState<string>('');
   const [editingBill, setEditingBill] = useState<any | null>(null);
+
+  const handleSelectProductSubPage = (sub: ProductSubPage) => {
+    setProductSubPage(sub);
+    localStorage.setItem(PRODUCT_SUBPAGE_KEY, sub);
+    setActiveTab('Product');
+    localStorage.setItem(ACTIVE_TAB_KEY, 'Product');
+  };
 
   useEffect(() => {
     // Clear legacy sticky customer & stale cache if present
@@ -111,24 +132,44 @@ function App() {
       setCustomerSubView('list');
       localStorage.setItem(CUSTOMER_SUBVIEW_KEY, 'list');
     }
-    if (tab === 'Quotation') {
+    if (tab === 'Estimate' || tab === 'Quotation') {
       setSelectedCustomerName('');
       setEditingBill(null);
     }
   };
 
-  const handleCustomerSelectedForParticular = (customerName: string) => {
+  const handleCustomerSelectedForEstimate = (customerName: string) => {
+    setSelectedCustomerName(customerName);
+    setEditingBill(null);
+    setActiveTab('Estimate');
+    localStorage.setItem(ACTIVE_TAB_KEY, 'Estimate');
+  };
+
+  const handleCustomerSelectedForQuotation = (customerName: string) => {
     setSelectedCustomerName(customerName);
     setEditingBill(null);
     setActiveTab('Quotation');
     localStorage.setItem(ACTIVE_TAB_KEY, 'Quotation');
   };
 
+  const handleCustomerSelectedForParticular = (customerName: string, subTab?: string) => {
+    if (subTab === 'Quotation') {
+      handleCustomerSelectedForQuotation(customerName);
+    } else {
+      handleCustomerSelectedForEstimate(customerName);
+    }
+  };
+
   const handleEditBill = (bill: any) => {
     setEditingBill(bill);
     setSelectedCustomerName('');
-    setActiveTab('Quotation');
-    localStorage.setItem(ACTIVE_TAB_KEY, 'Quotation');
+    if (bill.billType === 'QUOTATION') {
+      setActiveTab('Quotation');
+      localStorage.setItem(ACTIVE_TAB_KEY, 'Quotation');
+    } else {
+      setActiveTab('Estimate');
+      localStorage.setItem(ACTIVE_TAB_KEY, 'Estimate');
+    }
   };
 
   const handleEditBillSuccess = () => {
@@ -162,6 +203,8 @@ function App() {
           activeTab={activeTab}
           onSelectTab={handleSelectTab}
           onLogout={handleLogout}
+          productSubPage={productSubPage}
+          onSelectProductSubPage={handleSelectProductSubPage}
         />
 
         <Box component="main" sx={{ flexGrow: 1, width: '100%', py: 0.5 }}>
@@ -177,26 +220,46 @@ function App() {
                 <AllCustomersPage
                   onAddNewCustomer={() => setCustomerSubView('add')}
                   onSelectCustomerForParticular={handleCustomerSelectedForParticular}
+                  onSelectCustomerForEstimate={handleCustomerSelectedForEstimate}
+                  onSelectCustomerForQuotation={handleCustomerSelectedForQuotation}
                   onEditBill={handleEditBill}
                 />
               )}
             </>
           )}
 
-          {/* Sales Tab (Displays all quotation bills) */}
+          {/* Sales Tab (Displays all regular / estimate bills) */}
           {activeTab === 'Sales' && (
             <SalesPage
-              onNewQuotation={() => handleSelectTab('Quotation')}
+              onNewEstimate={() => handleSelectTab('Estimate')}
+              onNewQuotation={() => handleSelectTab('Estimate')}
               onEditBill={handleEditBill}
             />
           )}
 
-          {/* Quotation / Particulars Tab */}
-          {activeTab === 'Quotation' && (
+          {/* Estimate / Billing Tab (Adds to Sales) */}
+          {activeTab === 'Estimate' && (
             <ParticularsPage
+              mode="ESTIMATE"
               initialCustomerName={selectedCustomerName}
               editBillData={editingBill}
               onEditSuccess={handleEditBillSuccess}
+            />
+          )}
+
+          {/* Quotation Tab (Sample products calculation - Does not affect sales) */}
+          {activeTab === 'Quotation' && (
+            <QuotationPage
+              initialCustomerName={selectedCustomerName}
+              onNavigateToEstimate={(billData) => {
+                setEditingBill(billData);
+                setActiveTab('Estimate');
+                localStorage.setItem(ACTIVE_TAB_KEY, 'Estimate');
+              }}
+              onNavigateToSales={() => {
+                setActiveTab('Sales');
+                localStorage.setItem(ACTIVE_TAB_KEY, 'Sales');
+              }}
             />
           )}
 
@@ -213,7 +276,12 @@ function App() {
           {activeTab === 'Price List' && <PriceListPage />}
 
           {/* Product Master Tab */}
-          {activeTab === 'Product' && <ProductsPage />}
+          {activeTab === 'Product' && (
+            <ProductsPage
+              initialSubPage={productSubPage}
+              onSubPageChangeProp={handleSelectProductSubPage}
+            />
+          )}
 
           {/* Settings Tab */}
           {activeTab === 'Settings' && <SettingsPage />}
