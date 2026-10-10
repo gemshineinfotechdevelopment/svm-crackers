@@ -51,7 +51,7 @@ export const getSettings = async (_req: Request, res: Response, next: NextFuncti
       });
     } else {
       let needsSave = false;
-      if (!settings.companyName || settings.companyName.toLowerCase().includes('varun') || settings.companyName.toLowerCase().includes('dheeksha') || settings.companyName.toLowerCase().includes('apsara') || settings.companyName.toLowerCase().includes('manjula')) {
+      if (!settings.companyName || typeof settings.companyName !== 'string' || settings.companyName === 'false' || settings.companyName === 'true' || settings.companyName.toLowerCase().includes('varun') || settings.companyName.toLowerCase().includes('dheeksha') || settings.companyName.toLowerCase().includes('apsara') || settings.companyName.toLowerCase().includes('manjula')) {
         settings.companyName = 'S.V.M Fireworks Agencies';
         needsSave = true;
       }
@@ -63,7 +63,7 @@ export const getSettings = async (_req: Request, res: Response, next: NextFuncti
         settings.whatsapp = '8778429299';
         needsSave = true;
       }
-      if (!settings.address || settings.address.toLowerCase().includes('tirupur') || settings.address.toLowerCase().includes('varun') || settings.address.toLowerCase().includes('rajivgandhi') || settings.address.toLowerCase().includes('67 - h/e')) {
+      if (!settings.address || typeof settings.address !== 'string' || settings.address === 'false' || settings.address === 'true' || !settings.address.trim() || settings.address.toLowerCase().includes('tirupur') || settings.address.toLowerCase().includes('varun') || settings.address.toLowerCase().includes('rajivgandhi') || settings.address.toLowerCase().includes('67 - h/e')) {
         settings.address = 'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road, Keela Thiruthangal - 626 130. Tamil Nadu';
         needsSave = true;
       }
@@ -136,6 +136,13 @@ export const updateSettings = async (req: Request, res: Response, next: NextFunc
     cleanedData.billingStartDate = billingInfo.billingStartDate;
     cleanedData.billingEndDate = billingInfo.billingEndDate;
     cleanedData.billingStatus = billingInfo.billingStatus;
+
+    if (!cleanedData.companyName || typeof cleanedData.companyName !== 'string' || cleanedData.companyName === 'false' || cleanedData.companyName.toLowerCase().includes('varun') || cleanedData.companyName.toLowerCase().includes('dheeksha') || cleanedData.companyName.toLowerCase().includes('apsara') || cleanedData.companyName.toLowerCase().includes('manjula')) {
+      cleanedData.companyName = 'S.V.M Fireworks Agencies';
+    }
+    if (!cleanedData.address || typeof cleanedData.address !== 'string' || cleanedData.address === 'false' || !cleanedData.address.trim() || cleanedData.address.toLowerCase().includes('tirupur') || cleanedData.address.toLowerCase().includes('varun') || cleanedData.address.toLowerCase().includes('rajivgandhi') || cleanedData.address.toLowerCase().includes('67 - h/e')) {
+      cleanedData.address = 'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road, Keela Thiruthangal - 626 130. Tamil Nadu';
+    }
 
     const settings = await Settings.findOneAndUpdate(
       {},

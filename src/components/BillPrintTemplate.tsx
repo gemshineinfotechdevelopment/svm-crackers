@@ -101,15 +101,15 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
 
   // Display Company Name
   const displayCompanyName =
-    storeSettings.companyName && storeSettings.companyName.trim() !== '' && storeSettings.companyName !== 'General'
+    storeSettings.companyName && typeof storeSettings.companyName === 'string' && storeSettings.companyName.trim() !== '' && storeSettings.companyName !== 'General' && storeSettings.companyName !== 'false'
       ? storeSettings.companyName.toUpperCase()
-      : (bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General')
+      : (bill.companyName && typeof bill.companyName === 'string' && bill.companyName.trim() !== '' && bill.companyName !== 'General' && bill.companyName !== 'false')
         ? bill.companyName.toUpperCase()
         : 'S.V.M FIREWORKS AGENCIES';
 
-  const companyAddress = (storeSettings.address && !storeSettings.address.toLowerCase().includes('rajivgandhi') && !storeSettings.address.toLowerCase().includes('67 - h/e'))
+  const companyAddress = (storeSettings.address && typeof storeSettings.address === 'string' && storeSettings.address !== 'false' && !storeSettings.address.toLowerCase().includes('rajivgandhi') && !storeSettings.address.toLowerCase().includes('67 - h/e'))
     ? storeSettings.address.trim()
-    : (bill.companyAddress && !bill.companyAddress.toLowerCase().includes('rajivgandhi') && !bill.companyAddress.toLowerCase().includes('67 - h/e'))
+    : (bill.companyAddress && typeof bill.companyAddress === 'string' && bill.companyAddress !== 'false' && !bill.companyAddress.toLowerCase().includes('rajivgandhi') && !bill.companyAddress.toLowerCase().includes('67 - h/e'))
       ? bill.companyAddress.trim()
       : 'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road, Keela Thiruthangal - 626 130. Tamil Nadu';
   const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
