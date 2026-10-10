@@ -356,7 +356,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
 
   // Open Add Modal
   const openAddAction = () => {
-    const targetType = activeTabType === 'ALL' ? 'Retail' : activeTabType;
+    const targetType = activeTabType;
     setEditingProduct(null);
     setProductType(targetType);
     setProductSlNo(getNextSlNoForType(targetType));
@@ -580,6 +580,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         let nameCol = -1;
         let catCol = -1;
         let unitCol = -1;
+        let qtyCol = -1;
         let mrpCol = -1;
         let rateCol = -1;
         let typeCol = -1;
@@ -786,7 +787,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
   }
 
   if (currentSubPage === 'product-price map') {
-    return <ProductPriceMapPage onSubPageChange={handleSubPageChange} />;
+    return <ProductPriceMapPage currentSubPage="product-price map" onSubPageChange={handleSubPageChange} />;
   }
 
   return (
@@ -947,7 +948,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
               </Typography>
               <input
                 type="text"
-                placeholder={`Search ${activeTabType === 'ALL' ? '' : activeTabType} products...`}
+                placeholder={`Search ${activeTabType} products...`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="erp-input"
@@ -988,7 +989,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
               <Button
                 onClick={() => {
                   const openBulkUploadModal = () => {
-                    setBulkUploadType(activeTabType === 'ALL' ? 'Retail' : activeTabType);
+                    setBulkUploadType(activeTabType);
                     setPreviewItems([]);
                     setUploadFileName('');
                     setBulkUploadOpen(true);
@@ -1019,7 +1020,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                   '&:hover': { bgcolor: '#DCFCE7' },
                 }}
               >
-                Bulk Upload ({activeTabType === 'ALL' ? 'Retail' : activeTabType})
+                Bulk Upload ({activeTabType})
               </Button>
 
               <Button
@@ -1163,7 +1164,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
 
                           {/* S.No starts from 1 for Retail, 1 for Wholesale, and continuous 1..N for All Products */}
                           <TableCell sx={{ textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#1E3A8A' }}>
-                            {activeTabType === 'ALL' ? idx + 1 : (p.slNo || idx + 1)}
+                            {p.slNo || idx + 1}
                           </TableCell>
 
                           <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
