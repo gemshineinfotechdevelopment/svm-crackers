@@ -30,6 +30,7 @@ import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import EditRoundedIcon from '@mui/icons-material/EditRounded';
 
 import {
   CustomersApi,
@@ -425,6 +426,7 @@ export const GstBillPage: FC = () => {
   };
 
   // UI state
+  const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [savingBill, setSavingBill] = useState<boolean>(false);
   const [snackbarMessage, setSnackbarMessage] = useState<string>('');
   const [snackbarOpen, setSnackbarOpen] = useState<boolean>(false);
@@ -653,33 +655,6 @@ export const GstBillPage: FC = () => {
     }
   };
 
-  // Reset form to fresh blank invoice
-  const handleResetForm = (targetYear: number | string = selectedYear) => {
-    setSelectedCustomer(null);
-    setCustomerName('');
-    setCustomerAddress('');
-    setCustomerGst('');
-    setCustomerAadhar('');
-    setCustomerPhone('');
-    setDespatchedTo('');
-    setLorryTransport('');
-    setLrNo('');
-    setLrDate(getTodayDateStr());
-    setTotalCases('0');
-    setTotalCasesManual(false);
-    setQuickCode('');
-    setSelectedCatalogProduct(null);
-    setProductRows([
-      { id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
-    ]);
-    setSelectedRowId(null);
-    setBillDate(getTodayDateStr());
-    setTaxType('IGST');
-    setTaxPercent('18');
-    setBillFlag(true);
-    fetchNextGstBillNo(targetYear);
-  };
-
   useEffect(() => {
     loadInitialData(selectedYear);
     fetchGstHistory(selectedYear);
@@ -737,6 +712,99 @@ export const GstBillPage: FC = () => {
       setCustomerAadhar('');
       setDespatchedTo('');
     }
+  };
+
+  // Reset form to blank new bill
+  const handleResetForm = async (targetYear: number | string = selectedYear) => {
+    setEditingBillId(null);
+    setSelectedCustomer(null);
+    setCustomerName('');
+    setCustomerPhone('');
+    setCustomerAddress('');
+    setCustomerGst('');
+    setCustomerAadhar('');
+    setDespatchedTo('');
+    setLorryTransport('');
+    setLrNo('');
+    setLrDate(getTodayDateStr());
+    setTotalCases('0');
+    setTotalCasesManual(false);
+    setQuickCode('');
+    setSelectedCatalogProduct(null);
+    setBillDate(getTodayDateStr());
+    setTaxType('IGST');
+    setTaxPercent('18');
+    setBillFlag(true);
+    setProductRows([
+      { id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
+    ]);
+    setSelectedRowId(null);
+    await fetchNextGstBillNo(targetYear);
+  };
+
+  // Edit Bill from History
+  const handleEditBill = (b: any) => {
+    setEditingBillId(b._id || b.id || null);
+    setBillNo(b.billNo || '');
+    setBillDate(b.date || getTodayDateStr());
+    if (b.year) {
+      setSelectedYear(Number(b.year));
+    }
+
+    // Customer info
+    const matchedCust = customerOptions.find(
+      (c) => c.name.toLowerCase().trim() === (b.customerName || '').toLowerCase().trim()
+    );
+    setSelectedCustomer(matchedCust || null);
+    setCustomerName(b.customerName || '');
+    setCustomerPhone(b.customerPhone || b.customerMobile || matchedCust?.mobile || '');
+    setCustomerAddress(b.customerAddress || matchedCust?.address || '');
+    setCustomerGst(b.customerGst || matchedCust?.gst || '');
+    setCustomerAadhar(b.customerAadhar || matchedCust?.aadhar || '');
+
+    // Despatch info
+    setDespatchedTo(b.despatchTo || b.dispatchTo || '');
+    setLorryTransport(b.lorryTransport || b.transport || '');
+    setLrNo(b.lrNo || '');
+    setLrDate(b.lrDate || getTodayDateStr());
+    setTotalCases(String(b.caseCount || b.cases || '0'));
+    setTotalCasesManual(Boolean(b.caseCount && b.caseCount !== '0'));
+
+    // Tax info
+    setTaxType(b.taxType || (parseFloat(String(b.igstTotal || 0)) > 0 ? 'IGST' : (parseFloat(String(b.cgstTotal || 0)) > 0 ? 'CGST_SGST' : 'IGST')));
+    setTaxPercent(String(b.taxPercent || b.gstRate || '18'));
+    setBillFlag(b.billFlag !== 'NO');
+
+    // Products rows
+    const prods = b.products || [];
+    const formattedRows: GstRowItem[] = prods.map((p: any, idx: number) => {
+      const q = String(p.quantity !== undefined ? p.quantity : '1');
+      const r = String(p.rate !== undefined ? p.rate : '0');
+      const amt = p.amount !== undefined ? String(p.amount) : (parseFloat(q) * parseFloat(r)).toFixed(2);
+      return {
+        id: String(p._id || p.id || idx + 1),
+        code: p.code || '',
+        particular: p.particular || p.name || '',
+        hsnCode: p.hsnCode || p.hsn || '3604',
+        quantity: q,
+        unit: p.unit || p.pktUnit || p.per || 'Case',
+        rate: r,
+        amount: amt,
+      };
+    });
+
+    setProductRows(
+      formattedRows.length > 0
+        ? formattedRows
+        : [{ id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' }]
+    );
+    setSelectedRowId(null);
+
+    // Switch to create form tab
+    setActiveSubTab('create');
+
+    setSnackbarMessage(`Loaded Tax Bill #${b.billNo} for editing. Modify any details and click Update Bill.`);
+    setSnackbarOpen(true);
   };
 
   // Product Code Lookup Helper
@@ -1183,34 +1251,51 @@ export const GstBillPage: FC = () => {
         })),
       };
 
-      try {
-        await ParticularsApi.create(payload);
-      } catch (err) {
-        console.warn('Backend save notice:', err);
+      if (editingBillId) {
+        try {
+          await ParticularsApi.update(editingBillId, payload);
+        } catch (err) {
+          console.warn('Backend update notice:', err);
+        }
+      } else {
+        try {
+          await ParticularsApi.create(payload);
+        } catch (err) {
+          console.warn('Backend save notice:', err);
+        }
       }
 
       // Save to local storage cache
       const existingHistoryRaw = localStorage.getItem(GST_LOCAL_HISTORY_KEY);
       const existingHistory: any[] = existingHistoryRaw ? JSON.parse(existingHistoryRaw) : [];
-      const updatedHistory = [billData, ...existingHistory.filter((b) => b.billNo !== billData.billNo)];
+      const updatedHistory = [
+        { ...billData, _id: editingBillId || undefined },
+        ...existingHistory.filter((b) => b.billNo !== billData.billNo && (editingBillId ? (b._id !== editingBillId && b.id !== editingBillId) : true)),
+      ];
       localStorage.setItem(GST_LOCAL_HISTORY_KEY, JSON.stringify(updatedHistory));
 
-      setSnackbarMessage(`GST Bill #${billData.billNo} saved successfully!`);
+      setSnackbarMessage(
+        editingBillId
+          ? `GST Bill #${billData.billNo} updated successfully!`
+          : `GST Bill #${billData.billNo} saved successfully!`
+      );
       setSnackbarOpen(true);
 
       // Open PDF Preview & Print Modal
       setSelectedBillForPrint(billData);
       setPrintModalOpen(true);
 
+      const prevEditing = editingBillId;
+      setEditingBillId(null);
       fetchGstHistory();
-      if (sessions.length > 1) {
+      if (!prevEditing && sessions.length > 1) {
         const remaining = sessions.filter((s) => s.id !== activeSessionId);
         const nextId = remaining[0].id;
         setSessions(remaining);
         setActiveSessionId(nextId);
         saveGstSessions(remaining, nextId);
         applySessionToForm(remaining[0]);
-      } else {
+      } else if (!prevEditing) {
         handleResetForm();
       }
     } catch (e: any) {
@@ -1499,6 +1584,53 @@ export const GstBillPage: FC = () => {
                 Duplicate to Customers
               </Button>
             </Box>
+
+            {/* Editing Active Notice Banner */}
+            {editingBillId && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  bgcolor: '#FEF3C7',
+                  border: '1.5px solid #F59E0B',
+                  borderRadius: '4px',
+                  px: 1.5,
+                  py: 0.7,
+                  mb: 1,
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  <EditRoundedIcon sx={{ fontSize: 18, color: '#B45309' }} />
+                  <Typography sx={{ fontSize: '12px', fontWeight: 800, color: '#92400E' }}>
+                    Editing Tax Bill #{billNo} {customerName ? `— ${customerName}` : ''}
+                  </Typography>
+                  <Typography sx={{ fontSize: '11px', color: '#B45309' }}>
+                    (Modify products or customer details, then click "Update Bill")
+                  </Typography>
+                </Box>
+                <Button
+                  size="small"
+                  onClick={() => handleResetForm()}
+                  sx={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    color: '#92400E',
+                    bgcolor: '#FDE68A',
+                    border: '1px solid #F59E0B',
+                    py: 0.2,
+                    px: 1.2,
+                    height: '24px',
+                    borderRadius: '3px',
+                    '&:hover': { bgcolor: '#FCD34D' },
+                  }}
+                >
+                  Cancel Edit
+                </Button>
+              </Box>
+            )}
 
             {/* ========================================================= */}
             {/* TOP SECTION: 3 FIELDSETS (Bill Info, Customer Info, Despatch Info) */}
@@ -2584,7 +2716,7 @@ export const GstBillPage: FC = () => {
                         disabled={savingBill}
                         variant="contained"
                         sx={{
-                          bgcolor: '#741748',
+                          bgcolor: editingBillId ? '#0284C7' : '#741748',
                           color: '#FFFFFF',
                           fontWeight: 700,
                           fontSize: '12px',
@@ -2593,10 +2725,16 @@ export const GstBillPage: FC = () => {
                           borderRadius: '3px',
                           whiteSpace: 'nowrap',
                           boxShadow: 'none',
-                          '&:hover': { bgcolor: '#580e34' },
+                          '&:hover': { bgcolor: editingBillId ? '#0369A1' : '#580e34' },
                         }}
                       >
-                        {savingBill ? <CircularProgress size={16} color="inherit" /> : 'Save Bill'}
+                        {savingBill ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : editingBillId ? (
+                          'Update Bill'
+                        ) : (
+                          'Save Bill'
+                        )}
                       </Button>
 
                       <Button
@@ -2746,6 +2884,15 @@ export const GstBillPage: FC = () => {
                             </TableCell>
                             <TableCell sx={{ textAlign: 'center' }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                                <IconButton
+                                  size="small"
+                                  title="Edit Bill"
+                                  onClick={() => handleEditBill(b)}
+                                  sx={{ color: '#0284C7', p: 0.4, '&:hover': { bgcolor: '#E0F2FE' } }}
+                                >
+                                  <EditRoundedIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+
                                 <IconButton
                                   size="small"
                                   title="Print Bill"
