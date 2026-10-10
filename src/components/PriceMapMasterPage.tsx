@@ -195,7 +195,7 @@ export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({
     });
   };
 
-  // Handle Double Click to open Product Price Map (Image 2)
+  // Handle navigate to Product Price Map (Image 2)
   const handleOpenProductPriceMap = (mapName?: string) => {
     const targetName = mapName || priceMaps[selectedIndex]?.name || 'SVM';
     localStorage.setItem('svm_selected_pricemap_name', targetName);
@@ -216,6 +216,8 @@ export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({
     }
     setEditingIndex(null);
   };
+
+  const selectedShopName = priceMaps[selectedIndex]?.name || 'SVM';
 
   return (
     <Box sx={{ width: '100%', p: { xs: 1, sm: 1.5 }, bgcolor: '#D9E4F2', minHeight: 'calc(100vh - 70px)' }}>
@@ -257,7 +259,7 @@ export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({
                   '&:hover': { bgcolor: '#C2410C' },
                 }}
               >
-                Open Product Price Map (Image 2)
+                Go to Product Price Map ▶
               </Button>
               <Tooltip title="Refresh list" arrow>
                 <IconButton
@@ -283,10 +285,10 @@ export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({
             minHeight: '480px',
           }}
         >
-          {/* Clean Price Map List Card Container */}
+          {/* Clean Price Map List Card Container (Matching Reference Image 1) */}
           <Box
             sx={{
-              width: { xs: '100%', sm: '420px', md: '460px' },
+              width: { xs: '100%', sm: '440px', md: '480px' },
               bgcolor: '#ECE9D8',
               border: '1px solid #7F9DB9',
               borderRadius: '4px',
@@ -295,7 +297,7 @@ export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({
               display: 'flex',
               flexDirection: 'column',
               p: 1.5,
-              gap: 1,
+              gap: 1.2,
             }}
           >
             {/* Header Label: Price Map list */}
@@ -303,275 +305,290 @@ export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({
               Price Map list
             </Typography>
 
-              {/* DataGridView Container (Matching Reference Image 1) */}
-              <TableContainer
-                component={Paper}
-                elevation={0}
-                sx={{
-                  border: '1px solid #7F9DB9',
-                  borderRadius: 0,
-                  bgcolor: '#9AAEC4',
-                  height: '240px',
-                  maxHeight: '240px',
-                  overflowY: 'auto',
-                }}
-              >
-                <Table size="small" stickyHeader sx={{ borderCollapse: 'collapse' }}>
-                  <TableHead>
-                    <TableRow>
-                      {/* Left Indicator Column Header */}
-                      <TableCell
-                        sx={{
-                          width: '26px',
-                          minWidth: '26px',
-                          p: 0,
-                          bgcolor: '#ECE9D8',
-                          borderRight: '1px solid #999999',
-                          borderBottom: '1px solid #999999',
+            {/* DataGridView Container (Matching Reference Image 1) */}
+            <TableContainer
+              component={Paper}
+              elevation={0}
+              sx={{
+                border: '1px solid #7F9DB9',
+                borderRadius: 0,
+                bgcolor: '#9AAEC4',
+                height: '240px',
+                maxHeight: '240px',
+                overflowY: 'auto',
+              }}
+            >
+              <Table size="small" stickyHeader sx={{ borderCollapse: 'collapse' }}>
+                <TableHead>
+                  <TableRow>
+                    {/* Left Indicator Column Header */}
+                    <TableCell
+                      sx={{
+                        width: '28px',
+                        minWidth: '28px',
+                        p: 0,
+                        bgcolor: '#ECE9D8',
+                        borderRight: '1px solid #999999',
+                        borderBottom: '1px solid #999999',
+                      }}
+                    />
+                    {/* PriceMapName Header */}
+                    <TableCell
+                      sx={{
+                        bgcolor: '#ECE9D8',
+                        color: '#000000',
+                        fontWeight: 600,
+                        fontSize: '11.5px',
+                        py: 0.5,
+                        px: 1,
+                        borderBottom: '1px solid #999999',
+                        borderRight: '1px solid #D4D0C8',
+                      }}
+                    >
+                      PriceMapName
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {priceMaps.map((item, idx) => {
+                    const isSelected = selectedIndex === idx;
+                    const isEditing = editingIndex === idx;
+
+                    return (
+                      <TableRow
+                        key={item.name + idx}
+                        onClick={() => {
+                          setSelectedIndex(idx);
                         }}
-                      />
-                      {/* PriceMapName Header */}
-                      <TableCell
+                        onDoubleClick={() => handleOpenProductPriceMap(item.name)}
                         sx={{
-                          bgcolor: '#ECE9D8',
-                          color: '#000000',
-                          fontWeight: 500,
-                          fontSize: '11.5px',
-                          py: 0.4,
-                          px: 1,
-                          borderBottom: '1px solid #999999',
-                          borderRight: '1px solid #D4D0C8',
+                          cursor: 'pointer',
+                          bgcolor: isSelected ? '#3399FF' : '#FFFFFF',
+                          '&:hover': {
+                            bgcolor: isSelected ? '#3399FF' : '#F0F7FF',
+                          },
                         }}
                       >
-                        PriceMapName
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {priceMaps.map((item, idx) => {
-                      const isSelected = selectedIndex === idx;
-                      const isEditing = editingIndex === idx;
-
-                      return (
-                        <TableRow
-                          key={item.name + idx}
-                          onClick={() => setSelectedIndex(idx)}
-                          onDoubleClick={() => handleOpenProductPriceMap(item.name)}
+                        {/* Row Indicator Cell with Arrow ▶ */}
+                        <TableCell
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedIndex(idx);
+                          }}
                           sx={{
-                            cursor: 'pointer',
-                            bgcolor: isSelected ? '#3399FF' : '#FFFFFF',
-                            '&:hover': {
-                              bgcolor: isSelected ? '#3399FF' : '#F5F5F5',
-                            },
+                            width: '28px',
+                            minWidth: '28px',
+                            p: 0,
+                            textAlign: 'center',
+                            bgcolor: '#ECE9D8',
+                            borderRight: '1px solid #999999',
+                            borderBottom: '1px solid #E0E0E0',
+                            height: '24px',
                           }}
                         >
-                          {/* Row Indicator Cell with Arrow ▶ */}
-                          <TableCell
-                            sx={{
-                              width: '26px',
-                              minWidth: '26px',
-                              p: 0,
-                              textAlign: 'center',
-                              bgcolor: '#ECE9D8',
-                              borderRight: '1px solid #999999',
-                              borderBottom: '1px solid #E0E0E0',
-                              height: '22px',
-                            }}
-                          >
-                            {isSelected && (
-                              <PlayArrowRoundedIcon
-                                sx={{
-                                  fontSize: 12,
-                                  color: '#000000',
-                                  verticalAlign: 'middle',
-                                }}
-                              />
-                            )}
-                          </TableCell>
+                          {isSelected && (
+                            <PlayArrowRoundedIcon
+                              sx={{
+                                fontSize: 13,
+                                color: '#000000',
+                                verticalAlign: 'middle',
+                              }}
+                            />
+                          )}
+                        </TableCell>
 
-                          {/* PriceMapName Value Cell */}
-                          <TableCell
-                            sx={{
-                              py: 0.3,
-                              px: 1,
-                              fontSize: '11.5px',
-                              fontWeight: 500,
-                              color: isSelected ? '#FFFFFF' : '#000000',
-                              borderBottom: '1px solid #E0E0E0',
-                              borderRight: '1px solid #E0E0E0',
-                              height: '22px',
-                              userSelect: 'none',
-                            }}
-                          >
-                            {isEditing ? (
-                              <input
-                                autoFocus
-                                value={editingValue}
-                                onChange={(e) => setEditingValue(e.target.value)}
-                                onBlur={() => handleInlineEditSave(idx)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleInlineEditSave(idx);
-                                  if (e.key === 'Escape') setEditingIndex(null);
-                                }}
-                                style={{
-                                  width: '100%',
-                                  fontSize: '11.5px',
-                                  padding: '1px 3px',
-                                  border: '1px solid #0055EA',
-                                  outline: 'none',
-                                }}
-                              />
-                            ) : (
-                              <Box
-                                sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                                onDoubleClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingIndex(idx);
-                                  setEditingValue(item.name);
+                        {/* PriceMapName Value Cell: clicking this shop opens Product Price Map */}
+                        <TableCell
+                          onClick={() => {
+                            setSelectedIndex(idx);
+                            handleOpenProductPriceMap(item.name);
+                          }}
+                          sx={{
+                            py: 0.3,
+                            px: 1,
+                            fontSize: '12px',
+                            fontWeight: isSelected ? 700 : 500,
+                            color: isSelected ? '#FFFFFF' : '#000000',
+                            borderBottom: '1px solid #E0E0E0',
+                            borderRight: '1px solid #E0E0E0',
+                            height: '24px',
+                            userSelect: 'none',
+                          }}
+                        >
+                          {isEditing ? (
+                            <input
+                              autoFocus
+                              value={editingValue}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onBlur={() => handleInlineEditSave(idx)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleInlineEditSave(idx);
+                                if (e.key === 'Escape') setEditingIndex(null);
+                              }}
+                              style={{
+                                width: '100%',
+                                fontSize: '11.5px',
+                                padding: '1px 3px',
+                                border: '1px solid #0055EA',
+                                outline: 'none',
+                              }}
+                            />
+                          ) : (
+                            <Box
+                              sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                setEditingIndex(idx);
+                                setEditingValue(item.name);
+                              }}
+                            >
+                              <span>{item.name}</span>
+                              <Typography
+                                sx={{
+                                  fontSize: '10px',
+                                  color: isSelected ? '#DCEBFA' : '#64748B',
+                                  fontWeight: 500,
+                                  pr: 0.5,
                                 }}
                               >
-                                <span>{item.name}</span>
-                                {isSelected && (
-                                  <Typography sx={{ fontSize: '9.5px', color: '#DCEBFA', fontStyle: 'italic', pr: 0.5 }}>
-                                    (Double-click to map)
-                                  </Typography>
-                                )}
-                              </Box>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-
-                    {/* Empty Fill Area to replicate Windows DataGridView look */}
-                    {Array.from({ length: Math.max(0, 7 - priceMaps.length) }).map((_, i) => (
-                      <TableRow key={`empty-${i}`}>
-                        <TableCell sx={{ width: '26px', bgcolor: '#ECE9D8', borderRight: '1px solid #999999', borderBottom: '1px solid #E0E0E0', height: '22px' }} />
-                        <TableCell sx={{ bgcolor: '#9AAEC4', borderBottom: '1px solid #8FA3BA', height: '22px' }} />
+                                {isSelected ? 'Click to Open ▶' : 'Open ▶'}
+                              </Typography>
+                            </Box>
+                          )}
+                        </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    );
+                  })}
 
-              {/* Action Buttons Row (Matching Image 1: Add New | Save | Delete) */}
-              <Box
+                  {/* Empty Fill Area to replicate Windows DataGridView look */}
+                  {Array.from({ length: Math.max(0, 7 - priceMaps.length) }).map((_, i) => (
+                    <TableRow key={`empty-${i}`}>
+                      <TableCell sx={{ width: '28px', bgcolor: '#ECE9D8', borderRight: '1px solid #999999', borderBottom: '1px solid #E0E0E0', height: '24px' }} />
+                      <TableCell sx={{ bgcolor: '#9AAEC4', borderBottom: '1px solid #8FA3BA', height: '24px' }} />
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Action Buttons Row (Matching Image 1: Add New | Save | Delete) */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                gap: 1.5,
+                pt: 0.5,
+              }}
+            >
+              {/* [ Add New ] Button */}
+              <Button
+                variant="outlined"
+                onClick={handleAddNew}
                 sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 1.5,
-                  pt: 1,
-                  pb: 0.5,
+                  minWidth: '78px',
+                  height: '24px',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  color: '#000000',
+                  background: 'linear-gradient(180deg, #F6F6F6 0%, #EAEAEA 50%, #DFDFDF 51%, #D2D2D2 100%)',
+                  border: '1px solid #707070',
+                  borderRadius: '2px',
+                  textTransform: 'none',
+                  '&:hover': {
+                    background: 'linear-gradient(180deg, #FFFFFF 0%, #F0F0F0 100%)',
+                    borderColor: '#3399FF',
+                  },
                 }}
               >
-                {/* [ Add New ] Button */}
-                <Button
-                  variant="outlined"
-                  onClick={handleAddNew}
-                  sx={{
-                    minWidth: '78px',
-                    height: '24px',
-                    fontSize: '11px',
-                    fontWeight: 500,
-                    color: '#000000',
-                    background: 'linear-gradient(180deg, #F6F6F6 0%, #EAEAEA 50%, #DFDFDF 51%, #D2D2D2 100%)',
-                    border: '1px solid #707070',
-                    borderRadius: '2px',
-                    textTransform: 'none',
-                    '&:hover': {
-                      background: 'linear-gradient(180deg, #FFFFFF 0%, #F0F0F0 100%)',
-                      borderColor: '#3399FF',
-                    },
-                  }}
-                >
-                  Add New
-                </Button>
+                Add New
+              </Button>
 
-                {/* [ Save ] Button (Highlighted with default focus box like in Image 1) */}
-                <Button
-                  variant="outlined"
-                  onClick={handleSave}
-                  disabled={loading}
-                  sx={{
-                    minWidth: '78px',
-                    height: '24px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: '#000000',
-                    background: 'linear-gradient(180deg, #F6F6F6 0%, #EAEAEA 50%, #DFDFDF 51%, #D2D2D2 100%)',
-                    border: '1.5px solid #3399FF',
-                    borderRadius: '2px',
-                    textTransform: 'none',
-                    boxShadow: '0 0 2px #3399FF',
-                    outline: '1px dotted #333333',
-                    outlineOffset: '-4px',
-                    '&:hover': {
-                      background: 'linear-gradient(180deg, #FFFFFF 0%, #F0F0F0 100%)',
-                      borderColor: '#0055EA',
-                    },
-                  }}
-                >
-                  Save
-                </Button>
+              {/* [ Save ] Button (Highlighted with default focus box like in Image 1) */}
+              <Button
+                variant="outlined"
+                onClick={handleSave}
+                disabled={loading}
+                sx={{
+                  minWidth: '78px',
+                  height: '24px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: '#000000',
+                  background: 'linear-gradient(180deg, #F6F6F6 0%, #EAEAEA 50%, #DFDFDF 51%, #D2D2D2 100%)',
+                  border: '1.5px solid #3399FF',
+                  borderRadius: '2px',
+                  textTransform: 'none',
+                  boxShadow: '0 0 2px #3399FF',
+                  outline: '1px dotted #333333',
+                  outlineOffset: '-4px',
+                  '&:hover': {
+                    background: 'linear-gradient(180deg, #FFFFFF 0%, #F0F0F0 100%)',
+                    borderColor: '#0055EA',
+                  },
+                }}
+              >
+                Save
+              </Button>
 
-                {/* [ Delete ] Button */}
-                <Button
-                  variant="outlined"
-                  onClick={handleDelete}
-                  disabled={priceMaps.length === 0}
-                  sx={{
-                    minWidth: '78px',
-                    height: '24px',
-                    fontSize: '11px',
-                    fontWeight: 500,
-                    color: '#000000',
-                    background: 'linear-gradient(180deg, #F6F6F6 0%, #EAEAEA 50%, #DFDFDF 51%, #D2D2D2 100%)',
-                    border: '1px solid #707070',
-                    borderRadius: '2px',
-                    textTransform: 'none',
-                    '&:hover': {
-                      background: 'linear-gradient(180deg, #FFFFFF 0%, #F0F0F0 100%)',
-                      borderColor: '#DC2626',
-                      color: '#DC2626',
-                    },
-                  }}
-                >
-                  Delete
-                </Button>
-              </Box>
+              {/* [ Delete ] Button */}
+              <Button
+                variant="outlined"
+                onClick={handleDelete}
+                disabled={priceMaps.length === 0}
+                sx={{
+                  minWidth: '78px',
+                  height: '24px',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  color: '#000000',
+                  background: 'linear-gradient(180deg, #F6F6F6 0%, #EAEAEA 50%, #DFDFDF 51%, #D2D2D2 100%)',
+                  border: '1px solid #707070',
+                  borderRadius: '2px',
+                  textTransform: 'none',
+                  '&:hover': {
+                    background: 'linear-gradient(180deg, #FFFFFF 0%, #F0F0F0 100%)',
+                    borderColor: '#DC2626',
+                    color: '#DC2626',
+                  },
+                }}
+              >
+                Delete
+              </Button>
+            </Box>
 
-              {/* Primary Button to choose the highlighted shop and open products */}
-              <Box sx={{ display: 'flex', justifyContent: 'center', pt: 0.5 }}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  onClick={() => handleOpenProductPriceMap(priceMaps[selectedIndex]?.name)}
-                  sx={{
-                    height: '32px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    bgcolor: '#0855DA',
-                    color: '#FFFFFF',
-                    textTransform: 'none',
-                    borderRadius: '3px',
-                    boxShadow: '0 2px 4px rgba(0, 85, 234, 0.3)',
-                    '&:hover': { bgcolor: '#0045BF' },
-                  }}
-                >
-                  👉 Choose "{priceMaps[selectedIndex]?.name || 'SVM'}" &amp; Open Products
-                </Button>
-              </Box>
+            {/* Primary Button to choose the highlighted shop and open product-price map */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', pt: 0.5 }}>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => handleOpenProductPriceMap(selectedShopName)}
+                sx={{
+                  height: '32px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  bgcolor: '#0855DA',
+                  color: '#FFFFFF',
+                  textTransform: 'none',
+                  borderRadius: '3px',
+                  boxShadow: '0 2px 4px rgba(0, 85, 234, 0.3)',
+                  '&:hover': { bgcolor: '#0045BF' },
+                }}
+              >
+                👉 Choose "{selectedShopName}" &amp; Open Products in Price Map
+              </Button>
+            </Box>
 
-              {/* Informative helper footer */}
-              <Box sx={{ textAlign: 'center', pt: 0.5 }}>
-                <Typography sx={{ fontSize: '10.5px', color: '#64748B' }}>
-                  Select a Price Map and click <b>Save</b> or click the button above to view retail products &amp; rates.
-                </Typography>
-              </Box>
+            {/* Informative helper footer */}
+            <Box sx={{ textAlign: 'center', pt: 0.5 }}>
+              <Typography sx={{ fontSize: '10.5px', color: '#64748B' }}>
+                Click any shop or click the button above to view rates in <b>Product Price Map</b>.
+              </Typography>
             </Box>
           </Box>
         </Box>
+      </Box>
 
       {/* Add New Price Map Modal Dialog */}
       <Dialog
@@ -643,7 +660,7 @@ export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({
         </DialogActions>
       </Dialog>
 
-      {/* Custom Delete Confirmation Dialog (replacing window.confirm localhost alert) */}
+      {/* Custom Delete Confirmation Dialog */}
       <Dialog
         open={deleteConfirmDialog.open}
         onClose={() => setDeleteConfirmDialog((prev) => ({ ...prev, open: false }))}

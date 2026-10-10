@@ -13,6 +13,7 @@ import { ParticularsPage } from './components/ParticularsPage';
 import { QuotationPage } from './components/QuotationPage';
 import { GstBillPage } from './components/GstBillPage';
 import { DespatchPage } from './components/DespatchPage';
+import { StockPage } from './components/StockPage';
 import { SettingsPage, getStoredSettings, DEFAULT_COMPANY_SETTINGS } from './components/SettingsPage';
 import { SettingsApi } from './services/api';
 import { YearRestrictionDialog } from './components/YearRestrictionDialog';
@@ -22,7 +23,7 @@ const ACTIVE_TAB_KEY = 'apsara_active_tab';
 const CUSTOMER_SUBVIEW_KEY = 'apsara_customer_subview';
 const PRODUCT_SUBPAGE_KEY = 'svm_product_subpage';
 
-const VALID_TABS = ['All Customers', 'Sales', 'Estimate', 'Product', 'Quotation', 'Price List', 'Categories', 'GST Bill', 'Despatch', 'Settings'] as const;
+const VALID_TABS = ['All Customers', 'Sales', 'Estimate', 'Product', 'Quotation', 'Price List', 'Categories', 'Stock', 'GST Bill', 'Despatch', 'Settings'] as const;
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -274,6 +275,9 @@ function App() {
 
           {/* Categories Tab */}
           {activeTab === 'Categories' && <CategoriesPage />}
+
+          {/* Stock & Sales Analytics Tab */}
+          {activeTab === 'Stock' && <StockPage />}
 
           {/* Price List Tab */}
           {activeTab === 'Price List' && <PriceListPage />}

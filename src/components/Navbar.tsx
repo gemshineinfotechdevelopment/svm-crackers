@@ -33,6 +33,7 @@ import ShoppingCartRoundedIcon from '@mui/icons-material/ShoppingCartRounded';
 import AltRouteRoundedIcon from '@mui/icons-material/AltRouteRounded';
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
+import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
 import defaultApsaraLogo from '../assets/logo.png';
 import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { HealthApi, API_BASE_URL } from '../services/api';
@@ -44,7 +45,7 @@ import {
 } from '../utils/yearContext';
 import { PRODUCT_SUB_PAGES, type ProductSubPage } from '../types/productSubPages';
 
-export type NavTab = 'All Customers' | 'Sales' | 'Estimate' | 'Product' | 'Quotation' | 'Price List' | 'Categories' | 'GST Bill' | 'Despatch' | 'Settings';
+export type NavTab = 'All Customers' | 'Sales' | 'Estimate' | 'Product' | 'Quotation' | 'Price List' | 'Categories' | 'Stock' | 'GST Bill' | 'Despatch' | 'Settings';
 
 interface NavbarProps {
   activeTab?: NavTab;
@@ -149,6 +150,7 @@ export const Navbar: FC<NavbarProps> = ({
     { label: 'Quotation', tabKey: 'Quotation' },
     { label: 'Price List', tabKey: 'Price List' },
     { label: 'Categories', tabKey: 'Categories' },
+    { label: 'Stock', tabKey: 'Stock' },
     { label: 'Tax Bill', tabKey: 'GST Bill' },
     { label: 'Despatch', tabKey: 'Despatch' },
     { label: 'Settings', tabKey: 'Settings' },
@@ -607,6 +609,7 @@ export const Navbar: FC<NavbarProps> = ({
             { label: 'Quotation', tab: 'Quotation' as NavTab, icon: <RequestQuoteRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Price List', tab: 'Price List' as NavTab, icon: <FormatListNumberedRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Categories', tab: 'Categories' as NavTab, icon: <CategoryRoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Stock (Sales)', tab: 'Stock' as NavTab, icon: <TrendingUpRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Tax Bill (GST)', tab: 'GST Bill' as NavTab, icon: <DescriptionRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Despatch', tab: 'Despatch' as NavTab, icon: <LocalShippingRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Settings', tab: 'Settings' as NavTab, icon: <SettingsRoundedIcon sx={{ fontSize: 18 }} /> },
