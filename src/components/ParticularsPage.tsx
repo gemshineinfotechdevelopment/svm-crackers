@@ -23,6 +23,10 @@ import {
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import {
   CustomersApi,
   CompaniesApi,
@@ -33,6 +37,7 @@ import {
 import { getStoredSettings } from './SettingsPage';
 import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
+import { DuplicateBillModal } from './DuplicateBillModal';
 import {
   getActiveBillingYear,
   validateDateMatchesYear,
@@ -40,6 +45,11 @@ import {
 } from '../utils/yearContext';
 import { getSelectedBillYear } from '../utils/billYearUtils';
 import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
+import {
+  getParticularSessions,
+  saveParticularSessions,
+  type ParticularDraftSession,
+} from '../utils/billingSessionManager';
 
 interface ProductRowItem {
   id: string;
@@ -131,9 +141,11 @@ const getRateForType = (prod: ProductCatalogOption | undefined | null, rType: st
 };
 
 interface ParticularsPageProps {
+  mode?: 'ESTIMATE' | 'QUOTATION';
   initialCustomerName?: string;
   editBillData?: any | null;
   onEditSuccess?: () => void;
+  onConvertToEstimate?: (billData?: any) => void;
 }
 
 const getInitialDateStr = (targetYear?: number) => {
@@ -145,9 +157,11 @@ const getInitialDateStr = (targetYear?: number) => {
 };
 
 export const ParticularsPage: FC<ParticularsPageProps> = ({
+  mode = 'ESTIMATE',
   initialCustomerName,
   editBillData,
   onEditSuccess,
+  onConvertToEstimate,
 }) => {
   const [storeSettings] = useState(() => getStoredSettings());
 
@@ -167,19 +181,35 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const [, setCompanyOptions] = useState<{ id: string; name: string }[]>([]);
   const [productOptions, setProductOptions] = useState<ProductCatalogOption[]>([]);
 
+  const isEditMode = Boolean(editBillData && (editBillData._id || editBillData.id));
+
+  // 0. Session Draft Management State
+  const initialSessionData = useMemo(() => {
+    if (editBillData) return { sessions: [], activeId: '' };
+    return getParticularSessions(mode);
+  }, [mode, Boolean(editBillData)]);
+
+  const [sessions, setSessions] = useState<ParticularDraftSession[]>(() => initialSessionData.sessions);
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => initialSessionData.activeId);
+
+  const initialDraft = useMemo(() => {
+    if (editBillData) return null;
+    return initialSessionData.sessions.find((s) => s.id === initialSessionData.activeId) || initialSessionData.sessions[0] || null;
+  }, []);
+
   // 1. Customer Info Left Box State
-  const [customerNo, setCustomerNo] = useState<string>('');
-  const [billDate, setBillDate] = useState<string>(() => getInitialDateStr(selectedYear));
-  const [billNo, setBillNo] = useState<string>('');
-  const [rateType, setRateType] = useState<string>('Befor Rate');
-  const [customerGst, setCustomerGst] = useState<string>('');
+  const [customerNo, setCustomerNo] = useState<string>(() => initialDraft?.customerNo || '');
+  const [billDate, setBillDate] = useState<string>(() => initialDraft?.billDate || getInitialDateStr(selectedYear));
+  const [billNo, setBillNo] = useState<string>(() => initialDraft?.billNo || '');
+  const [rateType, setRateType] = useState<string>(() => initialDraft?.rateType || 'Befor Rate');
+  const [customerGst, setCustomerGst] = useState<string>(() => initialDraft?.customerGst || '');
 
   // 2. Customer Middle Selection & Right New Customer Form
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOptionItem | null>(null);
-  const [customerName, setCustomerName] = useState<string>(initialCustomerName || '');
-  const [customerMobile, setCustomerMobile] = useState<string>('');
-  const [customerAddress, setCustomerAddress] = useState<string>('');
-  const [companyName, setCompanyName] = useState<string>(() => storeSettings.companyName || 'Manjula Crackers');
+  const [customerName, setCustomerName] = useState<string>(() => initialCustomerName || initialDraft?.customerName || '');
+  const [customerMobile, setCustomerMobile] = useState<string>(() => initialDraft?.customerMobile || '');
+  const [customerAddress, setCustomerAddress] = useState<string>(() => initialDraft?.customerAddress || '');
+  const [companyName, setCompanyName] = useState<string>(() => initialDraft?.companyName || storeSettings.companyName || 'Manjula Crackers');
 
   // 3. Product Selection Bar State
   const [quickCode, setQuickCode] = useState<string>('');
@@ -192,18 +222,214 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const codeInputRef = useRef<HTMLInputElement>(null);
   const qtyInputRef = useRef<HTMLInputElement>(null);
 
-  // 4. Products Table Rows (Starts clean with 1 empty editable row)
-  const [productRows, setProductRows] = useState<ProductRowItem[]>([
-    { id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', amount: '0' },
-  ]);
+  // 4. Products Table Rows (Starts clean with 1 empty editable row or restored rows)
+  const [productRows, setProductRows] = useState<ProductRowItem[]>(() => {
+    if (initialDraft?.productRows && initialDraft.productRows.length > 0) {
+      return initialDraft.productRows;
+    }
+    return [{ id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', amount: '0' }];
+  });
 
   // 5. Payment Info Right Box State
-  const [discountPercent, setDiscountPercent] = useState<string>('0');
-  const [discountRs, setDiscountRs] = useState<string>('0');
-  const [packingRs, setPackingRs] = useState<string>('');
-  const [packingPercent, setPackingPercent] = useState<string>('');
-  const [remarks, setRemarks] = useState<string>('');
-  const [paymentMode, setPaymentMode] = useState<string>('Cash');
+  const [discountPercent, setDiscountPercent] = useState<string>(() => initialDraft?.discountPercent || '0');
+  const [discountRs, setDiscountRs] = useState<string>(() => initialDraft?.discountRs || '0');
+  const [packingRs, setPackingRs] = useState<string>(() => initialDraft?.packingRs || '');
+  const [packingPercent, setPackingPercent] = useState<string>(() => initialDraft?.packingPercent || '');
+  const [remarks, setRemarks] = useState<string>(() => initialDraft?.remarks || '');
+  const [paymentMode, setPaymentMode] = useState<string>(() => initialDraft?.paymentMode || 'Cash');
+
+  // Session Helper: Apply session data to form inputs
+  const applySessionToForm = (sess: ParticularDraftSession) => {
+    setCustomerNo(sess.customerNo || '');
+    setBillDate(sess.billDate || getInitialDateStr(selectedYear));
+    setBillNo(sess.billNo || '');
+    setRateType(sess.rateType || 'Befor Rate');
+    setCustomerGst(sess.customerGst || '');
+    setCustomerName(sess.customerName || '');
+    setCustomerMobile(sess.customerMobile || '');
+    setCustomerAddress(sess.customerAddress || '');
+    setCompanyName(sess.companyName || storeSettings.companyName || 'Manjula Crackers');
+    setSelectedCustomer(null);
+    setProductRows(
+      sess.productRows && sess.productRows.length > 0
+        ? sess.productRows
+        : [{ id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', amount: '0' }]
+    );
+    setDiscountPercent(sess.discountPercent || '0');
+    setDiscountRs(sess.discountRs || '0');
+    setPackingRs(sess.packingRs || '');
+    setPackingPercent(sess.packingPercent || '');
+    setRemarks(sess.remarks || '');
+    setPaymentMode(sess.paymentMode || 'Cash');
+  };
+
+  // Real-time draft session autosave
+  useEffect(() => {
+    if (isEditMode || !activeSessionId) return;
+    setSessions((prev) => {
+      const updated = prev.map((s) => {
+        if (s.id === activeSessionId) {
+          return {
+            ...s,
+            customerNo,
+            billDate,
+            billNo,
+            rateType,
+            customerGst,
+            customerName,
+            customerMobile,
+            customerAddress,
+            companyName,
+            productRows,
+            discountPercent,
+            discountRs,
+            packingRs,
+            packingPercent,
+            remarks,
+            paymentMode,
+            lastUpdated: Date.now(),
+          };
+        }
+        return s;
+      });
+      saveParticularSessions(mode, updated, activeSessionId);
+      return updated;
+    });
+  }, [
+    isEditMode,
+    activeSessionId,
+    mode,
+    customerNo,
+    billDate,
+    billNo,
+    rateType,
+    customerGst,
+    customerName,
+    customerMobile,
+    customerAddress,
+    companyName,
+    productRows,
+    discountPercent,
+    discountRs,
+    packingRs,
+    packingPercent,
+    remarks,
+    paymentMode,
+  ]);
+
+  // Create a brand new bill session (preserves existing bill sessions)
+  const handleCreateNewSession = async () => {
+    let nextNum = '1001';
+    try {
+      const res = await ParticularsApi.getNextBillNo(mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR', selectedYear);
+      if (res?.nextBillNo) nextNum = res.nextBillNo;
+    } catch {
+      // fallback
+    }
+
+    const newIndex = sessions.length + 1;
+    const newSession: ParticularDraftSession = {
+      id: `session_${Date.now()}_${newIndex}`,
+      title: `${mode === 'QUOTATION' ? 'Quotation' : 'Bill'} ${newIndex}`,
+      mode,
+      customerNo: '',
+      billDate: getInitialDateStr(selectedYear),
+      billNo: nextNum,
+      rateType: 'Befor Rate',
+      customerGst: '',
+      customerName: '',
+      customerMobile: '',
+      customerAddress: '',
+      companyName: storeSettings.companyName || 'Manjula Crackers',
+      productRows: [{ id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', amount: '0' }],
+      discountPercent: '0',
+      discountRs: '0',
+      packingRs: '',
+      packingPercent: '',
+      remarks: '',
+      paymentMode: 'Cash',
+      selectedYear,
+      lastUpdated: Date.now(),
+    };
+
+    const updated = [...sessions, newSession];
+    setSessions(updated);
+    setActiveSessionId(newSession.id);
+    saveParticularSessions(mode, updated, newSession.id);
+    applySessionToForm(newSession);
+
+    setSnackbarMessage(`New ${mode === 'QUOTATION' ? 'Quotation' : 'Bill'} session created. Previous draft is saved!`);
+    setSnackbarOpen(true);
+  };
+
+  // Switch between open draft sessions
+  const handleSwitchSession = (targetSessionId: string) => {
+    if (targetSessionId === activeSessionId) return;
+
+    // Save current active state before switching
+    const updated = sessions.map((s) => {
+      if (s.id === activeSessionId) {
+        return {
+          ...s,
+          customerNo,
+          billDate,
+          billNo,
+          rateType,
+          customerGst,
+          customerName,
+          customerMobile,
+          customerAddress,
+          companyName,
+          productRows,
+          discountPercent,
+          discountRs,
+          packingRs,
+          packingPercent,
+          remarks,
+          paymentMode,
+          lastUpdated: Date.now(),
+        };
+      }
+      return s;
+    });
+
+    const targetSession = updated.find((s) => s.id === targetSessionId);
+    if (!targetSession) return;
+
+    setSessions(updated);
+    setActiveSessionId(targetSessionId);
+    saveParticularSessions(mode, updated, targetSessionId);
+    applySessionToForm(targetSession);
+  };
+
+  // Close an individual draft session
+  const handleCloseSession = (targetSessionId: string) => {
+    if (sessions.length <= 1) {
+      if (window.confirm(`Clear current ${mode === 'QUOTATION' ? 'Quotation' : 'Bill'} draft?`)) {
+        handleExitReset();
+      }
+      return;
+    }
+
+    const sess = sessions.find((s) => s.id === targetSessionId);
+    const hasData = sess && sess.productRows.some((r) => r.particular.trim() !== '');
+    if (hasData) {
+      if (!window.confirm(`Close "${sess?.customerName || sess?.title}"? This draft tab will be removed.`)) {
+        return;
+      }
+    }
+
+    const remaining = sessions.filter((s) => s.id !== targetSessionId);
+    let nextId = activeSessionId;
+    if (targetSessionId === activeSessionId) {
+      nextId = remaining[0].id;
+      applySessionToForm(remaining[0]);
+    }
+
+    setSessions(remaining);
+    setActiveSessionId(nextId);
+    saveParticularSessions(mode, remaining, nextId);
+  };
 
   // UI status
   const [savingBill, setSavingBill] = useState<boolean>(false);
@@ -211,8 +437,6 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const [snackbarOpen, setSnackbarOpen] = useState<boolean>(false);
   const [printModalOpen, setPrintModalOpen] = useState<boolean>(false);
   const [selectedBillForPrint, setSelectedBillForPrint] = useState<BillPrintData | null>(null);
-
-  const isEditMode = Boolean(editBillData && (editBillData._id || editBillData.id));
 
   // Check customer previous history
   const checkPreviousHistory = async (name: string, targetYear: number = selectedYear) => {
@@ -240,7 +464,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         CompaniesApi.getAll().catch(() => []),
         ProductsApi.getAll(targetYear).catch(() => []),
         PriceListsApi.getAll({ year: targetYear }).catch(() => []),
-        ParticularsApi.getNextBillNo('REGULAR', targetYear).catch(() => ({ nextBillNo: '1001' })),
+        ParticularsApi.getNextBillNo(mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR', targetYear).catch(() => ({ nextBillNo: '1001' })),
       ]);
 
       if (Array.isArray(custRes) && custRes.length > 0) {
@@ -442,6 +666,70 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     return Math.max(0, subtotal - discountAmount + packingAmount);
   }, [subtotal, discountAmount, packingAmount]);
 
+  // Duplicate for Multiple Customers State & Memo
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+
+  const handleOpenDuplicateModal = () => {
+    const validRows = productRows.filter((r) => r.particular.trim() !== '');
+    if (validRows.length === 0) {
+      setSnackbarMessage('Please add at least one product item before duplicating.');
+      setSnackbarOpen(true);
+      return;
+    }
+    setDuplicateModalOpen(true);
+  };
+
+  const currentTemplateBill = useMemo(() => {
+    const validRows = productRows.filter((r) => r.particular.trim() !== '');
+    return {
+      billNo: billNo || '',
+      date: billDate,
+      rateType: rateType,
+      customerName: customerName.trim(),
+      customerPhone: customerMobile.trim(),
+      customerAddress: customerAddress.trim(),
+      customerGst: customerGst.trim(),
+      companyName: companyName || storeSettings.companyName || 'Manjula Crackers',
+      discount: String(discountAmount),
+      packing: String(packingAmount),
+      transport: '0',
+      tax: '0',
+      amount: subtotal.toFixed(2),
+      total: netPayment.toFixed(2),
+      netAmount: netPayment.toFixed(2),
+      paymentMode: paymentMode || 'Cash',
+      paymentStatus: paymentMode === 'Cash' || paymentMode === 'UPI' ? 'PAID' : 'UNPAID',
+      paidAmount: paymentMode === 'Cash' || paymentMode === 'UPI' ? netPayment.toFixed(2) : '0.00',
+      notes: remarks,
+      billType: mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR',
+      products: validRows.map((r) => ({
+        particular: r.particular,
+        quantity: r.quantity,
+        rate: r.rate,
+        pktUnit: r.pktUnit,
+        amount: r.amount,
+      })),
+    };
+  }, [
+    billNo,
+    billDate,
+    rateType,
+    customerName,
+    customerMobile,
+    customerAddress,
+    customerGst,
+    companyName,
+    storeSettings.companyName,
+    discountAmount,
+    packingAmount,
+    subtotal,
+    netPayment,
+    paymentMode,
+    remarks,
+    mode,
+    productRows,
+  ]);
+
 
   // Row Management
   const handleRowChange = (id: string, field: keyof ProductRowItem, val: string) => {
@@ -581,6 +869,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         paymentStatus: paymentMode === 'Cash' || paymentMode === 'UPI' ? 'PAID' : 'UNPAID',
         paidAmount: paymentMode === 'Cash' || paymentMode === 'UPI' ? netPayment.toFixed(2) : '0.00',
         notes: remarks,
+        billType: mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR',
         products: validRows.map((r) => ({
           particular: r.particular,
           quantity: r.quantity,
@@ -593,10 +882,14 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       if (isEditMode && editBillData) {
         const id = editBillData._id || editBillData.id;
         await ParticularsApi.update(id, payload);
-        setSnackbarMessage('Quotation / Bill updated successfully!');
+        setSnackbarMessage(mode === 'QUOTATION' ? 'Quotation updated successfully!' : 'Estimate / Bill updated successfully!');
       } else {
         await ParticularsApi.create(payload);
-        setSnackbarMessage('Quotation / Bill saved successfully!');
+        setSnackbarMessage(
+          mode === 'QUOTATION'
+            ? 'Quotation saved successfully! (Not added to sales)'
+            : 'Estimate / Bill saved successfully! Added to Sales.'
+        );
       }
 
       setSnackbarOpen(true);
@@ -622,7 +915,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         discount: discountAmount,
         packing: packingAmount,
         total: netPayment,
-        invoiceTitle: 'QUOTATION',
+        invoiceTitle: mode === 'QUOTATION' ? 'QUOTATION' : 'ESTIMATE',
         products: validRows.map((r) => ({
           particular: r.particular,
           quantity: r.quantity,
@@ -636,7 +929,77 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       setPrintModalOpen(true);
     } catch (err: any) {
       console.error('Failed to save bill:', err);
-      setSnackbarMessage(err.message || 'Failed to save Quotation.');
+      setSnackbarMessage(err.message || `Failed to save ${mode === 'QUOTATION' ? 'Quotation' : 'Estimate Bill'}.`);
+      setSnackbarOpen(true);
+    } finally {
+      setSavingBill(false);
+    }
+  };
+
+  const handleConvertToEstimateDirectly = async () => {
+    if (!customerName.trim()) {
+      setSnackbarMessage('Please enter or select Customer Name first.');
+      setSnackbarOpen(true);
+      return;
+    }
+    const validRows = productRows.filter((r) => r.particular.trim() !== '');
+    if (validRows.length === 0) {
+      setSnackbarMessage('Please add at least one product item.');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    if (!window.confirm('Convert this Quotation to an official Estimate Bill? It will be added to Sales Register and Account Ledger.')) return;
+
+    setSavingBill(true);
+    try {
+      if (isEditMode && editBillData) {
+        const id = editBillData._id || editBillData.id;
+        const res = await ParticularsApi.convertToBill(id);
+        const converted = res?.data || res;
+        setSnackbarMessage(`Quotation converted to Estimate Bill #${converted.billNo || ''} successfully! Added to Sales.`);
+        setSnackbarOpen(true);
+        if (onEditSuccess) onEditSuccess();
+        if (onConvertToEstimate) onConvertToEstimate(converted);
+      } else {
+        const payload = {
+          customerName: customerName.trim(),
+          customerPhone: customerMobile.trim(),
+          customerAddress: customerAddress.trim(),
+          customerGst: customerGst.trim(),
+          companyName: companyName || storeSettings.companyName || 'Manjula Crackers',
+          date: billDate,
+          rateType: rateType,
+          year: selectedYear,
+          discount: String(discountAmount),
+          packing: String(packingAmount),
+          transport: '0',
+          tax: '0',
+          amount: subtotal.toFixed(2),
+          total: netPayment.toFixed(2),
+          paymentMode: paymentMode || 'Cash',
+          paymentStatus: paymentMode === 'Cash' || paymentMode === 'UPI' ? 'PAID' : 'UNPAID',
+          paidAmount: paymentMode === 'Cash' || paymentMode === 'UPI' ? netPayment.toFixed(2) : '0.00',
+          notes: remarks,
+          billType: 'REGULAR',
+          products: validRows.map((r) => ({
+            particular: r.particular,
+            quantity: r.quantity,
+            rate: r.rate,
+            pktUnit: r.pktUnit,
+            amount: r.amount,
+          })),
+        };
+        const res = await ParticularsApi.create(payload);
+        const created = res?.data || res;
+        setSnackbarMessage(`Saved & converted to Estimate Bill #${created.billNo || ''} successfully! Added to Sales.`);
+        setSnackbarOpen(true);
+        if (onEditSuccess) onEditSuccess();
+        if (onConvertToEstimate) onConvertToEstimate(created);
+      }
+    } catch (err: any) {
+      console.error('Failed to convert quotation to bill:', err);
+      setSnackbarMessage(err.message || 'Failed to convert to Estimate Bill.');
       setSnackbarOpen(true);
     } finally {
       setSavingBill(false);
@@ -682,7 +1045,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       discount: discountAmount,
       packing: packingAmount,
       total: netPayment,
-      invoiceTitle: 'QUOTATION',
+      invoiceTitle: mode === 'QUOTATION' ? 'QUOTATION' : 'ESTIMATE',
       products: validRows.map((r) => ({
         particular: r.particular,
         quantity: r.quantity,
@@ -757,7 +1120,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         >
           {/* Window Icon + Title */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <HubRoundedIcon sx={{ fontSize: 18, color: '#0284C7' }} />
+            <HubRoundedIcon sx={{ fontSize: 18, color: mode === 'QUOTATION' ? '#D97706' : '#0284C7' }} />
             <Typography
               sx={{
                 fontSize: '13px',
@@ -766,13 +1129,158 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                 letterSpacing: '0.01em',
               }}
             >
-              Customer Factory (Quotation / Estimate)
+              {mode === 'QUOTATION' ? 'Customer Factory (Sample Quotation)' : 'Customer Factory (Estimate / Bill Entry)'}
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: mode === 'QUOTATION' ? '#92400E' : '#047857',
+                bgcolor: mode === 'QUOTATION' ? '#FEF3C7' : '#ECFDF5',
+                px: 1,
+                py: 0.2,
+                borderRadius: '3px',
+                border: `1px solid ${mode === 'QUOTATION' ? '#FDE68A' : '#A7F3D0'}`,
+              }}
+            >
+              {mode === 'QUOTATION' ? 'Sample Only - No Sales Impact' : 'Official Entry - Adds to Sales'}
             </Typography>
           </Box>
         </Box>
 
         {/* Inner Form Content */}
         <Box sx={{ p: { xs: 1, sm: 1.5 }, bgcolor: '#F0F5FA' }}>
+          {/* ========================================================= */}
+          {/* BILLING SESSIONS / MULTI-BILL DRAFT TABS BAR */}
+          {/* ========================================================= */}
+          {!isEditMode && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.8,
+                mb: 1.2,
+                overflowX: 'auto',
+                pb: 0.5,
+                borderBottom: '1px solid #CBD5E1',
+              }}
+            >
+              <Typography sx={{ fontSize: '11.5px', fontWeight: 800, color: '#475569', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <ReceiptLongRoundedIcon sx={{ fontSize: 16, color: '#1E40AF' }} />
+                Active Sessions:
+              </Typography>
+
+              {sessions.map((sess, idx) => {
+                const isActive = sess.id === activeSessionId;
+                const rowCount = Array.isArray(sess.productRows) ? sess.productRows.filter(r => r.particular && r.particular.trim()).length : 0;
+                const displayName = sess.customerName && sess.customerName.trim() ? sess.customerName.trim() : `${mode === 'QUOTATION' ? 'Quotation' : 'Bill'} ${idx + 1}`;
+
+                return (
+                  <Box
+                    key={sess.id}
+                    onClick={() => handleSwitchSession(sess.id)}
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.8,
+                      px: 1.2,
+                      py: 0.4,
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      bgcolor: isActive ? '#1E40AF' : '#FFFFFF',
+                      color: isActive ? '#FFFFFF' : '#334155',
+                      border: `1px solid ${isActive ? '#1E40AF' : '#CBD5E1'}`,
+                      fontSize: '11.5px',
+                      fontWeight: isActive ? 700 : 600,
+                      whiteSpace: 'nowrap',
+                      boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      transition: 'all 0.15s ease',
+                      '&:hover': {
+                        bgcolor: isActive ? '#1E3A8A' : '#F1F5F9',
+                      },
+                    }}
+                  >
+                    <span>{displayName}</span>
+                    {rowCount > 0 && (
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          padding: '1px 5px',
+                          borderRadius: '10px',
+                          backgroundColor: isActive ? 'rgba(255,255,255,0.25)' : '#E2E8F0',
+                          color: isActive ? '#FFFFFF' : '#0F172A',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {rowCount} {rowCount === 1 ? 'item' : 'items'}
+                      </span>
+                    )}
+                    {sessions.length > 1 && (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCloseSession(sess.id);
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          opacity: 0.8,
+                          fontWeight: 800,
+                          padding: '0 2px',
+                          marginLeft: '2px',
+                        }}
+                        title="Close session"
+                      >
+                        ✕
+                      </span>
+                    )}
+                  </Box>
+                );
+              })}
+
+              {/* + New Bill Session Button */}
+              <Button
+                size="small"
+                onClick={handleCreateNewSession}
+                startIcon={<AddRoundedIcon sx={{ fontSize: 14 }} />}
+                sx={{
+                  bgcolor: '#ECFDF5',
+                  border: '1px dashed #059669',
+                  color: '#047857',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  height: '26px',
+                  px: 1.2,
+                  whiteSpace: 'nowrap',
+                  '&:hover': { bgcolor: '#D1FAE5' },
+                }}
+              >
+                + New {mode === 'QUOTATION' ? 'Quotation' : 'Bill'} Session
+              </Button>
+
+              {/* Duplicate for Multiple Customers Quick Button in Session Bar */}
+              <Button
+                size="small"
+                onClick={handleOpenDuplicateModal}
+                startIcon={<ContentCopyRoundedIcon sx={{ fontSize: 13 }} />}
+                sx={{
+                  bgcolor: '#EFF6FF',
+                  border: '1px solid #93C5FD',
+                  color: '#1E40AF',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  height: '26px',
+                  px: 1.2,
+                  whiteSpace: 'nowrap',
+                  '&:hover': { bgcolor: '#DBEAFE' },
+                }}
+              >
+                Duplicate to Customers
+              </Button>
+            </Box>
+          )}
+
           {/* ========================================================= */}
           {/* TOP SECTION: 4 FIELDSET PANELS (Customer Info, Selection, New Customer, Address) */}
           {/* ========================================================= */}
@@ -1415,94 +1923,123 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                 />
               </Box>
 
-              {/* Next Payment Mode */}
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
-                <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A' }}>
-                  Next Payment Mode
-                </Typography>
-                <select
-                  value={paymentMode}
-                  onChange={(e) => setPaymentMode(e.target.value)}
-                  className="erp-input"
-                  style={{ width: '150px', fontSize: '11.5px' }}
-                >
-                  <option value="Cash">Cash</option>
-                  <option value="UPI">UPI / GPay</option>
-                  <option value="Bank">Bank Transfer</option>
-                  <option value="Credit">Credit / Due</option>
-                </select>
-              </Box>
-
-              {/* Action Buttons: [ Save ] [ Print ] [ Exit ] */}
+              {/* Action Buttons: Neatly aligned in 2 rows */}
               <Box
                 sx={{
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  gap: 1,
-                  mt: 2,
-                  pt: 1,
+                  flexDirection: 'column',
+                  gap: 0.8,
+                  mt: 1.5,
+                  pt: 1.2,
                   borderTop: '1px solid #E2E8F0',
                 }}
               >
-                {/* Save Button (Deep burgundy/plum as in screenshot) */}
+                {/* Primary Action Buttons Row: Save, Print, Exit */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 0.8 }}>
+                  <Button
+                    onClick={handleSaveBill}
+                    disabled={savingBill}
+                    variant="contained"
+                    sx={{
+                      bgcolor: '#741748',
+                      color: '#FFFFFF',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      py: 0.7,
+                      borderRadius: '3px',
+                      textTransform: 'none',
+                      whiteSpace: 'nowrap',
+                      boxShadow: 'none',
+                      '&:hover': { bgcolor: '#580e34' },
+                    }}
+                  >
+                    {savingBill ? <CircularProgress size={16} color="inherit" /> : (mode === 'QUOTATION' ? 'Save Quotation' : 'Save Bill')}
+                  </Button>
+
+                  <Button
+                    onClick={handlePrint}
+                    variant="outlined"
+                    startIcon={<PrintOutlinedIcon sx={{ fontSize: 14 }} />}
+                    sx={{
+                      bgcolor: '#E5ECF4',
+                      borderColor: '#94A3B8',
+                      color: '#0F172A',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      py: 0.7,
+                      borderRadius: '3px',
+                      textTransform: 'none',
+                      whiteSpace: 'nowrap',
+                      '&:hover': { bgcolor: '#D9E4F2' },
+                    }}
+                  >
+                    Print
+                  </Button>
+
+                  <Button
+                    onClick={handleExitReset}
+                    variant="outlined"
+                    sx={{
+                      bgcolor: '#F1F5F9',
+                      borderColor: '#CBD5E1',
+                      color: '#475569',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      py: 0.7,
+                      borderRadius: '3px',
+                      textTransform: 'none',
+                      whiteSpace: 'nowrap',
+                      '&:hover': { bgcolor: '#E2E8F0' },
+                    }}
+                  >
+                    Exit
+                  </Button>
+                </Box>
+
+                {/* Secondary Actions: Convert to Estimate (Quotation Mode) & Duplicate to Customers */}
+                {mode === 'QUOTATION' && (
+                  <Button
+                    onClick={handleConvertToEstimateDirectly}
+                    disabled={savingBill}
+                    variant="contained"
+                    fullWidth
+                    startIcon={<span style={{ fontSize: '13px' }}>⚡</span>}
+                    sx={{
+                      bgcolor: '#059669',
+                      color: '#FFFFFF',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      py: 0.65,
+                      borderRadius: '3px',
+                      textTransform: 'none',
+                      whiteSpace: 'nowrap',
+                      boxShadow: 'none',
+                      '&:hover': { bgcolor: '#047857' },
+                    }}
+                  >
+                    Convert to Estimate / Bill
+                  </Button>
+                )}
+
                 <Button
-                  onClick={handleSaveBill}
-                  disabled={savingBill}
+                  onClick={handleOpenDuplicateModal}
                   variant="contained"
+                  fullWidth
+                  startIcon={<ContentCopyRoundedIcon sx={{ fontSize: 14 }} />}
                   sx={{
-                    bgcolor: '#741748',
+                    bgcolor: '#1E40AF',
                     color: '#FFFFFF',
                     fontWeight: 700,
-                    fontSize: '12.5px',
-                    px: 2.5,
-                    py: 0.5,
-                    minWidth: '70px',
+                    fontSize: '12px',
+                    py: 0.65,
                     borderRadius: '3px',
-                    '&:hover': { bgcolor: '#580e34' },
+                    textTransform: 'none',
+                    whiteSpace: 'nowrap',
+                    boxShadow: 'none',
+                    '&:hover': { bgcolor: '#1D4ED8' },
                   }}
                 >
-                  {savingBill ? <CircularProgress size={16} color="inherit" /> : 'Save'}
-                </Button>
-
-                {/* Print Button (Grey desktop button) */}
-                <Button
-                  onClick={handlePrint}
-                  variant="outlined"
-                  sx={{
-                    bgcolor: '#E5ECF4',
-                    borderColor: '#94A3B8',
-                    color: '#0F172A',
-                    fontWeight: 700,
-                    fontSize: '12.5px',
-                    px: 2,
-                    py: 0.5,
-                    minWidth: '65px',
-                    borderRadius: '3px',
-                    '&:hover': { bgcolor: '#D9E4F2' },
-                  }}
-                >
-                  Print
-                </Button>
-
-                {/* Exit Button (Grey desktop button) */}
-                <Button
-                  onClick={handleExitReset}
-                  variant="outlined"
-                  sx={{
-                    bgcolor: '#E5ECF4',
-                    borderColor: '#94A3B8',
-                    color: '#0F172A',
-                    fontWeight: 700,
-                    fontSize: '12.5px',
-                    px: 2,
-                    py: 0.5,
-                    minWidth: '65px',
-                    borderRadius: '3px',
-                    '&:hover': { bgcolor: '#D9E4F2' },
-                  }}
-                >
-                  Exit
+                  Duplicate to Customers
                 </Button>
               </Box>
             </Box>
@@ -1697,6 +2234,22 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Duplicate Bill to Multiple Customers Modal */}
+      {duplicateModalOpen && (
+        <DuplicateBillModal
+          open={duplicateModalOpen}
+          onClose={() => setDuplicateModalOpen(false)}
+          templateBill={currentTemplateBill}
+          mode={mode}
+          selectedYear={selectedYear}
+          onSuccess={(createdBills) => {
+            setSnackbarMessage(`Successfully duplicated bill to ${createdBills.length} customers!`);
+            setSnackbarOpen(true);
+            if (onEditSuccess) onEditSuccess();
+          }}
+        />
+      )}
 
       {/* Snackbar Feedback */}
       <Snackbar

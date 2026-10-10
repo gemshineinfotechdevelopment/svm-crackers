@@ -37,7 +37,7 @@ import {
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
 
-export type NavTab = 'All Customers' | 'Sales' | 'Product' | 'Quotation' | 'GST Bill' | 'Categories' | 'Price List' | 'Settings';
+export type NavTab = 'All Customers' | 'Sales' | 'Estimate' | 'Quotation' | 'Product' | 'GST Bill' | 'Categories' | 'Price List' | 'Settings';
 
 interface NavbarProps {
   activeTab?: NavTab;
@@ -132,11 +132,12 @@ export const Navbar: FC<NavbarProps> = ({
   const erpMenuItems: ErpMenuItem[] = [
     { label: 'Customers', tabKey: 'All Customers' },
     { label: 'Sales', tabKey: 'Sales' },
-    { label: 'Product Master', tabKey: 'Product' },
+    { label: 'Estimate', tabKey: 'Estimate' },
     { label: 'Quotation', tabKey: 'Quotation' },
+    { label: 'Tax Bill', tabKey: 'GST Bill' },
     { label: 'Price List', tabKey: 'Price List' },
     { label: 'Categories', tabKey: 'Categories' },
-    { label: 'Tax Bill', tabKey: 'GST Bill' },
+    { label: 'Product Master', tabKey: 'Product' },
     { label: 'Settings', tabKey: 'Settings' },
   ];
 
@@ -463,12 +464,13 @@ export const Navbar: FC<NavbarProps> = ({
         <List sx={{ p: 1 }}>
           {[
             { label: 'Customers', tab: 'All Customers' as NavTab, icon: <PeopleAltRoundedIcon sx={{ fontSize: 18 }} /> },
-            { label: 'Sales (Quotation Bills)', tab: 'Sales' as NavTab, icon: <ReceiptLongRoundedIcon sx={{ fontSize: 18 }} /> },
-            { label: 'Product Master', tab: 'Product' as NavTab, icon: <Inventory2RoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Sales (Register)', tab: 'Sales' as NavTab, icon: <ReceiptLongRoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Estimate (Bill)', tab: 'Estimate' as NavTab, icon: <ReceiptLongRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Quotation', tab: 'Quotation' as NavTab, icon: <RequestQuoteRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Tax Bill (GST)', tab: 'GST Bill' as NavTab, icon: <DescriptionRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Price List', tab: 'Price List' as NavTab, icon: <FormatListNumberedRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Categories', tab: 'Categories' as NavTab, icon: <CategoryRoundedIcon sx={{ fontSize: 18 }} /> },
+            { label: 'Product Master', tab: 'Product' as NavTab, icon: <Inventory2RoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Settings', tab: 'Settings' as NavTab, icon: <SettingsRoundedIcon sx={{ fontSize: 18 }} /> },
           ].map((item) => (
             <ListItem key={item.label} disablePadding sx={{ mb: 0.5 }}>

@@ -39,7 +39,10 @@ export interface IParticular extends Document {
   pdfPublicId?: string;
   products: IParticularProductItem[];
   // GST Specific Fields
-  billType?: 'REGULAR' | 'GST';
+  billType?: 'REGULAR' | 'GST' | 'QUOTATION' | 'ESTIMATE' | string;
+  isConverted?: boolean;
+  convertedBillNo?: string;
+  convertedAt?: Date;
   placeOfSupply?: string;
   reverseCharge?: string;
   vehicleNo?: string;
@@ -107,8 +110,11 @@ const ParticularSchema: Schema = new Schema(
     pdfName: { type: String, default: '' },
     pdfPublicId: { type: String, default: '' },
     products: [ParticularProductItemSchema],
-    // GST Specific Fields
-    billType: { type: String, enum: ['REGULAR', 'GST'], default: 'REGULAR' },
+    // GST & Document Specific Fields
+    billType: { type: String, default: 'REGULAR' },
+    isConverted: { type: Boolean, default: false },
+    convertedBillNo: { type: String, default: '' },
+    convertedAt: { type: Date },
     placeOfSupply: { type: String, default: '' },
     reverseCharge: { type: String, default: 'No' },
     vehicleNo: { type: String, default: '' },
