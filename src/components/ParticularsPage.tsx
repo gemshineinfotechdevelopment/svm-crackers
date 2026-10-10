@@ -69,6 +69,15 @@ interface CustomerOptionItem {
   gst?: string;
 }
 
+interface QtyWarningItem {
+  slNo?: number | string;
+  name: string;
+  requestedQty: number | string;
+  availableStock?: number;
+  unit?: string;
+  issue: 'MISSING_QTY' | 'OUT_OF_STOCK' | 'INSUFFICIENT_STOCK';
+}
+
 interface ProductCatalogOption {
   id: string;
   sku?: string;
@@ -81,6 +90,7 @@ interface ProductCatalogOption {
   retailRate?: number;
   productType?: string;
   unit?: string;
+  qty?: number;
 }
 
 const findProductByCode = (code: string | undefined | null, options: ProductCatalogOption[]): ProductCatalogOption | null => {
@@ -445,6 +455,19 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const [printModalOpen, setPrintModalOpen] = useState<boolean>(false);
   const [selectedBillForPrint, setSelectedBillForPrint] = useState<BillPrintData | null>(null);
 
+  // Quantity restriction dialog state for Estimate billing
+  const [qtyWarningDialog, setQtyWarningDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    items: QtyWarningItem[];
+  }>({
+    open: false,
+    title: '',
+    message: '',
+    items: [],
+  });
+
   // Check customer previous history
   const checkPreviousHistory = async (name: string, targetYear: number = selectedYear) => {
     if (!name || !name.trim() || isEditMode) return;
@@ -521,6 +544,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           retailRate: mrpVal > 0 ? mrpVal : rateVal,
           productType: pType,
           unit: unitVal,
+          qty: typeof p.qty === 'number' ? p.qty : (typeof p.stock === 'number' ? p.stock : (typeof p.totalStock === 'number' ? p.totalStock : 0)),
         });
       });
     }
@@ -538,6 +562,10 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
             const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : (p.sNo !== undefined ? String(p.sNo) : String(idx + 1));
             const skuCode = p.sku ? String(p.sku) : (p.itemCode ? String(p.itemCode) : `PL-${100 + idx}`);
+            const existingOpt = prodMap.get(key.toLowerCase());
+            const preservedQty = existingOpt?.qty !== undefined
+              ? existingOpt.qty
+              : (typeof p.qty === 'number' ? p.qty : (typeof p.stock === 'number' ? p.stock : 0));
 
             prodMap.set(key.toLowerCase(), {
               id: p._id || p.id,
@@ -551,6 +579,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               retailRate: mrpVal > 0 ? mrpVal : rateVal,
               productType: 'Both',
               unit: p.unit || '1 Box',
+              qty: preservedQty,
             });
           }
         } else {
@@ -559,6 +588,11 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             const rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
             const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : (p.sNo !== undefined ? String(p.sNo) : String(idx + 1));
             const skuCode = p.sku ? String(p.sku) : (p.itemCode ? String(p.itemCode) : `PL-${100 + idx}`);
+            const existingOpt = prodMap.get(key.toLowerCase());
+            const preservedQty = existingOpt?.qty !== undefined
+              ? existingOpt.qty
+              : (typeof p.qty === 'number' ? p.qty : (typeof p.stock === 'number' ? p.stock : 0));
+
             prodMap.set(key.toLowerCase(), {
               id: p._id || p.id,
               sku: skuCode,
@@ -571,6 +605,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               retailRate: mrpVal > 0 ? mrpVal : rateVal,
               productType: 'Both',
               unit: p.unit || '1 Box',
+              qty: preservedQty,
             });
           }
         }
@@ -896,10 +931,10 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           }
         }
 
-        const rawQty = field === 'quantity' ? (val === '0' ? '1' : val) : updated.quantity;
-        const q = parseFloat(rawQty) || 1;
+        const rawQty = field === 'quantity' ? val : updated.quantity;
+        const q = parseFloat(rawQty) || 0;
         const r = parseFloat(field === 'rate' ? val : updated.rate) || 0;
-        updated.quantity = rawQty || '1';
+        updated.quantity = rawQty;
         updated.amount = String(Math.round(q * r));
         return updated;
       })
@@ -910,18 +945,112 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setProductRows((prev) => prev.filter((r) => r.id !== id));
   };
 
+  // Helper to validate product quantities for Estimate billing mode
+  const validateEstimateQuantities = (rows: ProductRowItem[]): QtyWarningItem[] => {
+    const problematic: QtyWarningItem[] = [];
+    const validRows = rows.filter((r) => r.particular && r.particular.trim() !== '');
+
+    validRows.forEach((r, idx) => {
+      const q = parseFloat(r.quantity);
+      const match =
+        productOptions.find((p) => p.name.trim().toLowerCase() === r.particular.trim().toLowerCase()) ||
+        findProductByCode(r.particular, productOptions);
+      const stockQty = match?.qty;
+
+      if (!r.quantity || isNaN(q) || q <= 0) {
+        problematic.push({
+          slNo: idx + 1,
+          name: r.particular,
+          requestedQty: r.quantity || '0',
+          availableStock: typeof stockQty === 'number' ? stockQty : 0,
+          unit: r.pktUnit,
+          issue: 'MISSING_QTY',
+        });
+      } else if (typeof stockQty === 'number' && stockQty <= 0) {
+        problematic.push({
+          slNo: idx + 1,
+          name: r.particular,
+          requestedQty: q,
+          availableStock: stockQty,
+          unit: r.pktUnit,
+          issue: 'OUT_OF_STOCK',
+        });
+      }
+    });
+
+    return problematic;
+  };
+
+  const showQuantityWarningDialog = (items: QtyWarningItem[]) => {
+    const hasMissingQty = items.some((i) => i.issue === 'MISSING_QTY');
+    const hasOutOfStock = items.some((i) => i.issue === 'OUT_OF_STOCK');
+
+    let dialogTitle = '⚠️ Product Quantity Alert';
+    let dialogMessage = 'Please review the following product(s) before saving this Estimate bill:';
+
+    if (hasMissingQty && !hasOutOfStock) {
+      dialogTitle = '⚠️ Product Quantity Missing';
+      dialogMessage = 'The following product(s) do not have a valid quantity. In Estimate billing, product quantity cannot be 0 or empty (minimum 1 required):';
+    } else if (hasOutOfStock && !hasMissingQty) {
+      dialogTitle = '⚠️ Product Out of Stock';
+      dialogMessage = 'The following product(s) have 0 quantity available in inventory (Out of Stock):';
+    } else {
+      dialogTitle = '⚠️ Product Quantity & Stock Alert';
+      dialogMessage = 'The following product(s) have invalid quantities or 0 stock in inventory:';
+    }
+
+    setQtyWarningDialog({
+      open: true,
+      title: dialogTitle,
+      message: dialogMessage,
+      items,
+    });
+  };
+
   // Add selected product from top product bar
   const handleAddProductFromBar = (prod: ProductCatalogOption | null, qtyVal: string = quickQty) => {
     if (!prod) return;
+    const q = parseFloat(qtyVal);
+
+    if (mode === 'ESTIMATE') {
+      // 1. Missing or invalid quantity entered
+      if (!qtyVal || isNaN(q) || q <= 0) {
+        showQuantityWarningDialog([
+          {
+            name: prod.name,
+            requestedQty: qtyVal || '0',
+            availableStock: typeof prod.qty === 'number' ? prod.qty : 0,
+            unit: prod.unit || quickUnit || '1 Box',
+            issue: 'MISSING_QTY',
+          },
+        ]);
+        return;
+      }
+
+      // 2. Check if product has 0 stock in inventory
+      if (typeof prod.qty === 'number' && prod.qty <= 0) {
+        showQuantityWarningDialog([
+          {
+            name: prod.name,
+            requestedQty: q,
+            availableStock: 0,
+            unit: prod.unit || quickUnit || '1 Box',
+            issue: 'OUT_OF_STOCK',
+          },
+        ]);
+        return;
+      }
+    }
+
     const rateVal = getRateForType(prod, rateType);
-    const q = parseFloat(qtyVal) || 1;
+    const validQ = isNaN(q) || q <= 0 ? 1 : q;
     const newRow: ProductRowItem = {
       id: String(Date.now()),
       particular: prod.name,
       pktUnit: prod.unit || quickUnit || '1 Box',
       rate: String(rateVal),
-      quantity: String(q),
-      amount: String(Math.round(q * rateVal)),
+      quantity: String(validQ),
+      amount: String(Math.round(validQ * rateVal)),
     };
     setProductRows((prev) => {
       if (prev.length === 1 && !prev[0].particular.trim() && (prev[0].amount === '0' || !prev[0].amount)) {
@@ -993,6 +1122,15 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       setSnackbarMessage('Please add at least one product item.');
       setSnackbarOpen(true);
       return;
+    }
+
+    // In Estimate mode, validate product quantities and stock
+    if (mode === 'ESTIMATE') {
+      const problematic = validateEstimateQuantities(productRows);
+      if (problematic.length > 0) {
+        showQuantityWarningDialog(problematic);
+        return;
+      }
     }
 
     setSavingBill(true);
@@ -1112,6 +1250,13 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       return;
     }
 
+    // Validate quantities and stock before converting to Estimate
+    const problematic = validateEstimateQuantities(productRows);
+    if (problematic.length > 0) {
+      showQuantityWarningDialog(problematic);
+      return;
+    }
+
     if (!window.confirm('Convert this Quotation to an official Estimate Bill? It will be added to Sales Register and Account Ledger.')) return;
 
     setSavingBill(true);
@@ -1170,6 +1315,21 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   };
 
   const handleSaveBill = async () => {
+    // In Estimate mode, validate product quantities and stock before saving
+    if (mode === 'ESTIMATE') {
+      const validRows = productRows.filter((r) => r.particular.trim() !== '');
+      if (validRows.length === 0) {
+        setSnackbarMessage('Please add at least one product item.');
+        setSnackbarOpen(true);
+        return;
+      }
+      const problematic = validateEstimateQuantities(productRows);
+      if (problematic.length > 0) {
+        showQuantityWarningDialog(problematic);
+        return;
+      }
+    }
+
     const currentSystemYear = new Date().getFullYear();
     const currentSystemYearStr = currentSystemYear.toString();
     const selectedViewYear = getSelectedBillYear();
@@ -1962,7 +2122,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                           <input
                             type="number"
                             min="1"
-                            value={row.quantity === '0' || !row.quantity ? '1' : row.quantity}
+                            value={row.quantity}
                             onChange={(e) => handleRowChange(row.id, 'quantity', e.target.value)}
                             onWheel={(e) => (e.target as HTMLElement).blur()}
                             style={{
@@ -1973,7 +2133,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                               fontSize: '12.5px',
                               textAlign: 'center',
                               fontWeight: 600,
-                              color: '#0F172A',
+                              color: !row.quantity || parseFloat(row.quantity) <= 0 ? '#DC2626' : '#0F172A',
                             }}
                           />
                         </TableCell>
@@ -2489,6 +2649,160 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           }}
         />
       )}
+
+      {/* ========================================================= */}
+      {/* PRODUCT QUANTITY WARNING DIALOG (ESTIMATE BILLING) */}
+      {/* ========================================================= */}
+      <Dialog
+        open={qtyWarningDialog.open}
+        onClose={() => setQtyWarningDialog((prev) => ({ ...prev, open: false }))}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '8px',
+              border: '2px solid #EF4444',
+              boxShadow: '0 10px 40px rgba(239, 68, 68, 0.25)',
+              overflow: 'hidden',
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            bgcolor: '#FEF2F2',
+            borderBottom: '1px solid #FEE2E2',
+            py: 1.5,
+            px: 2.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+          }}
+        >
+          <Box
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              bgcolor: '#FEE2E2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '20px',
+              flexShrink: 0,
+            }}
+          >
+            ⚠️
+          </Box>
+          <Box sx={{ flexGrow: 1 }}>
+            <Typography sx={{ fontWeight: 800, fontSize: '15px', color: '#991B1B' }}>
+              {qtyWarningDialog.title || 'Product Quantity Warning'}
+            </Typography>
+            <Typography sx={{ fontSize: '11.5px', color: '#B91C1C', fontWeight: 500 }}>
+              Estimate Bill Restriction • Cannot proceed with missing quantity or zero stock
+            </Typography>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 2.5 }}>
+          <Typography sx={{ fontSize: '13px', color: '#374151', mb: 2, fontWeight: 500 }}>
+            {qtyWarningDialog.message}
+          </Typography>
+
+          <TableContainer
+            sx={{
+              border: '1px solid #FECACA',
+              borderRadius: '6px',
+              maxHeight: '260px',
+              bgcolor: '#FFFFFF',
+            }}
+          >
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#FEF2F2' }}>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8 }}>
+                    Product
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8, textAlign: 'center' }}>
+                    Bill Qty
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8, textAlign: 'center' }}>
+                    Available Stock
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8, textAlign: 'center' }}>
+                    Status
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {qtyWarningDialog.items.map((item, idx) => (
+                  <TableRow key={idx} sx={{ '&:last-child td': { borderBottom: 0 } }}>
+                    <TableCell sx={{ fontSize: '12px', fontWeight: 600, color: '#1F2937', py: 1 }}>
+                      {item.name}
+                      {item.unit ? (
+                        <Typography component="span" sx={{ fontSize: '10.5px', color: '#6B7280', ml: 0.8 }}>
+                          ({item.unit})
+                        </Typography>
+                      ) : null}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: '12.5px', fontWeight: 800, color: '#DC2626', textAlign: 'center', py: 1 }}>
+                      {item.requestedQty}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: '12px', fontWeight: 600, color: '#4B5563', textAlign: 'center', py: 1 }}>
+                      {item.availableStock !== undefined ? item.availableStock : '0'}
+                    </TableCell>
+                    <TableCell sx={{ textAlign: 'center', py: 1 }}>
+                      <Box
+                        sx={{
+                          display: 'inline-block',
+                          px: 1,
+                          py: 0.3,
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          bgcolor: item.issue === 'MISSING_QTY' ? '#FEE2E2' : '#FEF3C7',
+                          color: item.issue === 'MISSING_QTY' ? '#DC2626' : '#B45309',
+                        }}
+                      >
+                        {item.issue === 'MISSING_QTY'
+                          ? 'Missing Qty / 0'
+                          : item.issue === 'OUT_OF_STOCK'
+                          ? 'Out of Stock (0)'
+                          : 'Insufficient Stock'}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <Box sx={{ mt: 2, p: 1.2, bgcolor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '6px' }}>
+            <Typography sx={{ fontSize: '11.5px', color: '#92400E', fontWeight: 500 }}>
+              💡 <strong>Note:</strong> Estimate bills deduct stock directly from inventory and cannot proceed with zero quantity or negative stock. Please enter a valid quantity or adjust inventory stock.
+            </Typography>
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ px: 2.5, py: 1.5, bgcolor: '#F9FAFB', borderTop: '1px solid #E5E7EB' }}>
+          <Button
+            onClick={() => setQtyWarningDialog((prev) => ({ ...prev, open: false }))}
+            variant="contained"
+            sx={{
+              bgcolor: '#DC2626',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '12.5px',
+              textTransform: 'none',
+              px: 3,
+              '&:hover': { bgcolor: '#B91C1C' },
+            }}
+          >
+            Close & Edit Bill
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Snackbar Feedback */}
       <Snackbar
