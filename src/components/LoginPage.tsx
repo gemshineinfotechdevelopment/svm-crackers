@@ -32,11 +32,24 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
       .then((res) => {
         const data = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res;
         if (data && typeof data === 'object') {
-          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha') || data.companyName.toLowerCase().includes('apsara') || data.companyName.toLowerCase().includes('svm'))
-            ? 'Manjula Crackers'
+          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha') || data.companyName.toLowerCase().includes('apsara') || data.companyName.toLowerCase().includes('manjula'))
+            ? 'S.V.M Fireworks Agencies'
             : (data.companyName ?? DEFAULT_COMPANY_SETTINGS.companyName);
 
-          const remoteSettings = { ...DEFAULT_COMPANY_SETTINGS, ...data, companyName: compName };
+          const compAddr = (!data.address || data.address.toLowerCase().includes('tirupur') || data.address.toLowerCase().includes('varun') || data.address.toLowerCase().includes('rajivgandhi') || data.address.toLowerCase().includes('67 - h/e'))
+            ? DEFAULT_COMPANY_SETTINGS.address
+            : data.address;
+
+          const remoteSettings = {
+            ...DEFAULT_COMPANY_SETTINGS,
+            ...data,
+            companyName: compName,
+            address: compAddr,
+            phone: data.phone || DEFAULT_COMPANY_SETTINGS.phone,
+            whatsapp: data.whatsapp || DEFAULT_COMPANY_SETTINGS.whatsapp,
+            gstin: data.gstin || DEFAULT_COMPANY_SETTINGS.gstin,
+            licNo: data.licNo || DEFAULT_COMPANY_SETTINGS.licNo,
+          };
           setSettings(remoteSettings);
           localStorage.setItem('apsara_app_settings', JSON.stringify(remoteSettings));
         }
@@ -135,7 +148,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
         >
           <LockOutlinedIcon sx={{ fontSize: 18, color: '#1E3A8A' }} />
           <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', letterSpacing: 0.2 }}>
-            {settings.companyName || 'Manjula Crackers'} - System Login
+            {settings.companyName || 'S.V.M Fireworks Agencies'} - System Login
           </Typography>
         </Box>
 
@@ -144,7 +157,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <Box
             component="img"
             src={settings.logoUrl || defaultProjectLogo}
-            alt="Manjula Crackers Logo"
+            alt="S.V.M Fireworks Agencies Logo"
             sx={{
               maxHeight: 50,
               maxWidth: 160,
@@ -260,7 +273,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
           <Box sx={{ mt: 2, pt: 1, borderTop: '1px solid #E2E8F0', textAlign: 'center' }}>
             <Typography sx={{ fontSize: '10.5px', color: '#64748B' }}>
-              {settings.companyName || 'Manjula Crackers'} • Sivakasi
+              {settings.companyName || 'S.V.M Fireworks Agencies'} • Sivakasi
             </Typography>
           </Box>
         </Box>

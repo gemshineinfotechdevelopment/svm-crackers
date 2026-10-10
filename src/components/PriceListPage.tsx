@@ -1136,7 +1136,7 @@ export const PriceListPage: FC = () => {
     ];
 
     const storeSettings = getStoredSettings();
-    const compName = storeSettings.companyName || 'Manjula Crackers';
+    const compName = storeSettings.companyName || 'S.V.M Fireworks Agencies';
     const cleanPrefix = compName.replace(/[^a-zA-Z0-9_-]/g, '_');
 
     const worksheet = XLSX.utils.json_to_sheet(templateData);
@@ -1151,7 +1151,7 @@ export const PriceListPage: FC = () => {
       return;
     }
     const storeSettings = getStoredSettings();
-    const compName = storeSettings.companyName || 'Manjula Crackers';
+    const compName = storeSettings.companyName || 'S.V.M Fireworks Agencies';
     const cleanPrefix = compName.replace(/[^a-zA-Z0-9_-]/g, '_');
 
     const exportData = filteredItems.map((item, idx) => ({
@@ -1176,7 +1176,7 @@ export const PriceListPage: FC = () => {
     if (!printWindow) return;
 
     const storeSettings = getStoredSettings();
-    const compName = storeSettings.companyName || 'Manjula Crackers';
+    const compName = storeSettings.companyName || 'S.V.M Fireworks Agencies';
     const compUpper = compName.toUpperCase();
     const compTagline = storeSettings.tagline || `Official Wholesale & Retail Price List • ${storeSettings.city || 'Sivakasi'}`;
 

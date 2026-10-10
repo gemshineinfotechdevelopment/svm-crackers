@@ -100,17 +100,18 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
   }, []);
 
   // Display Company Name
-  const rawComp =
-    bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
-      ? bill.companyName
-      : storeSettings.companyName || 'MANJULA CRACKERS';
   const displayCompanyName =
-    rawComp.toUpperCase().includes('VARUN') || rawComp.toUpperCase().includes('DHEEKSHA') || rawComp.toUpperCase().includes('SVM') || rawComp.toUpperCase().includes('APSARA')
-      ? 'MANJULA CRACKERS'
-      : rawComp.toUpperCase();
+    storeSettings.companyName && storeSettings.companyName.trim() !== '' && storeSettings.companyName !== 'General'
+      ? storeSettings.companyName.toUpperCase()
+      : (bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General')
+        ? bill.companyName.toUpperCase()
+        : 'S.V.M FIREWORKS AGENCIES';
 
-  const companyAddress = (bill.companyAddress || storeSettings.address || '').trim() ||
-    '67 - H/E, Rajivgandhi Nagar, Near Ramji Polypack, Sivakasi Bus Stand , Sivakasi';
+  const companyAddress = (storeSettings.address && !storeSettings.address.toLowerCase().includes('rajivgandhi') && !storeSettings.address.toLowerCase().includes('67 - h/e'))
+    ? storeSettings.address.trim()
+    : (bill.companyAddress && !bill.companyAddress.toLowerCase().includes('rajivgandhi') && !bill.companyAddress.toLowerCase().includes('67 - h/e'))
+      ? bill.companyAddress.trim()
+      : 'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road, Keela Thiruthangal - 626 130. Tamil Nadu';
   const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
   const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
   const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
@@ -170,7 +171,7 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
     packingPercent = pPct.toFixed(2);
     packingAmount = (subtotal * pPct) / 100;
   } else if ((bill.packingCharges !== undefined && bill.packingCharges !== null && bill.packingCharges !== '') ||
-             (bill.packing !== undefined && bill.packing !== null && bill.packing !== '')) {
+    (bill.packing !== undefined && bill.packing !== null && bill.packing !== '')) {
     const rawPack = String(bill.packingCharges ?? bill.packing).trim();
     const pVal = parseFloat(rawPack.replace(/[^0-9.]/g, '')) || 0;
     if (rawPack.includes('%')) {

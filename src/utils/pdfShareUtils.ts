@@ -85,7 +85,7 @@ export const shareBillViaWhatsApp = async (
   const pdfBlob = await generatePdfBlob(element, filename);
   const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
 
-  const compName = options.companyName || (options.isGst ? 'SVM CRACKERS' : 'MANJULA CRACKERS');
+  const compName = options.companyName || (options.isGst ? 'S.V.M FIREWORKS AGENCIES' : 'S.V.M FIREWORKS AGENCIES');
   const formattedAmt = typeof options.totalAmount === 'number'
     ? options.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : String(options.totalAmount);

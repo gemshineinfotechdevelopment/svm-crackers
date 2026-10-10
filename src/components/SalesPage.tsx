@@ -92,13 +92,19 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
       }
     };
 
+    const handleBillSaved = () => {
+      fetchBills();
+    };
+
     window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
     window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
     window.addEventListener('apsara_bill_year_changed', handleYearChange);
+    window.addEventListener('apsara_bill_saved', handleBillSaved);
     return () => {
       window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
       window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
       window.removeEventListener('apsara_bill_year_changed', handleYearChange);
+      window.removeEventListener('apsara_bill_saved', handleBillSaved);
     };
   }, []);
 
@@ -167,7 +173,7 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
       companyName:
         bill.companyName && bill.companyName.trim() !== '' && bill.companyName !== 'General'
           ? bill.companyName
-          : storeSettings.companyName || 'Manjula Crackers',
+          : storeSettings.companyName || 'S.V.M Fireworks Agencies',
       companyAddress: storeSettings.address,
       companyCity: storeSettings.city,
       companyPincode: storeSettings.pincode,
@@ -483,8 +489,8 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewQuotation, onEditBill }) =>
                           {searchTerm
                             ? 'No sales bills matching your search.'
                             : selectedYear === 'ALL'
-                            ? 'No quotation bills found in database.'
-                            : `No quotation bills created for Year ${selectedYear}.`}
+                              ? 'No quotation bills found in database.'
+                              : `No quotation bills created for Year ${selectedYear}.`}
                         </Typography>
                         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', mt: 1.5 }}>
                           {selectedYear !== 'ALL' && (

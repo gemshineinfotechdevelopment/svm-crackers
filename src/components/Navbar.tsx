@@ -140,7 +140,7 @@ export const Navbar: FC<NavbarProps> = ({
     { label: 'Settings', tabKey: 'Settings' },
   ];
 
-  const firmName = (companySettings.companyName || 'MANJULA CRACKERS').toUpperCase();
+  const firmName = (companySettings.companyName || 'S.V.M FIREWORKS AGENCIES').toUpperCase();
 
   return (
     <Box component="header" sx={{ width: '100%', userSelect: 'none' }}>

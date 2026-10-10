@@ -333,6 +333,17 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       return;
     }
 
+    const normalizeMode = (m?: any) => {
+      if (!m) return computedStatus === 'PAID' ? 'CASH' : 'CREDIT';
+      const s = String(m).trim().toUpperCase();
+      if (s.includes('UPI') || s.includes('GPAY')) return 'UPI';
+      if (s.includes('BANK') || s.includes('TRANSFER')) return 'BANK';
+      if (s.includes('CREDIT') || s.includes('DUE') || s.includes('UNPAID')) return 'CREDIT';
+      return 'CASH';
+    };
+
+    const finalPaymentMode = normalizeMode(paymentMode);
+
     const particular = await Particular.create({
       customerName: trimmedCustName,
       customerPhone: customerPhone || '',
@@ -349,7 +360,7 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       amount: amount || total || '0.00',
       total: total || amount || '0.00',
       paymentStatus: computedStatus,
-      paymentMode: paymentMode || (computedStatus === 'PAID' ? 'CASH' : 'CREDIT'),
+      paymentMode: finalPaymentMode,
       paidAmount: paidNum > 0 ? paidNum.toFixed(2) : '0.00',
       notes: notes || '',
       date: rawDate,
@@ -488,8 +499,16 @@ export const updateParticular = async (req: Request, res: Response, next: NextFu
         ...(tax !== undefined && { tax }),
         ...(amount !== undefined && { amount }),
         ...(total !== undefined && { total }),
-        ...(paymentStatus !== undefined && { paymentStatus }),
-        ...(paymentMode !== undefined && { paymentMode }),
+        ...(paymentStatus !== undefined && { paymentStatus: String(paymentStatus).toUpperCase() }),
+        ...(paymentMode !== undefined && {
+          paymentMode: (() => {
+            const s = String(paymentMode).trim().toUpperCase();
+            if (s.includes('UPI') || s.includes('GPAY')) return 'UPI';
+            if (s.includes('BANK') || s.includes('TRANSFER')) return 'BANK';
+            if (s.includes('CREDIT') || s.includes('DUE') || s.includes('UNPAID')) return 'CREDIT';
+            return 'CASH';
+          })(),
+        }),
         ...(paidAmount !== undefined && { paidAmount }),
         ...(notes !== undefined && { notes }),
         ...(date !== undefined && { date }),

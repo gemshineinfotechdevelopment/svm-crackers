@@ -179,7 +179,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const [customerName, setCustomerName] = useState<string>(initialCustomerName || '');
   const [customerMobile, setCustomerMobile] = useState<string>('');
   const [customerAddress, setCustomerAddress] = useState<string>('');
-  const [companyName, setCompanyName] = useState<string>(() => storeSettings.companyName || 'Manjula Crackers');
+  const [companyName, setCompanyName] = useState<string>(() => storeSettings.companyName || 'S.V.M Fireworks Agencies');
 
   // 3. Product Selection Bar State
   const [quickCode, setQuickCode] = useState<string>('');
@@ -354,7 +354,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     return () => {
       window.removeEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Handle Edit Mode population
@@ -369,7 +369,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       if (editBillData.rateType) setRateType(editBillData.rateType);
       setDiscountRs(String(editBillData.discount ?? '0'));
       setPackingRs(String(editBillData.packing ?? ''));
-      setCompanyName(editBillData.companyName || storeSettings.companyName || 'Manjula Crackers');
+      setCompanyName(editBillData.companyName || storeSettings.companyName || 'S.V.M Fireworks Agencies');
       setPaymentMode(editBillData.paymentMode || 'Cash');
       if (editBillData.notes) setRemarks(editBillData.notes);
 
@@ -566,7 +566,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         customerPhone: customerMobile.trim(),
         customerAddress: customerAddress.trim(),
         customerGst: customerGst.trim(),
-        companyName: companyName || storeSettings.companyName || 'Manjula Crackers',
+        companyName: companyName || storeSettings.companyName || 'S.V.M Fireworks Agencies',
         billNo: billNo || '1001',
         date: billDate,
         rateType: rateType,
@@ -599,7 +599,21 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         setSnackbarMessage('Quotation / Bill saved successfully!');
       }
 
+      window.dispatchEvent(new Event('apsara_bill_saved'));
       setSnackbarOpen(true);
+
+      // Refresh next bill number for fresh quotations
+      if (!isEditMode) {
+        ParticularsApi.getNextBillNo('REGULAR', selectedYear)
+          .then((res) => {
+            if (res && res.nextBillNo) setBillNo(res.nextBillNo);
+          })
+          .catch(() => { });
+      }
+
+      if (isEditMode && onEditSuccess) {
+        onEditSuccess();
+      }
 
       // Construct bill data and open PDF Preview & Print Modal immediately
       const savedBillData: BillPrintData = {
@@ -610,7 +624,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         customerPhone: customerMobile.trim(),
         customerAddress: customerAddress.trim(),
         customerGst: customerGst.trim(),
-        companyName: companyName || storeSettings.companyName || 'Manjula Crackers',
+        companyName: companyName || storeSettings.companyName || 'S.V.M Fireworks Agencies',
         companyAddress: storeSettings.address,
         companyCity: storeSettings.city,
         companyPincode: storeSettings.pincode,
@@ -659,41 +673,20 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     executeSaveBill();
   };
 
-  // Direct Print / PDF Handler
+  // Direct Print / PDF Handler (Ensures bill is saved then previewed)
   const handlePrint = () => {
     const validRows = productRows.filter((r) => r.particular.trim() !== '');
-    const billData: BillPrintData = {
-      billNo: billNo || '1001',
-      date: billDate,
-      rateType: rateType,
-      customerName: customerName || 'Valued Customer',
-      customerPhone: customerMobile,
-      customerAddress: customerAddress,
-      customerGst: customerGst,
-      companyName: companyName || storeSettings.companyName || 'Manjula Crackers',
-      companyAddress: storeSettings.address,
-      companyCity: storeSettings.city,
-      companyPincode: storeSettings.pincode,
-      companyState: storeSettings.state,
-      companyPhone: storeSettings.phone,
-      companyWhatsapp: storeSettings.whatsapp,
-      logoUrl: storeSettings.logoUrl,
-      subtotal: subtotal,
-      discount: discountAmount,
-      packing: packingAmount,
-      total: netPayment,
-      invoiceTitle: 'QUOTATION',
-      products: validRows.map((r) => ({
-        particular: r.particular,
-        quantity: r.quantity,
-        rate: r.rate,
-        pktUnit: r.pktUnit,
-        amount: r.amount,
-      })),
-    };
-
-    setSelectedBillForPrint(billData);
-    setPrintModalOpen(true);
+    if (!customerName.trim()) {
+      setSnackbarMessage('Please enter or select Customer Name.');
+      setSnackbarOpen(true);
+      return;
+    }
+    if (validRows.length === 0) {
+      setSnackbarMessage('Please add at least one product item.');
+      setSnackbarOpen(true);
+      return;
+    }
+    handleSaveBill();
   };
 
   // Reset / Exit Form
@@ -1697,6 +1690,20 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* ========================================================= */}
+      {/* QUOTATION / BILL PRINT PREVIEW MODAL */}
+      {/* ========================================================= */}
+      {selectedBillForPrint && (
+        <BillPrintModal
+          open={printModalOpen}
+          onClose={() => {
+            setPrintModalOpen(false);
+            setSelectedBillForPrint(null);
+          }}
+          bill={selectedBillForPrint}
+        />
+      )}
 
       {/* Snackbar Feedback */}
       <Snackbar

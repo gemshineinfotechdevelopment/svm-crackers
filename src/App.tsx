@@ -49,7 +49,7 @@ function App() {
 
     const updateTitle = () => {
       const settings = getStoredSettings();
-      const compName = settings.companyName || 'Manjula Crackers';
+      const compName = settings.companyName || 'S.V.M Fireworks Agencies';
       document.title = `${compName} - Billing & Management`;
     };
     updateTitle();
@@ -59,11 +59,21 @@ function App() {
       .then((res) => {
         const data = (res && typeof res === 'object' && 'data' in res && res.data) ? res.data : res;
         if (data && typeof data === 'object') {
-          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha') || data.companyName.toLowerCase().includes('apsara') || data.companyName.toLowerCase().includes('svm'))
-            ? 'Manjula Crackers'
-            : (data.companyName ?? DEFAULT_COMPANY_SETTINGS.companyName);
+          const compName = (!data.companyName || data.companyName.toLowerCase().includes('varun') || data.companyName.toLowerCase().includes('dheeksha') || data.companyName.toLowerCase().includes('apsara') || data.companyName.toLowerCase().includes('manjula'))
+          const compAddr = (!data.address || data.address.toLowerCase().includes('tirupur') || data.address.toLowerCase().includes('varun') || data.address.toLowerCase().includes('rajivgandhi') || data.address.toLowerCase().includes('67 - h/e'))
+            ? DEFAULT_COMPANY_SETTINGS.address
+            : data.address;
 
-          const remoteSettings = { ...DEFAULT_COMPANY_SETTINGS, ...data, companyName: compName };
+          const remoteSettings = {
+            ...DEFAULT_COMPANY_SETTINGS,
+            ...data,
+            companyName: compName,
+            address: compAddr,
+            phone: data.phone || DEFAULT_COMPANY_SETTINGS.phone,
+            whatsapp: data.whatsapp || DEFAULT_COMPANY_SETTINGS.whatsapp,
+            gstin: data.gstin || DEFAULT_COMPANY_SETTINGS.gstin,
+            licNo: data.licNo || DEFAULT_COMPANY_SETTINGS.licNo,
+          };
           localStorage.setItem('apsara_app_settings', JSON.stringify(remoteSettings));
           window.dispatchEvent(new Event('apsara_settings_updated'));
           updateTitle();
