@@ -952,28 +952,14 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
     validRows.forEach((r, idx) => {
       const q = parseFloat(r.quantity);
-      const match =
-        productOptions.find((p) => p.name.trim().toLowerCase() === r.particular.trim().toLowerCase()) ||
-        findProductByCode(r.particular, productOptions);
-      const stockQty = match?.qty;
 
       if (!r.quantity || isNaN(q) || q <= 0) {
         problematic.push({
           slNo: idx + 1,
           name: r.particular,
           requestedQty: r.quantity || '0',
-          availableStock: typeof stockQty === 'number' ? stockQty : 0,
           unit: r.pktUnit,
           issue: 'MISSING_QTY',
-        });
-      } else if (typeof stockQty === 'number' && stockQty <= 0) {
-        problematic.push({
-          slNo: idx + 1,
-          name: r.particular,
-          requestedQty: q,
-          availableStock: stockQty,
-          unit: r.pktUnit,
-          issue: 'OUT_OF_STOCK',
         });
       }
     });
@@ -982,27 +968,10 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   };
 
   const showQuantityWarningDialog = (items: QtyWarningItem[]) => {
-    const hasMissingQty = items.some((i) => i.issue === 'MISSING_QTY');
-    const hasOutOfStock = items.some((i) => i.issue === 'OUT_OF_STOCK');
-
-    let dialogTitle = '⚠️ Product Quantity Alert';
-    let dialogMessage = 'Please review the following product(s) before saving this Estimate bill:';
-
-    if (hasMissingQty && !hasOutOfStock) {
-      dialogTitle = '⚠️ Product Quantity Missing';
-      dialogMessage = 'The following product(s) do not have a valid quantity. In Estimate billing, product quantity cannot be 0 or empty (minimum 1 required):';
-    } else if (hasOutOfStock && !hasMissingQty) {
-      dialogTitle = '⚠️ Product Out of Stock';
-      dialogMessage = 'The following product(s) have 0 quantity available in inventory (Out of Stock):';
-    } else {
-      dialogTitle = '⚠️ Product Quantity & Stock Alert';
-      dialogMessage = 'The following product(s) have invalid quantities or 0 stock in inventory:';
-    }
-
     setQtyWarningDialog({
       open: true,
-      title: dialogTitle,
-      message: dialogMessage,
+      title: '⚠️ Product Quantity Missing',
+      message: 'In Estimate billing, each product must have a valid quantity (minimum 1). Please enter quantity for the following product(s):',
       items,
     });
   };
@@ -1013,29 +982,14 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     const q = parseFloat(qtyVal);
 
     if (mode === 'ESTIMATE') {
-      // 1. Missing or invalid quantity entered
+      // Missing or invalid quantity entered (less than or equal to 0, or empty)
       if (!qtyVal || isNaN(q) || q <= 0) {
         showQuantityWarningDialog([
           {
             name: prod.name,
             requestedQty: qtyVal || '0',
-            availableStock: typeof prod.qty === 'number' ? prod.qty : 0,
             unit: prod.unit || quickUnit || '1 Box',
             issue: 'MISSING_QTY',
-          },
-        ]);
-        return;
-      }
-
-      // 2. Check if product has 0 stock in inventory
-      if (typeof prod.qty === 'number' && prod.qty <= 0) {
-        showQuantityWarningDialog([
-          {
-            name: prod.name,
-            requestedQty: q,
-            availableStock: 0,
-            unit: prod.unit || quickUnit || '1 Box',
-            issue: 'OUT_OF_STOCK',
           },
         ]);
         return;
@@ -2697,10 +2651,10 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           </Box>
           <Box sx={{ flexGrow: 1 }}>
             <Typography sx={{ fontWeight: 800, fontSize: '15px', color: '#991B1B' }}>
-              {qtyWarningDialog.title || 'Product Quantity Warning'}
+              {qtyWarningDialog.title || 'Product Quantity Missing'}
             </Typography>
             <Typography sx={{ fontSize: '11.5px', color: '#B91C1C', fontWeight: 500 }}>
-              Estimate Bill Restriction • Cannot proceed with missing quantity or zero stock
+              Estimate Bill Restriction • Product quantity must be entered (minimum 1)
             </Typography>
           </Box>
         </DialogTitle>
@@ -2721,16 +2675,19 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: '#FEF2F2' }}>
+                  <TableCell sx={{ width: '50px', fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8, textAlign: 'center' }}>
+                    S.No
+                  </TableCell>
                   <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8 }}>
-                    Product
+                    Product Name
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8, textAlign: 'center' }}>
-                    Bill Qty
+                  <TableCell sx={{ width: '90px', fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8, textAlign: 'center' }}>
+                    Unit
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8, textAlign: 'center' }}>
-                    Available Stock
+                  <TableCell sx={{ width: '100px', fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8, textAlign: 'center' }}>
+                    Quantity
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8, textAlign: 'center' }}>
+                  <TableCell sx={{ width: '140px', fontWeight: 700, fontSize: '11.5px', color: '#991B1B', py: 0.8, textAlign: 'center' }}>
                     Status
                   </TableCell>
                 </TableRow>
@@ -2738,19 +2695,17 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               <TableBody>
                 {qtyWarningDialog.items.map((item, idx) => (
                   <TableRow key={idx} sx={{ '&:last-child td': { borderBottom: 0 } }}>
-                    <TableCell sx={{ fontSize: '12px', fontWeight: 600, color: '#1F2937', py: 1 }}>
+                    <TableCell sx={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748B', py: 1 }}>
+                      {item.slNo || idx + 1}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: '12.5px', fontWeight: 600, color: '#1F2937', py: 1 }}>
                       {item.name}
-                      {item.unit ? (
-                        <Typography component="span" sx={{ fontSize: '10.5px', color: '#6B7280', ml: 0.8 }}>
-                          ({item.unit})
-                        </Typography>
-                      ) : null}
                     </TableCell>
-                    <TableCell sx={{ fontSize: '12.5px', fontWeight: 800, color: '#DC2626', textAlign: 'center', py: 1 }}>
-                      {item.requestedQty}
+                    <TableCell sx={{ textAlign: 'center', fontSize: '12px', color: '#4B5563', py: 1 }}>
+                      {item.unit || '-'}
                     </TableCell>
-                    <TableCell sx={{ fontSize: '12px', fontWeight: 600, color: '#4B5563', textAlign: 'center', py: 1 }}>
-                      {item.availableStock !== undefined ? item.availableStock : '0'}
+                    <TableCell sx={{ fontSize: '13px', fontWeight: 800, color: '#DC2626', textAlign: 'center', py: 1 }}>
+                      {item.requestedQty || '0'}
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center', py: 1 }}>
                       <Box
@@ -2761,15 +2716,12 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                           borderRadius: '12px',
                           fontSize: '11px',
                           fontWeight: 700,
-                          bgcolor: item.issue === 'MISSING_QTY' ? '#FEE2E2' : '#FEF3C7',
-                          color: item.issue === 'MISSING_QTY' ? '#DC2626' : '#B45309',
+                          bgcolor: '#FEE2E2',
+                          color: '#DC2626',
+                          border: '1px solid #FECACA',
                         }}
                       >
-                        {item.issue === 'MISSING_QTY'
-                          ? 'Missing Qty / 0'
-                          : item.issue === 'OUT_OF_STOCK'
-                          ? 'Out of Stock (0)'
-                          : 'Insufficient Stock'}
+                        Quantity Missing / 0
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -2780,7 +2732,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
           <Box sx={{ mt: 2, p: 1.2, bgcolor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '6px' }}>
             <Typography sx={{ fontSize: '11.5px', color: '#92400E', fontWeight: 500 }}>
-              💡 <strong>Note:</strong> Estimate bills deduct stock directly from inventory and cannot proceed with zero quantity or negative stock. Please enter a valid quantity or adjust inventory stock.
+              💡 <strong>Note:</strong> In Estimate billing, product quantity cannot be 0 or empty. Please enter a valid quantity (minimum 1) for each product to save the bill.
             </Typography>
           </Box>
         </DialogContent>
@@ -2799,7 +2751,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               '&:hover': { bgcolor: '#B91C1C' },
             }}
           >
-            Close & Edit Bill
+            Close & Enter Quantity
           </Button>
         </DialogActions>
       </Dialog>
