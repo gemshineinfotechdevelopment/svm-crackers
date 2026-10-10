@@ -14,7 +14,6 @@ import {
   Tooltip,
   CircularProgress,
   Chip,
-  LinearProgress,
 } from '@mui/material';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
@@ -28,7 +27,7 @@ import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import * as XLSX from 'xlsx';
 
 import { ParticularsApi, ProductsApi } from '../services/api';
-import { getActiveBillingYear, getStandardYearOptions } from '../utils/yearContext';
+import { getActiveBillingYear, setActiveBillingYear, YEAR_CHANGE_EVENT } from '../utils/yearContext';
 
 export interface ProductSaleStat {
   rank: number;
@@ -38,35 +37,28 @@ export interface ProductSaleStat {
   totalRevenue: number;
   averageRate: number;
   billsCount: number;
-  sharePercent: number;
   years: number[];
 }
 
-// Realistic reference sales data for crackers so year-wise reports are immediately rich
-const REFERENCE_CRACKER_SALES = [
-  { name: '1k wala', baseQty: 840, rate: 120, category: 'Garlands' },
-  { name: 'Gr Chakkar Big 10p', baseQty: 720, rate: 80, category: 'Chakkars' },
-  { name: 'Flower Pot delux', baseQty: 680, rate: 110, category: 'Flower Pots' },
-  { name: '4" Mega Dlx 20 Ply', baseQty: 590, rate: 130, category: 'Atom Bombs' },
-  { name: '2 Sound', baseQty: 530, rate: 100, category: 'Sound Crackers' },
-  { name: '5" Lady Dlx', baseQty: 470, rate: 100, category: 'Atom Bombs' },
-  { name: '4" Gold ganesh', baseQty: 450, rate: 86, category: 'Atom Bombs' },
-  { name: '5 Mega dlx', baseQty: 410, rate: 120, category: 'Atom Bombs' },
-  { name: 'Gr Chakkar Spl', baseQty: 390, rate: 150, category: 'Chakkars' },
-  { name: '6" Dlx', baseQty: 360, rate: 140, category: 'Atom Bombs' },
-  { name: '4" Dlx Laxmi', baseQty: 340, rate: 64, category: 'Atom Bombs' },
-  { name: 'Gr Chakkar Dlx', baseQty: 310, rate: 300, category: 'Chakkars' },
-  { name: '4" Lakshmi', baseQty: 290, rate: 16, category: 'Atom Bombs' },
-  { name: 'Kuruvi Crckers', baseQty: 270, rate: 20, category: 'Sound Crackers' },
-  { name: '7cm Electric Sparklers', baseQty: 620, rate: 45, category: 'Sparklers' },
-  { name: '10cm Color Sparklers', baseQty: 540, rate: 65, category: 'Sparklers' },
-  { name: '15cm Green Sparklers', baseQty: 430, rate: 95, category: 'Sparklers' },
-  { name: '30cm Electric Sparklers', baseQty: 380, rate: 135, category: 'Sparklers' },
-  { name: '12 Shot Rider', baseQty: 250, rate: 350, category: 'Sky Shots' },
-  { name: '30 Shot Aerial Deluxe', baseQty: 180, rate: 750, category: 'Sky Shots' },
-  { name: '60 Shot Multi Colour', baseQty: 110, rate: 1450, category: 'Sky Shots' },
-  { name: '120 Shot Grand Finale', baseQty: 65, rate: 2800, category: 'Sky Shots' },
-];
+export const extractBillYear = (bill: any): number => {
+  if (bill.year) {
+    const y = Number(bill.year);
+    if (!isNaN(y) && y >= 2000) return y;
+  }
+  if (bill.date) {
+    // bill.date format: DD-MM-YYYY (e.g. 10-10-2026)
+    const parts = String(bill.date).trim().split(/[-/]/);
+    if (parts.length === 3) {
+      const y = parseInt(parts[2], 10);
+      if (!isNaN(y) && y >= 2000) return y;
+    }
+  }
+  if (bill.createdAt) {
+    const y = new Date(bill.createdAt).getFullYear();
+    if (!isNaN(y) && y >= 2000) return y;
+  }
+  return getActiveBillingYear() || new Date().getFullYear();
+};
 
 export const StockPage: FC = () => {
   const currentYear = getActiveBillingYear() || new Date().getFullYear();
@@ -78,12 +70,27 @@ export const StockPage: FC = () => {
   const [rawBills, setRawBills] = useState<any[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
 
-  const yearOptions = useMemo(() => {
-    const list = getStandardYearOptions();
-    return ['ALL', ...list];
-  }, []);
+  // Dynamically resolve only real years present in actual bills
+  const availableYears = useMemo(() => {
+    const yrs = new Set<number>();
+    rawBills.forEach((b: any) => {
+      const y = extractBillYear(b);
+      if (y) yrs.add(y);
+    });
+    // Always include current active billing year
+    const activeYr = getActiveBillingYear() || new Date().getFullYear();
+    yrs.add(activeYr);
+    return Array.from(yrs).sort((a, b) => b - a);
+  }, [rawBills]);
 
-  // Fetch sales particulars from API
+  const yearOptions = useMemo(() => {
+    if (availableYears.length > 1) {
+      return ['ALL', ...availableYears];
+    }
+    return availableYears;
+  }, [availableYears]);
+
+  // Fetch sales particulars and products from API
   const loadData = async () => {
     setLoading(true);
     try {
@@ -92,9 +99,10 @@ export const StockPage: FC = () => {
         ProductsApi.getAll().catch(() => []),
       ]);
 
-      setRawBills(Array.isArray(billsData) ? billsData : []);
+      const billsList = Array.isArray(billsData) ? billsData : [];
+      setRawBills(billsList);
 
-      // Extract unique categories from products
+      // Extract unique categories from real products
       const cats = new Set<string>();
       if (Array.isArray(productsData)) {
         productsData.forEach((p: any) => {
@@ -103,7 +111,6 @@ export const StockPage: FC = () => {
           }
         });
       }
-      REFERENCE_CRACKER_SALES.forEach((r) => cats.add(r.category));
       setAllCategories(Array.from(cats));
     } catch (err) {
       console.error('Error loading stock sales data:', err);
@@ -114,9 +121,26 @@ export const StockPage: FC = () => {
 
   useEffect(() => {
     loadData();
+
+    const handleYearChange = (e: any) => {
+      if (e.detail?.year) {
+        setSelectedYear(e.detail.year);
+      }
+    };
+    window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+    return () => {
+      window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+    };
   }, []);
 
-  // Compute aggregated product sales statistics per year
+  const handleYearChangeFromDropdown = (val: string | number) => {
+    setSelectedYear(val);
+    if (val !== 'ALL') {
+      setActiveBillingYear(Number(val));
+    }
+  };
+
+  // Compute aggregated product sales statistics per year (from REAL bills only)
   const productStats = useMemo<ProductSaleStat[]>(() => {
     const statsMap = new Map<
       string,
@@ -130,10 +154,9 @@ export const StockPage: FC = () => {
       }
     >();
 
-    // 1. Process actual bills from the database
-    let totalFoundInBills = 0;
+    // Process actual bills from database
     rawBills.forEach((bill: any) => {
-      const billYear = Number(bill.year) || new Date(bill.date || bill.createdAt).getFullYear();
+      const billYear = extractBillYear(bill);
       if (selectedYear !== 'ALL' && billYear !== Number(selectedYear)) {
         return;
       }
@@ -147,12 +170,10 @@ export const StockPage: FC = () => {
           const rate = Number(p.rate) || 0;
           const amount = Number(p.amount) || qty * rate;
 
-          totalFoundInBills += qty;
-
           const key = name.toLowerCase();
           const existing = statsMap.get(key) || {
             productName: name,
-            category: 'Crackers',
+            category: p.category || 'General',
             totalQuantity: 0,
             totalRevenue: 0,
             billsCount: 0,
@@ -168,34 +189,6 @@ export const StockPage: FC = () => {
       }
     });
 
-    // 2. If no bill data exists for the selected year (e.g. empty test db), supplement with reference cracker data
-    // Scale quantity slightly per year so every year has realistic differentiated sales
-    if (totalFoundInBills === 0) {
-      const yearMultiplier = selectedYear === 'ALL' ? 2.5 : Number(selectedYear) === 2026 ? 1.2 : Number(selectedYear) === 2025 ? 1.0 : 0.85;
-      REFERENCE_CRACKER_SALES.forEach((ref, index) => {
-        const key = ref.name.toLowerCase();
-        const adjustedQty = Math.round(ref.baseQty * yearMultiplier * (1 - index * 0.02));
-        const adjustedRevenue = Math.round(adjustedQty * ref.rate);
-        const refYears = new Set<number>();
-        if (selectedYear === 'ALL') {
-          refYears.add(2024);
-          refYears.add(2025);
-          refYears.add(2026);
-        } else {
-          refYears.add(Number(selectedYear));
-        }
-
-        statsMap.set(key, {
-          productName: ref.name,
-          category: ref.category,
-          totalQuantity: adjustedQty,
-          totalRevenue: adjustedRevenue,
-          billsCount: Math.max(5, Math.round(adjustedQty / 12)),
-          years: refYears,
-        });
-      });
-    }
-
     const list = Array.from(statsMap.values()).map((item) => {
       const avgRate = item.totalQuantity > 0 ? Math.round(item.totalRevenue / item.totalQuantity) : 0;
       return {
@@ -206,13 +199,9 @@ export const StockPage: FC = () => {
         totalRevenue: item.totalRevenue,
         averageRate: avgRate,
         billsCount: item.billsCount,
-        sharePercent: 0,
         years: Array.from(item.years).sort((a, b) => b - a),
       };
     });
-
-    // Calculate total quantity across all products for % share
-    const grandTotalQty = list.reduce((acc, curr) => acc + curr.totalQuantity, 0) || 1;
 
     // Sort according to user preference (Default: Quantity Sold descending)
     list.sort((a, b) => {
@@ -221,11 +210,10 @@ export const StockPage: FC = () => {
       return b.billsCount - a.billsCount;
     });
 
-    // Assign rank and percentage
+    // Assign rank
     return list.map((item, index) => ({
       ...item,
       rank: index + 1,
-      sharePercent: Number(((item.totalQuantity / grandTotalQty) * 100).toFixed(1)),
     }));
   }, [rawBills, selectedYear, sortBy]);
 
@@ -257,21 +245,25 @@ export const StockPage: FC = () => {
     };
   }, [productStats]);
 
-  // Top seller per year overview cards
+  // Top seller per year overview cards (Only for years that actually exist in the database)
   const yearlyTopSellers = useMemo(() => {
-    const yearsList = [2026, 2025, 2024];
-    return yearsList.map((yr) => {
-      let topName = '1k wala';
-      let topQty = 840;
-      let topRev = 100800;
+    const yearsWithBills = availableYears.filter((yr) => {
+      return rawBills.some((b: any) => extractBillYear(b) === yr);
+    });
 
-      // Check real bills for this year
+    const targetYears = yearsWithBills.length > 0 ? yearsWithBills : [getActiveBillingYear() || new Date().getFullYear()];
+
+    return targetYears.map((yr) => {
+      let topName = 'No bills';
+      let topQty = 0;
+      let topRev = 0;
+
       const yearMap = new Map<string, { qty: number; rev: number }>();
       rawBills.forEach((b: any) => {
-        const bYear = Number(b.year) || new Date(b.date || b.createdAt).getFullYear();
+        const bYear = extractBillYear(b);
         if (bYear === yr && Array.isArray(b.products)) {
           b.products.forEach((p: any) => {
-            const pName = String(p.particular || '').trim();
+            const pName = String(p.particular || p.name || '').trim();
             if (!pName) return;
             const q = Number(p.quantity) || 0;
             const a = Number(p.amount) || q * (Number(p.rate) || 0);
@@ -293,12 +285,6 @@ export const StockPage: FC = () => {
             topRev = val.rev;
           }
         });
-      } else {
-        const multiplier = yr === 2026 ? 1.2 : yr === 2025 ? 1.0 : 0.85;
-        const ref = REFERENCE_CRACKER_SALES[0];
-        topName = ref.name;
-        topQty = Math.round(ref.baseQty * multiplier);
-        topRev = topQty * ref.rate;
       }
 
       return {
@@ -308,9 +294,9 @@ export const StockPage: FC = () => {
         topRev,
       };
     });
-  }, [rawBills]);
+  }, [rawBills, availableYears]);
 
-  // Export to Excel
+  // Export to Excel (Without Sales Share)
   const handleExportExcel = () => {
     const exportData = filteredStats.map((item) => ({
       Rank: item.rank,
@@ -320,7 +306,6 @@ export const StockPage: FC = () => {
       'Avg Rate (₹)': item.averageRate,
       'Total Revenue (₹)': item.totalRevenue,
       'Orders / Bills': item.billsCount,
-      'Sales Share (%)': `${item.sharePercent}%`,
       Year: selectedYear === 'ALL' ? 'All Years' : selectedYear,
     }));
 
@@ -330,7 +315,7 @@ export const StockPage: FC = () => {
     XLSX.writeFile(wb, `SVM_Crackers_Stock_Sales_Report_${selectedYear}.xlsx`);
   };
 
-  // Direct Print Report
+  // Direct Print Report (Without Sales Share)
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -365,7 +350,6 @@ export const StockPage: FC = () => {
                 <th class="text-right">Avg Rate (₹)</th>
                 <th class="text-right">Total Revenue (₹)</th>
                 <th class="text-center">Orders</th>
-                <th class="text-right">Share %</th>
               </tr>
             </thead>
             <tbody>
@@ -380,7 +364,6 @@ export const StockPage: FC = () => {
                   <td class="text-right">₹${item.averageRate.toLocaleString('en-IN')}</td>
                   <td class="text-right">₹${item.totalRevenue.toLocaleString('en-IN')}</td>
                   <td class="text-center">${item.billsCount}</td>
-                  <td class="text-right">${item.sharePercent}%</td>
                 </tr>
               `
                 )
@@ -448,7 +431,7 @@ export const StockPage: FC = () => {
               </Typography>
               <select
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
+                onChange={(e) => handleYearChangeFromDropdown(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
                 style={{
                   height: '28px',
                   backgroundColor: '#FFFFFF',
@@ -528,18 +511,18 @@ export const StockPage: FC = () => {
 
         {/* Content Container */}
         <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: '#F4F7FB', display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {/* 1. Year Highlights Row (Top Selling product for each Year) */}
+          {/* 1. Year Highlights Row (Top Selling product for real years) */}
           <Box>
             <Typography sx={{ fontSize: '12px', fontWeight: 800, color: '#334155', mb: 1, textTransform: 'uppercase' }}>
               📅 Year-Wise Top Sold Product Snapshot (Click to Filter)
             </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1.5 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: `repeat(${Math.min(yearlyTopSellers.length, 3)}, 1fr)` }, gap: 1.5 }}>
               {yearlyTopSellers.map((item) => {
                 const isSelected = selectedYear === item.year;
                 return (
                   <Box
                     key={item.year}
-                    onClick={() => setSelectedYear(item.year)}
+                    onClick={() => handleYearChangeFromDropdown(item.year)}
                     sx={{
                       bgcolor: isSelected ? '#EFF6FF' : '#FFFFFF',
                       border: isSelected ? '2px solid #2563EB' : '1px solid #CBD5E1',
@@ -607,7 +590,7 @@ export const StockPage: FC = () => {
                   {summaryMetrics.topProduct?.productName || 'None'}
                 </Typography>
                 <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#16A34A' }}>
-                  {summaryMetrics.topProduct?.totalQuantity.toLocaleString('en-IN')} units sold
+                  {summaryMetrics.topProduct?.totalQuantity.toLocaleString('en-IN') || 0} units sold
                 </Typography>
               </Box>
             </Box>
@@ -802,7 +785,7 @@ export const StockPage: FC = () => {
             </Box>
           </Box>
 
-          {/* 4. Main Product Sales Ranking Table */}
+          {/* 4. Main Product Sales Ranking Table (Sales Share column removed) */}
           <TableContainer
             component={Paper}
             elevation={0}
@@ -824,13 +807,12 @@ export const StockPage: FC = () => {
                   <TableCell align="right" sx={{ width: '120px' }}>Avg Rate (₹)</TableCell>
                   <TableCell align="right" sx={{ width: '140px' }}>Total Sales (₹)</TableCell>
                   <TableCell align="center" sx={{ width: '100px' }}>Orders</TableCell>
-                  <TableCell sx={{ width: '140px' }}>Sales Share</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredStats.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 4, color: '#64748B', fontSize: '13px' }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 4, color: '#64748B', fontSize: '13px' }}>
                       No product sales records found matching the filter.
                     </TableCell>
                   </TableRow>
@@ -901,7 +883,7 @@ export const StockPage: FC = () => {
                           />
                         </TableCell>
 
-                        {/* Total Quantity Sold */}
+                        {/* Units Sold */}
                         <TableCell align="right">
                           <Typography sx={{ fontSize: '13px', fontWeight: 900, color: '#16A34A' }}>
                             {item.totalQuantity.toLocaleString('en-IN')}
@@ -930,30 +912,6 @@ export const StockPage: FC = () => {
                           <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>
                             {item.billsCount} bills
                           </Typography>
-                        </TableCell>
-
-                        {/* Sales Share Progress */}
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Box sx={{ width: '100%', mr: 1 }}>
-                              <LinearProgress
-                                variant="determinate"
-                                value={Math.min(100, item.sharePercent * 3.5)}
-                                sx={{
-                                  height: 6,
-                                  borderRadius: 3,
-                                  bgcolor: '#E2E8F0',
-                                  '& .MuiLinearProgress-bar': {
-                                    bgcolor: isTop1 ? '#F59E0B' : '#2563EB',
-                                    borderRadius: 3,
-                                  },
-                                }}
-                              />
-                            </Box>
-                            <Typography sx={{ fontSize: '11px', fontWeight: 800, color: '#334155', minWidth: '32px' }}>
-                              {item.sharePercent}%
-                            </Typography>
-                          </Box>
                         </TableCell>
                       </TableRow>
                     );

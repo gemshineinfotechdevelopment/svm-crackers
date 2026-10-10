@@ -1,6 +1,5 @@
 import React from 'react';
 import defaultGaneshaLogo from '../assets/ganesha.jpg';
-import defaultProjectLogo from '../assets/logo.png';
 import { getStoredSettings } from './SettingsPage';
 import { numberToIndianWords } from '../utils/numberToWords';
 
@@ -132,7 +131,7 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill, copy
   const companyPhoneDisplay = phoneNumbersList.join(', ');
 
   // Company Logo from Settings / Bill
-  const companyLogoUrl = bill.logoUrl || storeSettings.logoUrl || defaultProjectLogo;
+  const companyLogoUrl = bill.logoUrl || storeSettings.logoUrl || '';
 
   // Subtotal from products
   const products = bill.products || [];

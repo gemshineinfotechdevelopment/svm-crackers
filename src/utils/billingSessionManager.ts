@@ -27,6 +27,7 @@ export interface ParticularDraftSession {
   packingPercent: string;
   remarks: string;
   paymentMode: string;
+  priceMap?: string;
   selectedYear?: number;
   lastUpdated: number;
 }
