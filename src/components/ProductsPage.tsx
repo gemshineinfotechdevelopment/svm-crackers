@@ -1162,7 +1162,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                             />
                           </TableCell>
 
-                          {/* S.No starts from 1 for Retail, 1 for Wholesale, and continuous 1..N for All Products */}
+                          {/* S.No starts from 1 for Retail, 1 for Wholesale */}
                           <TableCell sx={{ textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#1E3A8A' }}>
                             {p.slNo || idx + 1}
                           </TableCell>
