@@ -5,6 +5,7 @@ export interface IParticularProductItem {
   quantity: string;
   rate: string;
   pktUnit: string;
+  pcs?: string;
   amount: string;
   hsnCode?: string;
   gstRate?: string;
@@ -75,6 +76,7 @@ const ParticularProductItemSchema: Schema = new Schema({
   quantity: { type: String, default: '' },
   rate: { type: String, default: '' },
   pktUnit: { type: String, default: '' },
+  pcs: { type: String, default: '0' },
   amount: { type: String, default: '' },
   hsnCode: { type: String, default: '' },
   gstRate: { type: String, default: '' },

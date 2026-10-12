@@ -17,6 +17,7 @@ export interface ParticularDraftSession {
     id: string;
     particular: string;
     quantity: string;
+    pcs?: string;
     rate: string;
     pktUnit: string;
     amount: string;
