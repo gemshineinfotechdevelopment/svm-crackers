@@ -85,7 +85,7 @@ export const getParticularSessions = (mode: 'ESTIMATE' | 'QUOTATION'): { session
       if (Array.isArray(parsed.sessions) && parsed.sessions.length > 0) {
         const enrichedSessions = parsed.sessions.map((s: ParticularDraftSession) => ({
           ...s,
-          billDate: s.billDate || getTodayDateStr(),
+          billDate: getTodayDateStr(),
         }));
         return {
           sessions: enrichedSessions,
@@ -141,10 +141,20 @@ export const getGstSessions = (): { sessions: GstDraftSession[]; activeId: strin
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.sessions) && parsed.sessions.length > 0) {
-        const enrichedGst = parsed.sessions.map((s: GstDraftSession) => ({
-          ...s,
-          billDate: s.billDate || getTodayDateStr(),
-        }));
+        const enrichedGst = parsed.sessions.map((s: GstDraftSession) => {
+          let rows = s.productRows;
+          if (!rows || rows.length === 0) {
+            rows = [{ id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '', amount: '0' }];
+          } else if (rows.length === 1 && (!rows[0].particular || !rows[0].particular.trim())) {
+            rows = [{ ...rows[0], particular: 'Assorted Crackers', quantity: rows[0].quantity || '1' }];
+          }
+          return {
+            ...s,
+            billDate: getTodayDateStr(),
+            lrDate: getTodayDateStr(),
+            productRows: rows,
+          };
+        });
         return {
           sessions: enrichedGst,
           activeId: parsed.activeId || enrichedGst[0].id,
@@ -172,7 +182,7 @@ export const getGstSessions = (): { sessions: GstDraftSession[]; activeId: strin
     lrDate: '',
     totalCases: '0',
     productRows: [
-      { id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
+      { id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '', amount: '0' },
     ],
     taxPercent: '18',
     taxType: 'IGST',

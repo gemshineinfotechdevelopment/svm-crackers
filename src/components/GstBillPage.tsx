@@ -122,7 +122,7 @@ export const fromIsoDate = (isoStr: string) => {
   if (!isoStr) return '';
   const parts = isoStr.trim().split('-');
   if (parts.length === 3 && parts[0].length === 4) {
-    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`;
   }
   return isoStr;
 };
@@ -171,7 +171,7 @@ export const GstBillPage: FC = () => {
 
   // 1. Bill Info State (Top Left Box)
   const [billNo, setBillNo] = useState<string>(() => initialDraft?.billNo || '0001');
-  const [billDate, setBillDate] = useState<string>(() => initialDraft?.billDate || getTodayDateStr());
+  const [billDate, setBillDate] = useState<string>(() => getTodayDateStr());
   const billDatePickerRef = useRef<HTMLInputElement>(null);
   const lrDatePickerRef = useRef<HTMLInputElement>(null);
 
@@ -187,7 +187,7 @@ export const GstBillPage: FC = () => {
   const [despatchedTo, setDespatchedTo] = useState<string>(() => initialDraft?.despatchedTo || '');
   const [lorryTransport, setLorryTransport] = useState<string>(() => initialDraft?.lorryTransport || '');
   const [lrNo, setLrNo] = useState<string>(() => initialDraft?.lrNo || '');
-  const [lrDate, setLrDate] = useState<string>(() => initialDraft?.lrDate || getTodayDateStr());
+  const [lrDate, setLrDate] = useState<string>(() => getTodayDateStr());
   const [totalCases, setTotalCases] = useState<string>(() => initialDraft?.totalCases || '0');
   const [totalCasesManual, setTotalCasesManual] = useState<boolean>(false);
 
@@ -210,9 +210,12 @@ export const GstBillPage: FC = () => {
   // 5. Product List Table State
   const [productRows, setProductRows] = useState<GstRowItem[]>(() => {
     if (initialDraft?.productRows && initialDraft.productRows.length > 0) {
+      if (initialDraft.productRows.length === 1 && (!initialDraft.productRows[0].particular || !initialDraft.productRows[0].particular.trim())) {
+        return [{ ...initialDraft.productRows[0], particular: 'Assorted Crackers', quantity: initialDraft.productRows[0].quantity || '1' }];
+      }
       return initialDraft.productRows;
     }
-    return [{ id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' }];
+    return [{ id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '', amount: '0' }];
   });
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
@@ -237,11 +240,13 @@ export const GstBillPage: FC = () => {
     setLrDate(sess.lrDate || getTodayDateStr());
     setTotalCases(sess.totalCases || '0');
     setTotalCasesManual(false);
-    setProductRows(
+    const rowsToApply =
       sess.productRows && sess.productRows.length > 0
-        ? sess.productRows
-        : [{ id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' }]
-    );
+        ? (sess.productRows.length === 1 && (!sess.productRows[0].particular || !sess.productRows[0].particular.trim())
+            ? [{ ...sess.productRows[0], particular: 'Assorted Crackers', quantity: sess.productRows[0].quantity || '1' }]
+            : sess.productRows)
+        : [{ id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '', amount: '0' }];
+    setProductRows(rowsToApply);
     setSelectedRowId(null);
     setTaxType((sess.taxType as any) || 'IGST');
     setTaxPercent(sess.taxPercent || '18');
@@ -335,7 +340,7 @@ export const GstBillPage: FC = () => {
       lrDate: getTodayDateStr(),
       totalCases: '0',
       productRows: [
-        { id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
+        { id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '', amount: '0' },
       ],
       taxPercent: '18',
       taxType: 'IGST',
@@ -562,7 +567,26 @@ export const GstBillPage: FC = () => {
         category: p.category || 'General',
       }));
 
-      setProductOptions(options);
+      // Ensure "Assorted Crackers" option is available in the dropdown
+      const hasAssorted = options.some((p) => p.name.toLowerCase().trim() === 'assorted crackers');
+      const finalOptions: ProductCatalogOption[] = hasAssorted
+        ? options
+        : [
+            {
+              id: 'assorted_crackers_opt',
+              code: '',
+              slNo: '',
+              sku: '',
+              name: 'Assorted Crackers',
+              rate: 0,
+              unit: 'Case',
+              hsn: '3604',
+              category: 'General',
+            },
+            ...options,
+          ];
+
+      setProductOptions(finalOptions);
       await fetchNextGstBillNo(effectiveYear);
     } catch (e) {
       console.warn('Failed to load initial GST bill data', e);
@@ -708,7 +732,7 @@ export const GstBillPage: FC = () => {
     setTaxPercent('18');
     setBillFlag(true);
     setProductRows([
-      { id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
+      { id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '', amount: '0' },
     ]);
     setSelectedRowId(null);
     await fetchNextGstBillNo(targetYear);
@@ -768,7 +792,7 @@ export const GstBillPage: FC = () => {
     setProductRows(
       formattedRows.length > 0
         ? formattedRows
-        : [{ id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' }]
+        : [{ id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '', amount: '0' }]
     );
     setSelectedRowId(null);
 
@@ -789,7 +813,7 @@ export const GstBillPage: FC = () => {
     const newId = String(Date.now());
     setProductRows((prev) => [
       ...prev,
-      { id: newId, code: '', particular: '', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '0', amount: '0' },
+      { id: newId, code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '0', amount: '0' },
     ]);
     setSelectedRowId(newId);
   };
@@ -923,7 +947,7 @@ export const GstBillPage: FC = () => {
               return {
                 ...r,
                 code: itemCode,
-                particular: itemCode || 'Product Item',
+                particular: itemCode || 'Assorted Crackers',
                 hsnCode: itemHsn,
                 quantity: String(qNum),
                 unit: quickUnit || 'Case',
@@ -940,7 +964,7 @@ export const GstBillPage: FC = () => {
           {
             id: String(Date.now()),
             code: itemCode,
-            particular: itemCode || 'Product Item',
+            particular: itemCode || 'Assorted Crackers',
             hsnCode: itemHsn,
             quantity: String(qNum),
             unit: quickUnit || 'Case',
@@ -1682,12 +1706,13 @@ export const GstBillPage: FC = () => {
                         tabIndex={-1}
                         style={{
                           position: 'absolute',
-                          opacity: 0,
-                          width: '1px',
-                          height: '1px',
-                          bottom: 0,
                           right: 0,
-                          pointerEvents: 'none',
+                          top: 0,
+                          width: '28px',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                          zIndex: 2,
                         }}
                       />
                     </Box>
@@ -1939,12 +1964,13 @@ export const GstBillPage: FC = () => {
                         tabIndex={-1}
                         style={{
                           position: 'absolute',
-                          opacity: 0,
-                          width: '1px',
-                          height: '1px',
-                          bottom: 0,
                           right: 0,
-                          pointerEvents: 'none',
+                          top: 0,
+                          width: '28px',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                          zIndex: 2,
                         }}
                       />
                     </Box>
@@ -2266,7 +2292,7 @@ export const GstBillPage: FC = () => {
                                 type="text"
                                 value={row.particular}
                                 onChange={(e) => handleRowChange(row.id, 'particular', e.target.value)}
-                                placeholder="Enter product item..."
+                                placeholder="Assorted Crackers"
                                 style={{
                                   width: '100%',
                                   border: 'none',
