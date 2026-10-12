@@ -31,7 +31,7 @@ export function numberToIndianWords(amount: number | string): string {
     let res = '';
     if (hundreds > 0) {
       res += `${singleDigits[hundreds]} Hundred`;
-      if (rest > 0) res += ' ';
+      if (rest > 0) res += ' and ';
     }
     if (rest > 0) {
       res += convertTwoDigits(rest);

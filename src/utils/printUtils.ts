@@ -1,4 +1,13 @@
-import type { BillPrintData } from '../components/BillPrintTemplate';
+import {
+  type BillPrintData,
+  formatCurrency,
+  formatBillDate,
+  numberToWordsClean,
+  getProductCode,
+  splitRateAndContent,
+  splitProductParticular,
+  paginateProducts,
+} from '../components/BillPrintTemplate';
 import { formatCompanyAddressLines, type GstBillPrintData } from '../components/GstBillPrintTemplate';
 import { getStoredSettings } from '../components/SettingsPage';
 import { numberToIndianWords } from './numberToWords';
@@ -54,44 +63,29 @@ export const isDateInRange = (dateStr: string, fromDateStr: string, toDateStr: s
   return true;
 };
 
-export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): string => {
+export const generateBillHtml = (bill: BillPrintData): string => {
   const storeSettings = getStoredSettings();
-  const displayCompanyName =
-    storeSettings.companyName && typeof storeSettings.companyName === 'string' && storeSettings.companyName.trim() !== '' && storeSettings.companyName !== 'General' && storeSettings.companyName !== 'false'
-      ? storeSettings.companyName.toUpperCase()
-      : (bill.companyName && typeof bill.companyName === 'string' && bill.companyName.trim() !== '' && bill.companyName !== 'General' && bill.companyName !== 'false')
-        ? bill.companyName.toUpperCase()
-        : 'S.V.M FIREWORKS AGENCIES';
 
-  const companyAddress = (storeSettings.address && typeof storeSettings.address === 'string' && storeSettings.address !== 'false' && !storeSettings.address.toLowerCase().includes('rajivgandhi') && !storeSettings.address.toLowerCase().includes('67 - h/e'))
-    ? storeSettings.address.trim()
-    : (bill.companyAddress && typeof bill.companyAddress === 'string' && bill.companyAddress !== 'false' && !bill.companyAddress.toLowerCase().includes('rajivgandhi') && !bill.companyAddress.toLowerCase().includes('67 - h/e'))
-      ? bill.companyAddress.trim()
-      : 'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road, Keela Thiruthangal - 626 130. Tamil Nadu';
-  const companyCity = (bill.companyCity || storeSettings.city || 'Sivakasi').trim();
-  const companyPincode = (bill.companyPincode || storeSettings.pincode || '626123').trim();
-  const companyState = (bill.companyState || storeSettings.state || 'Tamil Nadu').trim();
+  const companyNameLine1 =
+    (storeSettings.companyName && storeSettings.companyName !== 'General' && storeSettings.companyName !== 'false'
+      ? storeSettings.companyName
+      : bill.companyName && bill.companyName !== 'General' && bill.companyName !== 'false'
+      ? bill.companyName
+      : 'S.V.M FIREWORKS AGENCIES').toUpperCase();
 
-  let cityLine = companyCity.toUpperCase();
-  if (companyPincode) {
-    cityLine += ` - ${companyPincode}`;
-  }
-  if (companyState && !cityLine.toLowerCase().includes(companyState.toLowerCase())) {
-    cityLine += `, ${companyState.toUpperCase()}`;
-  }
+  const companySubtitle = 'MANJULA TRADERS';
+  const companyAddressLine1 = '2/A13-14, SIVAKASI-VIRUDHUNAGAR MAIN ROAD,';
+  const companyAddressLine2 = 'THIRUTHANGAL, SIVAKASI - 626130.';
 
-  const primaryPhone = (bill.companyPhone || bill.phone || storeSettings.phone || '').trim();
-  const whatsappPhone = (bill.companyWhatsapp || storeSettings.whatsapp || '').trim();
-  const phoneNumbersList: string[] = [];
-  if (primaryPhone) phoneNumbersList.push(primaryPhone);
-  if (whatsappPhone && whatsappPhone !== primaryPhone) phoneNumbersList.push(whatsappPhone);
-  const companyPhoneDisplay = phoneNumbersList.join(', ');
+  const companyPhones =
+    storeSettings.phone && storeSettings.phone.trim() !== ''
+      ? storeSettings.phone
+      : '+91 96292 85344, 97900 62612';
 
-  const formatCur = (val: string | number | undefined | null) => {
-    if (val === undefined || val === null || val === '') return '0.00';
-    const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, '')) || 0;
-    return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
+  const companyEmail =
+    storeSettings.email && storeSettings.email.trim() !== ''
+      ? storeSettings.email
+      : 'crackersbazarsivakasi@gmail.com';
 
   const products = bill.products || [];
   const prodSubtotal = products.reduce((acc, p) => {
@@ -100,250 +94,107 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
     const amt = p.amount ? parseFloat(String(p.amount).replace(/,/g, '')) : q * r;
     return acc + amt;
   }, 0);
-  const subtotal = prodSubtotal > 0 ? prodSubtotal : (parseFloat(String(bill.subtotal || bill.amount || bill.total || 0).replace(/,/g, '')) || 0);
+  const subtotal =
+    prodSubtotal > 0
+      ? prodSubtotal
+      : parseFloat(String(bill.subtotal || bill.amount || bill.total || 0).replace(/,/g, '')) || 0;
 
-  // Discount calculation
-  let discountPercent = '0.00';
+  let discountPercent = '0';
   let discountAmount = 0;
   if (bill.discountPercent !== undefined && bill.discountPercent !== null && bill.discountPercent !== '') {
     const dPct = parseFloat(String(bill.discountPercent)) || 0;
-    discountPercent = dPct.toFixed(2);
+    discountPercent = Number.isInteger(dPct) ? String(dPct) : dPct.toFixed(2);
     discountAmount = (subtotal * dPct) / 100;
   } else if (bill.discount !== undefined && bill.discount !== null && bill.discount !== '') {
     const rawDisc = String(bill.discount).trim();
     const dVal = parseFloat(rawDisc.replace(/[^0-9.]/g, '')) || 0;
     if (rawDisc.includes('%') || (dVal > 0 && dVal <= 100 && !rawDisc.startsWith('₹'))) {
-      discountPercent = dVal.toFixed(2);
+      discountPercent = Number.isInteger(dVal) ? String(dVal) : dVal.toFixed(2);
       discountAmount = (subtotal * dVal) / 100;
     } else {
       discountAmount = dVal;
-      discountPercent = subtotal > 0 ? ((discountAmount / subtotal) * 100).toFixed(2) : '0.00';
+      const pct = subtotal > 0 ? (discountAmount / subtotal) * 100 : 0;
+      discountPercent = Number.isInteger(pct) ? String(pct) : pct.toFixed(0);
     }
   }
 
-  // Packing & Forwarding (P & F CHGS)
-  let packingPercent = '0.00';
+  let packingPercent = '0';
   let packingAmount = 0;
   if (bill.packingPercent !== undefined && bill.packingPercent !== null && bill.packingPercent !== '') {
     const pPct = parseFloat(String(bill.packingPercent)) || 0;
-    packingPercent = pPct.toFixed(2);
+    packingPercent = Number.isInteger(pPct) ? String(pPct) : pPct.toFixed(2);
     packingAmount = (subtotal * pPct) / 100;
-  } else if ((bill.packingCharges !== undefined && bill.packingCharges !== null && bill.packingCharges !== '') ||
-    (bill.packing !== undefined && bill.packing !== null && bill.packing !== '')) {
+  } else if (
+    (bill.packingCharges !== undefined && bill.packingCharges !== null && bill.packingCharges !== '') ||
+    (bill.packing !== undefined && bill.packing !== null && bill.packing !== '')
+  ) {
     const rawPack = String(bill.packingCharges ?? bill.packing).trim();
     const pVal = parseFloat(rawPack.replace(/[^0-9.]/g, '')) || 0;
     if (rawPack.includes('%')) {
-      packingPercent = pVal.toFixed(2);
+      packingPercent = Number.isInteger(pVal) ? String(pVal) : pVal.toFixed(2);
       packingAmount = (subtotal * pVal) / 100;
     } else {
       packingAmount = pVal;
-      packingPercent = subtotal > 0 ? ((packingAmount / subtotal) * 100).toFixed(2) : '0.00';
+      const pct = subtotal > 0 ? (packingAmount / subtotal) * 100 : 0;
+      packingPercent = Number.isInteger(pct) ? String(pct) : pct.toFixed(0);
     }
   }
 
-  // Transport calculation
-  const rawTransportStr = String(bill.transport ?? '').trim();
-  const cleanTrans = rawTransportStr.replace(/[^0-9.]/g, '');
-  const transNum = parseFloat(cleanTrans) || 0;
-  const transportAmt = (!isNaN(Number(rawTransportStr)) && transNum > 0) ? transNum : 0;
-  const transportDisplayName = (!rawTransportStr || rawTransportStr === '0' || rawTransportStr === '-') ? '' : rawTransportStr;
-
-  // Tax calculation
-  const rawTaxStr = String(bill.tax ?? '').trim();
-  const cleanTax = rawTaxStr.replace(/[^0-9.]/g, '');
-  const taxRate = parseFloat(cleanTax) || 0;
-
-  // Value of Goods
-  const valueOfGoods = Math.max(0, subtotal - discountAmount + packingAmount + transportAmt);
-  const taxAmount = taxRate > 0 ? (valueOfGoods * taxRate) / 100 : 0;
-
-  // Grand Total & Round Off
+  const netCalculated = Math.max(0, subtotal - discountAmount + packingAmount);
   const rawTotalNum = parseFloat(String(bill.total || 0).replace(/,/g, '')) || 0;
-  const calculatedTotal = valueOfGoods + taxAmount;
-  const grandTotalNum = rawTotalNum > 0 ? rawTotalNum : Math.round(calculatedTotal);
-  const roundOffNum = bill.roundOff !== undefined && bill.roundOff !== null && bill.roundOff !== ''
-    ? (parseFloat(String(bill.roundOff)) || 0)
-    : (grandTotalNum - calculatedTotal);
+  const grandTotalNum = rawTotalNum > 0 ? rawTotalNum : Math.round(netCalculated);
 
-  const totalQtyComputed = products.reduce((acc, p) => acc + (parseFloat(String(p.quantity || 0)) || 0), 0);
+  const amountInWords = numberToWordsClean(grandTotalNum);
+  const formattedDate = formatBillDate(bill.date);
+  const invoiceTitle = bill.invoiceTitle || bill.title || (bill.isEstimate ? 'Estimate' : 'Estimate');
 
-  const rawCustName = (bill.customerName || '').trim();
-  const customerDisplayName = rawCustName ? (rawCustName.toLowerCase().startsWith('m/s') ? rawCustName : `M/s. ${rawCustName}`) : '';
-  const customerAddressFormatted = bill.customerAddress && bill.customerAddress !== 'N/A' && bill.customerAddress !== '-'
-    ? bill.customerAddress
-    : '';
-  const customerAadharOrPan = (bill.customerAadhar || bill.customerPan || '').trim();
+  const pages = paginateProducts(products);
 
-  const rawDeliveryName = (bill.deliveryName || bill.customerName || '').trim();
-  const deliveryDisplayName = rawDeliveryName ? (rawDeliveryName.toLowerCase().startsWith('m/s') ? rawDeliveryName : `M/s. ${rawDeliveryName}`) : '';
-  const deliveryAddressFormatted = bill.deliveryAddress && bill.deliveryAddress !== 'N/A' && bill.deliveryAddress !== '-'
-    ? bill.deliveryAddress
-    : customerAddressFormatted;
-  const deliveryAadharOrPan = (bill.deliveryAadhar || customerAadharOrPan || '').trim();
+  const pagesHtml = pages
+    .map((pageProducts, pageIdx) => {
+      const isFirstPage = pageIdx === 0;
+      const isLastPage = pageIdx === pages.length - 1;
+      const startItemIndex = pageIdx === 0 ? 0 : 35 + (pageIdx - 1) * 35;
+      const pageNumber = pageIdx + 1;
+      const targetPageItems = isLastPage ? 28 : 35;
+      const spacerHeight = Math.max(16, (targetPageItems - pageProducts.length) * 22);
 
-  const dispatchFrom = bill.dispatchFrom || bill.despatchFrom || 'Sivakasi';
-  const dispatchTo = bill.dispatchTo || bill.despatchTo || bill.customerCity || '';
+      const rowsHtml = pageProducts
+        .map((item, idx) => {
+          const rowSNo = startItemIndex + idx + 1;
+          const codeDisplay = getProductCode(item);
+          const { rate, content } = splitRateAndContent(item);
+          const { name: prodName, extra: prodExtra } = splitProductParticular(item.particular);
+          const qNum = parseFloat(String(item.quantity || 0)) || 0;
+          const rNum = parseFloat(String(item.rate || 0)) || 0;
+          const rowAmount = item.amount ? parseFloat(String(item.amount).replace(/,/g, '')) : qNum * rNum;
 
-  const rawWords = numberToIndianWords(grandTotalNum);
-  const wordsClean = rawWords
-    .replace(/\s*Rupees\s*/i, ' ')
-    .replace(/\s*Only\s*/i, '')
-    .trim();
+          const prodDisplayHtml = prodExtra
+            ? `<div style="display: flex; justify-content: space-between; align-items: center; width: 100%;"><span>${prodName}</span><span style="padding-left: 8px; color: #000000;">${prodExtra}</span></div>`
+            : `<span>${prodName}</span>`;
 
-  const spacerMinHeight = Math.max(80, 520 - products.length * 26);
-
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const ganeshaImgUrl = `${origin}/ganesha.jpg`;
-  const companyLogoUrl = bill.logoUrl || storeSettings.logoUrl || '';
-
-  const copyLabels = ['ORIGINAL', 'DUPLICATE', 'TRIPLICATE', 'EXTRA COPY'];
-  const invoiceTitle = bill.invoiceTitle || (taxRate > 0 ? 'TAX INVOICE' : 'ESTIMATE');
-  const receiptSrc = bill.pdfData || bill.pdfUrl || '';
-
-  const productRowsHtml = products.length === 0
-    ? `
-      <tr style="vertical-align: top;">
-        <td style="border-right: 1px solid #000000; text-align: center; padding: 5px 4px;">1</td>
-        <td style="border-right: 1px solid #000000; padding: 5px 8px; font-weight: 600;">Assorted Crackers</td>
-        <td style="border-right: 1px solid #000000; text-align: center; padding: 5px 4px;">11 Case</td>
-        <td style="border-right: 1px solid #000000; text-align: right; padding: 5px 8px;">2,200.00</td>
-        <td style="border-right: 1px solid #000000; text-align: center; padding: 5px 4px;">Case</td>
-        <td style="text-align: right; padding: 5px 8px; font-weight: 600;">24,200.00</td>
-      </tr>
-    `
-    : products.map((item, idx) => {
-      const qNum = parseFloat(String(item.quantity || 0)) || 0;
-      const rNum = parseFloat(String(item.rate || 0)) || 0;
-      const rowAmount = item.amount ? parseFloat(String(item.amount).replace(/,/g, '')) : qNum * rNum;
-      const unitDisplay = item.pktUnit || item.unit || item.per || 'Case';
-
-      return `
-          <tr style="vertical-align: top;">
-            <td style="border-right: 1px solid #000000; text-align: center; padding: 4px 4px; font-weight: 500;">
-              ${idx + 1}
-            </td>
-            <td style="border-right: 1px solid #000000; padding: 4px 8px; font-weight: 600;">
-              ${item.particular}
-            </td>
-            <td style="border-right: 1px solid #000000; text-align: center; padding: 4px 4px;">
-              ${item.quantity} ${unitDisplay}
-            </td>
-            <td style="border-right: 1px solid #000000; text-align: right; padding: 4px 8px;">
-              ${formatCur(item.rate)}
-            </td>
-            <td style="border-right: 1px solid #000000; text-align: center; padding: 4px 4px;">
-              ${unitDisplay}
-            </td>
-            <td style="text-align: right; padding: 4px 8px; font-weight: 600;">
-              ${formatCur(rowAmount)}
-            </td>
-          </tr>
-        `;
-    }).join('');
-
-  const renderSingleInvoice = (copyName: string) => `
-    <div class="bill-page-wrapper">
-      <!-- Top Copy Indicator -->
-      <div style="display: flex; justify-content: flex-end; margin-bottom: 2px; padding-right: 2px;">
-        <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #000000;">
-          ${copyName}
-        </span>
-      </div>
-
-      <!-- Main Bordered Container -->
-      <div class="bill-box">
-        <!-- Header: Ganesha (Left) | Title (Center) | Apsara Logo (Right) -->
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 2px 10px 6px 10px; border-bottom: 1.5px solid #000000;">
-          <div style="width: 75px; text-align: center; flex-shrink: 0;">
-            <img src="${ganeshaImgUrl}" alt="Ganesha" style="max-height: 68px; max-width: 72px; object-fit: contain; display: block; margin: 0 auto;" />
-          </div>
-
-          <div style="flex: 1; text-align: center; padding: 0 8px;">
-            <div style="font-size: 24px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.15; margin-bottom: 2px; color: #000000;">
-              ${displayCompanyName}
-            </div>
-            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #000000; margin-bottom: 2px;">
-              (ALL KINDS OF CRACKERS AND FANCY VARIETIES AVAILABLE)
-            </div>
-            <div style="font-size: 11.5px; color: #000000; margin-bottom: 1px;">
-              ${companyAddress}
-            </div>
-            <div style="font-size: 12.5px; font-weight: 800; color: #000000;">
-              ${cityLine}
-            </div>
-            ${companyPhoneDisplay ? `<div style="font-size: 11px; font-weight: 700; color: #000000; margin-top: 1px;">Cell : ${companyPhoneDisplay}</div>` : ''}
-          </div>
-
-          <div style="width: 85px; text-align: center; flex-shrink: 0;">
-            ${companyLogoUrl ? `<img src="${companyLogoUrl}" alt="${displayCompanyName}" style="max-height: 68px; max-width: 85px; object-fit: contain; display: block; margin: 0 auto;" />` : ''}
-          </div>
-        </div>
-
-        <!-- 3-Column Section: To | Delivery To | Invoice Meta -->
-        <table style="width: 100%; border-collapse: collapse; border-bottom: 1.5px solid #000000; font-size: 11.5px;">
-          <tbody>
-            <tr>
-              <!-- Column 1: To -->
-              <td style="width: 38%; border-right: 1.5px solid #000000; padding: 6px 8px; vertical-align: top; line-height: 1.35;">
-                <div style="font-weight: 700; margin-bottom: 2px;">To :</div>
-                ${customerDisplayName ? `<div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${customerDisplayName}</div>` : ''}
-                ${customerAddressFormatted ? `<div style="margin-bottom: 2px;">${customerAddressFormatted}</div>` : ''}
-                ${bill.customerPhone ? `<div style="margin-bottom: 2px; font-weight: 500;">Cell : ${bill.customerPhone}</div>` : ''}
-                ${customerAadharOrPan ? `<div style="margin-top: 4px; font-weight: 600;">AADHAR/PAN No : ${customerAadharOrPan}</div>` : ''}
+          return `
+            <tr style="height: 22px; vertical-align: middle;">
+              <td style="border-right: 1px solid #000000; text-align: center; padding: 2px 2px; font-weight: 500;">${rowSNo}</td>
+              <td style="border-right: 1px solid #000000; text-align: center; padding: 2px 2px; font-weight: 600;">${codeDisplay}</td>
+              <td style="border-right: 1px solid #000000; text-align: left; padding: 2px 8px; font-weight: 500; overflow: hidden; white-space: nowrap;">${prodDisplayHtml}</td>
+              <td style="border-right: 1px solid #000000; text-align: right; padding-right: 10px; font-weight: 700;">${item.quantity}</td>
+              <td style="border-right: 1px solid #000000; padding: 2px 0;">
+                <div style="display: flex; justify-content: center; align-items: center; width: 100%;">
+                  <span style="width: 48%; text-align: right; padding-right: 4px; font-weight: 600;">${rate}</span>
+                  <span style="width: 52%; text-align: left; padding-left: 4px; font-weight: 600;">/ ${content}</span>
+                </div>
               </td>
-
-              <!-- Column 2: Delivery To Details -->
-              <td style="width: 38%; border-right: 1.5px solid #000000; padding: 6px 8px; vertical-align: top; line-height: 1.35;">
-                <div style="font-weight: 600; margin-bottom: 2px;">Delivery To Details:</div>
-                ${deliveryDisplayName ? `<div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${deliveryDisplayName}</div>` : ''}
-                ${deliveryAddressFormatted ? `<div style="margin-bottom: 2px;">${deliveryAddressFormatted}</div>` : ''}
-                ${bill.deliveryPhone || bill.customerPhone ? `<div style="margin-bottom: 2px; font-weight: 500;">Cell : ${bill.deliveryPhone || bill.customerPhone}</div>` : ''}
-                ${deliveryAadharOrPan ? `<div style="margin-top: 4px; font-weight: 600;">AADHAR/PAN No : ${deliveryAadharOrPan}</div>` : ''}
-              </td>
-
-              <!-- Column 3: Invoice Header, Bill No., Date -->
-              <td style="width: 24%; padding: 0; vertical-align: top;">
-                <table style="width: 100%; border-collapse: collapse; height: 100%;">
-                  <tbody>
-                    <tr>
-                      <td style="background-color: #404040; color: #FFFFFF; font-weight: 800; font-size: 12px; text-align: center; padding: 5px 4px; border-bottom: 1px solid #000000; letter-spacing: 0.06em;">
-                        ${invoiceTitle}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 6px 8px; border-bottom: 1px solid #000000; font-size: 12px; font-weight: 700;">
-                        Bill No. &nbsp;: &nbsp;<strong>${bill.billNo || ''}</strong>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 6px 8px; font-size: 12px; font-weight: 700;">
-                        Date &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: &nbsp;<strong>${bill.date}</strong>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </td>
+              <td style="text-align: right; padding-right: 10px; font-weight: 600;">${formatCurrency(rowAmount)}</td>
             </tr>
-          </tbody>
-        </table>
+          `;
+        })
+        .join('');
 
-        <!-- Products Table with Continuous Vertical Lines -->
-        <table style="width: 100%; border-collapse: collapse; border-bottom: 1.5px solid #000000; font-size: 11.5px;">
-          <thead>
-            <tr style="background-color: #404040; color: #FFFFFF; font-weight: 700; text-transform: uppercase; font-size: 11px;">
-              <th style="width: 6%; border-right: 1px solid #000000; padding: 5px 4px; text-align: center;">S.No</th>
-              <th style="width: 44%; border-right: 1px solid #000000; padding: 5px 8px; text-align: center;">PRODUCT NAME</th>
-              <th style="width: 13%; border-right: 1px solid #000000; padding: 5px 4px; text-align: center;">QUANTITY</th>
-              <th style="width: 13%; border-right: 1px solid #000000; padding: 5px 6px; text-align: center;">RATE</th>
-              <th style="width: 10%; border-right: 1px solid #000000; padding: 5px 4px; text-align: center;">PER</th>
-              <th style="width: 14%; padding: 5px 8px; text-align: center;">AMOUNT</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${productRowsHtml}
-
-            <!-- Continuous Vertical Lines Spacer to fill full A4 page -->
-            <tr style="height: ${spacerMinHeight}px;">
+      const spacerHtml =
+        spacerHeight > 0
+          ? `
+            <tr style="height: ${spacerHeight}px;">
               <td style="border-right: 1px solid #000000;">&nbsp;</td>
               <td style="border-right: 1px solid #000000;">&nbsp;</td>
               <td style="border-right: 1px solid #000000;">&nbsp;</td>
@@ -351,234 +202,179 @@ export const generateBillHtml = (bill: BillPrintData, copiesCount: number = 1): 
               <td style="border-right: 1px solid #000000;">&nbsp;</td>
               <td>&nbsp;</td>
             </tr>
-          </tbody>
-        </table>
+          `
+          : '';
 
-        <!-- Bottom Split Section: Dispatch Left | Totals Right -->
-        <table style="width: 100%; border-collapse: collapse; border-bottom: 1.5px solid #000000; font-size: 11.5px;">
-          <tbody>
-            <tr>
-              <!-- Left Column: Dispatch, Transport, HSN, Total Cases -->
-              <td style="width: 58%; border-right: 1.5px solid #000000; padding: 6px 8px; vertical-align: top; line-height: 1.45;">
-                <table style="width: 100%; border-collapse: collapse;">
-                  <tbody>
-                    <tr>
-                      <td style="padding: 2px 0; width: 50%;">
-                        Dispatch From &nbsp;: &nbsp;<strong>${dispatchFrom}</strong>
-                      </td>
-                      <td style="padding: 2px 0; width: 50%;">
-                        To &nbsp;: &nbsp;<strong>${dispatchTo || '-'}</strong>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 3px 0; width: 50%;">
-                        Transport &nbsp;: &nbsp;<strong>${transportDisplayName || '-'}</strong>
-                      </td>
-                      <td style="padding: 3px 0; width: 50%;">
-                        Total Pieces &nbsp;: &nbsp;<strong>${totalQtyComputed}</strong>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+      const summaryHtml = isLastPage
+        ? `
+          <tr style="height: 24px; border-top: 1px solid #000000;">
+            <td rowspan="4" style="border-right: 1px solid #000000; vertical-align: bottom; text-align: center; padding: 4px 1px; height: 96px;">
+              <div style="writing-mode: vertical-lr; transform: rotate(180deg); font-size: 10.5px; font-weight: 500; white-space: nowrap; margin: 0 auto; letter-spacing: 0.02em;">
+                ${amountInWords}
+              </div>
+            </td>
+            <td colspan="3" rowspan="4" style="border-right: 1px solid #000000;">&nbsp;</td>
+            <td style="border-right: 1px solid #000000; border-bottom: 1px solid #000000; text-align: center; font-weight: 600; padding: 2px 4px; fontSize: 11px;">
+              Sub Total
+            </td>
+            <td style="border-bottom: 1px solid #000000; text-align: right; font-weight: 600; padding-right: 10px; fontSize: 11px;">
+              ${formatCurrency(subtotal)}
+            </td>
+          </tr>
+          <tr style="height: 24px;">
+            <td style="border-right: 1px solid #000000; border-bottom: 1px solid #000000; text-align: center; font-weight: 600; padding: 2px 4px; fontSize: 11px;">
+              Discount (${discountPercent}%)
+            </td>
+            <td style="border-bottom: 1px solid #000000; text-align: right; font-weight: 600; padding-right: 10px; fontSize: 11px;">
+              ${formatCurrency(discountAmount)}
+            </td>
+          </tr>
+          <tr style="height: 24px;">
+            <td style="border-right: 1px solid #000000; border-bottom: 1px solid #000000; text-align: center; font-weight: 600; padding: 2px 4px; fontSize: 11px;">
+              Packing (${packingPercent}%)
+            </td>
+            <td style="border-bottom: 1px solid #000000; text-align: right; font-weight: 600; padding-right: 10px; fontSize: 11px;">
+              ${formatCurrency(packingAmount)}
+            </td>
+          </tr>
+          <tr style="height: 26px;">
+            <td style="border-right: 1px solid #000000; text-align: center; font-weight: 700; padding: 2px 4px; font-size: 12px;">
+              Net Amount
+            </td>
+            <td style="text-align: right; font-weight: 800; font-size: 14px; padding-right: 10px;">
+              ${formatCurrency(grandTotalNum)}
+            </td>
+          </tr>
+        `
+        : '';
 
-                ${receiptSrc
-      ? `
-                  <div style="margin-top: 8px; border-top: 1px dashed #CBD5E1; padding-top: 6px;">
-                    <div style="font-size: 10px; font-weight: 700; color: #64748B; margin-bottom: 4px;">
-                      ATTACHED TRANSPORT RECEIPT:
-                    </div>
-                    ${receiptSrc.startsWith('data:image') || receiptSrc.match(/\.(jpeg|jpg|png|webp|gif)$/i) || !receiptSrc.includes('application/pdf')
-        ? `<img src="${receiptSrc}" alt="Receipt" style="max-height: 70px; max-width: 100%; object-fit: contain; display: block;" />`
-        : `<span style="font-size: 11px; color: #0B4DB7; font-weight: 600;">PDF Attachment Included</span>`
-      }
-                  </div>
-                `
-      : ''
-    }
-              </td>
+      const headerHtml = isFirstPage
+        ? `
+          <div style="display: flex; align-items: stretch; border-bottom: 1px solid #000000; min-height: 76px;">
+            <div style="width: 70%; border-right: 1px solid #000000; text-align: center; padding: 6px 8px; display: flex; flex-direction: column; justify-content: center;">
+              <div style="font-size: 16px; font-weight: 800; letter-spacing: 0.04em; line-height: 1.2; color: #000000;">${companyNameLine1}</div>
+              <div style="font-size: 13.5px; font-weight: 800; letter-spacing: 0.03em; line-height: 1.25; margin-top: 1px; color: #000000;">${companySubtitle}</div>
+              <div style="font-size: 10.5px; font-weight: 700; line-height: 1.25; margin-top: 2px; color: #000000;">${companyAddressLine1}</div>
+              <div style="font-size: 10.5px; font-weight: 700; line-height: 1.25; color: #000000;">${companyAddressLine2}</div>
+            </div>
+            <div style="width: 30%; padding: 6px 10px; display: flex; flex-direction: column; justify-content: center; font-size: 10.5px; line-height: 1.45; color: #000000;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink: 0;">
+                  <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.02-.24c1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                </svg>
+                <span style="font-weight: 600;">${companyPhones}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink: 0;">
+                  <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                </svg>
+                <span style="font-weight: 500; word-break: break-all;">${companyEmail}</span>
+              </div>
+            </div>
+          </div>
+          <div style="border-bottom: 1px solid #000000; text-align: center; padding: 2px 0;">
+            <span style="font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; letter-spacing: 0.04em;">${invoiceTitle}</span>
+          </div>
+          <div style="display: flex; align-items: stretch; border-bottom: 1px solid #000000; font-size: 11px;">
+            <div style="width: 65%; border-right: 1px solid #000000; padding: 4px 8px; line-height: 1.35;">
+              <div style="display: flex; align-items: center;">
+                <span style="border: 1px solid #000000; padding: 0.5px 4px; font-weight: 700; font-size: 11px; margin-right: 8px; line-height: 1.1;">To</span>
+                <span style="font-weight: 700; text-transform: uppercase; font-size: 11.5px;">${bill.customerName || 'CASH'}</span>
+              </div>
+              ${(bill.customerAddress || bill.customerCity) ? `<div style="padding-left: 32px; text-transform: capitalize;">${bill.customerAddress || bill.customerCity}</div>` : ''}
+              ${bill.customerPhone ? `<div style="padding-left: 32px; font-weight: 600;">${bill.customerPhone}</div>` : ''}
+            </div>
+            <div style="width: 35%; padding: 4px 12px; line-height: 1.45; display: flex; flex-direction: column; justify-content: center;">
+              <div style="display: flex; justify-content: flex-start; gap: 8px;">
+                <span style="font-weight: 600;">Estimate No:</span>
+                <span style="font-weight: 700;">${bill.billNo || '1'}</span>
+              </div>
+              <div style="display: flex; justify-content: flex-start; gap: 8px; margin-top: 2px;">
+                <span style="font-weight: 600;">Date :</span>
+                <span style="font-weight: 700;">${formattedDate}</span>
+              </div>
+            </div>
+          </div>
+        `
+        : '';
 
-              <!-- Right Column: Calculations Table -->
-              <td style="width: 42%; padding: 0; vertical-align: top;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 11.5px;">
-                  <tbody>
-                    <tr>
-                      <td style="padding: 2.5px 8px; font-weight: 600;">Total :</td>
-                      <td style="padding: 2.5px 4px; text-align: center; width: 75px;">:</td>
-                      <td style="padding: 2.5px 8px; text-align: right; font-weight: 600;">
-                        ${formatCur(subtotal)}
-                      </td>
-                    </tr>
-                    ${discountAmount > 0
-      ? `
-                    <tr>
-                      <td style="padding: 2.5px 8px; font-weight: 500;">Less : Discount</td>
-                      <td style="padding: 2.5px 4px; text-align: center;">: ${discountPercent} %</td>
-                      <td style="padding: 2.5px 8px; text-align: right;">${formatCur(discountAmount)}</td>
-                    </tr>`
-      : ''
-    }
-                    ${packingAmount > 0
-      ? `
-                    <tr>
-                      <td style="padding: 2.5px 8px; font-weight: 500;">ADD : P &amp; F CHGS</td>
-                      <td style="padding: 2.5px 4px; text-align: center;">: ${packingPercent} %</td>
-                      <td style="padding: 2.5px 8px; text-align: right;">${formatCur(packingAmount)}</td>
-                    </tr>`
-      : ''
-    }
-                    ${transportAmt > 0
-      ? `
-                    <tr>
-                      <td style="padding: 2.5px 8px; font-weight: 500;">Transport Charges</td>
-                      <td style="padding: 2.5px 4px; text-align: center;">:</td>
-                      <td style="padding: 2.5px 8px; text-align: right;">${formatCur(transportAmt)}</td>
-                    </tr>`
-      : ''
-    }
-                    <tr>
-                      <td style="padding: 2.5px 8px; font-weight: 600;">Value of Goods</td>
-                      <td style="padding: 2.5px 4px; text-align: center;">:</td>
-                      <td style="padding: 2.5px 8px; text-align: right; font-weight: 600;">
-                        ${formatCur(valueOfGoods)}
-                      </td>
-                    </tr>
-                    ${taxAmount > 0
-      ? `
-                    <tr>
-                      <td style="padding: 2.5px 8px; font-weight: 500;">GST / Tax</td>
-                      <td style="padding: 2.5px 4px; text-align: center;">: ${taxRate} %</td>
-                      <td style="padding: 2.5px 8px; text-align: right;">${formatCur(taxAmount)}</td>
-                    </tr>`
-      : ''
-    }
-                    <tr>
-                      <td style="padding: 2.5px 8px; font-weight: 500;">Round Off</td>
-                      <td style="padding: 2.5px 4px; text-align: center;">:</td>
-                      <td style="padding: 2.5px 8px; text-align: right;">
-                        ${formatCur(roundOffNum)}
-                      </td>
-                    </tr>
-                    <tr style="border-top: 1px solid #000000;">
-                      <td style="padding: 4px 8px; font-weight: 800; font-size: 12px;">Grand Total</td>
-                      <td style="padding: 4px 4px; text-align: center; font-weight: 800;">:</td>
-                      <td style="padding: 4px 8px; text-align: right; font-weight: 800; font-size: 12px;">
-                        ${formatCur(grandTotalNum)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- Amount in Words -->
-        <div style="padding: 6px 8px; border-bottom: 1.5px solid #000000; font-size: 11.5px; font-weight: 700;">
-          Rupees : &nbsp;${wordsClean} Only.
+      return `
+        <div class="svm-page-wrapper" style="position: relative; box-sizing: border-box; margin-bottom: ${pageIdx < pages.length - 1 ? '32px' : '0'}; padding-bottom: 22px;">
+          <div style="border: 1px solid #000000; box-sizing: border-box; background-color: #FFFFFF;">
+            ${headerHtml}
+            <table style="width: 100%; border-collapse: collapse; font-size: 11px; background-color: #FFFFFF; table-layout: fixed;">
+              <thead>
+                <tr style="border-bottom: 1px solid #000000; height: 24px; background-color: #FFFFFF; color: #000000;">
+                  <th style="width: 6%; border-right: 1px solid #000000; text-align: center; padding: 3px 2px; font-weight: 700;">S.No.</th>
+                  <th style="width: 7%; border-right: 1px solid #000000; text-align: center; padding: 3px 2px; font-weight: 700;">Code</th>
+                  <th style="width: 49%; border-right: 1px solid #000000; text-align: center; padding: 3px 8px; font-weight: 700;">Product</th>
+                  <th style="width: 6%; border-right: 1px solid #000000; text-align: center; padding: 3px 2px; font-weight: 700;">Qty</th>
+                  <th style="width: 18%; border-right: 1px solid #000000; text-align: center; padding: 3px 4px; font-weight: 700;">Rate (Rs.) / Content</th>
+                  <th style="width: 14%; text-align: center; padding: 3px 4px; font-weight: 700;">Total ₹</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+                ${spacerHtml}
+                ${summaryHtml}
+              </tbody>
+            </table>
+          </div>
+          <div style="position: absolute; right: 4px; bottom: 2px; font-size: 11px; font-weight: 600; color: #000000;">
+            ${pageNumber}
+          </div>
         </div>
-
-        <!-- Footer: Terms Left | Signatory Right -->
-        <table style="width: 100%; border-collapse: collapse; font-size: 10.5px;">
-          <tbody>
-            <tr>
-              <td style="width: 58%; border-right: 1.5px solid #000000; padding: 6px 8px; vertical-align: top;">
-                <div style="line-height: 1.45;">
-                  <div>1. Certified that the particulars given above are true and correct.</div>
-                  <div>2. Goods once sold cannot be taken back on any account.</div>
-                  <div>3. Subject to sivakasi jurisdiction</div>
-                </div>
-                <div style="text-align: right; padding-right: 28px; margin-top: 16px; font-weight: 700; font-size: 11px;">
-                  E. &amp; O.E
-                </div>
-              </td>
-
-              <td style="width: 42%; padding: 6px 8px; vertical-align: top; text-align: center;">
-                <div style="font-weight: 800; font-size: 12px; text-transform: uppercase;">
-                  For ${displayCompanyName}
-                </div>
-                <div style="height: 48px;"></div>
-                <div style="font-size: 11px; font-weight: 600;">
-                  Authorized Signatory
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
-
-  // Repeat for the requested number of copies
-  const actualCopies = Math.max(1, copiesCount || 1);
-  let pagesHtml = '';
-  for (let i = 0; i < actualCopies; i++) {
-    const copyTitle = copyLabels[i] || (bill.invoiceCopy || 'ORIGINAL');
-    const isLast = i === actualCopies - 1;
-    pagesHtml += `
-      <div class="gst-print-copy ${!isLast ? 'page-break' : ''}">
-        ${renderSingleInvoice(copyTitle)}
-      </div>
-    `;
-  }
+      `;
+    })
+    .join('');
 
   return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>${invoiceTitle} #${bill.billNo || '1'} - ${displayCompanyName}</title>
+  <title>${invoiceTitle} #${bill.billNo || ''}</title>
   <style>
-    @page {
-      size: A4 portrait;
-      margin: 5mm 6mm;
-    }
-    *, *:before, *:after {
+    * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
-    html, body {
-      background: #ffffff;
-      color: #000000;
+    body {
       font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
-      font-size: 11.5px;
+      background-color: #FFFFFF;
+      color: #000000;
+      margin: 0;
+      padding: 0;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-    .gst-print-copy {
-      width: 100%;
-      box-sizing: border-box;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+    @page {
+      size: A4 portrait;
+      margin: 8mm 6mm;
     }
-    .bill-page-wrapper {
+    .svm-bill-print-container {
       width: 100%;
-      min-height: 280mm;
-      max-width: 100%;
+      max-width: 794px;
       margin: 0 auto;
-      padding: 0;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      background-color: #FFFFFF;
     }
-    .bill-box {
-      border: 1.5px solid #000000;
-      box-sizing: border-box;
-      background-color: #ffffff;
-      width: 100%;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+    .svm-page-wrapper {
+      page-break-after: always !important;
+      break-after: page !important;
+      box-shadow: none !important;
+      margin-bottom: 0 !important;
+    }
+    .svm-page-wrapper:last-child {
+      page-break-after: auto !important;
+      break-after: auto !important;
     }
   </style>
 </head>
 <body>
-  ${pagesHtml}
+  <div class="svm-bill-print-container">
+    ${pagesHtml}
+  </div>
 </body>
 </html>
   `;
@@ -764,6 +560,9 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
             <td style="border-right: 1px solid #000000; text-align: center; padding: 3px 2px;">
               ${item.quantity}
             </td>
+            <td style="border-right: 1px solid #000000; text-align: center; padding: 3px 2px;">
+              ${(item as any).pcs || '0'}
+            </td>
             <td style="border-right: 1px solid #000000; text-align: right; padding: 3px 6px;">
               ${formatCur(item.rate)}
             </td>
@@ -857,12 +656,13 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
             <thead>
               <tr style="background-color: #FFFFFF; color: #000000; font-size: 11.5px; font-weight: 700; border-bottom: 1px solid #000000;">
                 <th style="width: 6%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">S.No.</th>
-                <th style="width: 44%; border-right: 1px solid #000000; padding: 4px 8px; text-align: center;">Particulars</th>
-                <th style="width: 10%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">HSN</th>
-                <th style="width: 8%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">Qty</th>
-                <th style="width: 12%; border-right: 1px solid #000000; padding: 4px 6px; text-align: center;">Rate ₹</th>
+                <th style="width: 38%; border-right: 1px solid #000000; padding: 4px 8px; text-align: center;">Particulars</th>
+                <th style="width: 9%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">HSN</th>
+                <th style="width: 7%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">Qty</th>
+                <th style="width: 8%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">Pcs</th>
+                <th style="width: 11%; border-right: 1px solid #000000; padding: 4px 6px; text-align: center;">Rate ₹</th>
                 <th style="width: 8%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">Per</th>
-                <th style="width: 12%; padding: 4px 6px; text-align: center;">Total ₹</th>
+                <th style="width: 13%; padding: 4px 6px; text-align: center;">Total ₹</th>
               </tr>
             </thead>
             <tbody>
@@ -870,6 +670,7 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
 
               <!-- Continuous Vertical Lines Spacer to fill the A4 page -->
               <tr style="height: ${spacerMinHeight}px;">
+                <td style="border-right: 1px solid #000000;">&nbsp;</td>
                 <td style="border-right: 1px solid #000000;">&nbsp;</td>
                 <td style="border-right: 1px solid #000000;">&nbsp;</td>
                 <td style="border-right: 1px solid #000000;">&nbsp;</td>

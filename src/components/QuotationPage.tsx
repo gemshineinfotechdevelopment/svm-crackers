@@ -198,7 +198,10 @@ export const QuotationPage: FC<QuotationPageProps> = ({
       transport: String(quotation.transport || '0'),
       caseCount: String(quotation.caseCount || '0'),
       discount: String(quotation.discount || '0'),
-      packing: String(quotation.packing || '0'),
+      discountPercent: quotation.discountPercent,
+      packing: String(quotation.packing || quotation.packingCharges || '0'),
+      packingCharges: quotation.packingCharges,
+      packingPercent: quotation.packingPercent,
       subtotal: parseFloat(String(quotation.amount || quotation.subTotal || '0').replace(/,/g, '')) || 0,
       total: parseFloat(String(quotation.total || quotation.netAmount || '0').replace(/,/g, '')) || 0,
       paymentMode: quotation.paymentMode || 'Credit',
@@ -208,10 +211,12 @@ export const QuotationPage: FC<QuotationPageProps> = ({
       invoiceTitle: 'QUOTATION',
       products: Array.isArray(quotation.products)
         ? quotation.products.map((p: any) => ({
+            code: p.code || p.itemCode || p.slNo || '',
             particular: p.particular || '',
             quantity: p.quantity || '0',
             rate: p.rate || '0',
             pktUnit: p.pktUnit || '1 Box',
+            content: p.content || p.unit || p.pktUnit || '1',
             amount: p.amount || '0',
           }))
         : [],

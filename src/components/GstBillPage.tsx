@@ -63,6 +63,7 @@ export interface GstRowItem {
   particular: string;
   hsnCode?: string;
   quantity: string;
+  pcs?: string;
   unit: string;
   rate: string;
   amount: string;
@@ -87,6 +88,7 @@ export interface ProductCatalogOption {
   unit?: string;
   hsn?: string;
   category?: string;
+  pcs?: number;
 }
 
 export const getTodayDateString = (targetYear?: number) => {
@@ -122,7 +124,7 @@ export const fromIsoDate = (isoStr: string) => {
   if (!isoStr) return '';
   const parts = isoStr.trim().split('-');
   if (parts.length === 3 && parts[0].length === 4) {
-    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`;
   }
   return isoStr;
 };
@@ -171,7 +173,7 @@ export const GstBillPage: FC = () => {
 
   // 1. Bill Info State (Top Left Box)
   const [billNo, setBillNo] = useState<string>(() => initialDraft?.billNo || '0001');
-  const [billDate, setBillDate] = useState<string>(() => initialDraft?.billDate || getTodayDateStr());
+  const [billDate, setBillDate] = useState<string>(() => getTodayDateStr());
   const billDatePickerRef = useRef<HTMLInputElement>(null);
   const lrDatePickerRef = useRef<HTMLInputElement>(null);
 
@@ -187,7 +189,7 @@ export const GstBillPage: FC = () => {
   const [despatchedTo, setDespatchedTo] = useState<string>(() => initialDraft?.despatchedTo || '');
   const [lorryTransport, setLorryTransport] = useState<string>(() => initialDraft?.lorryTransport || '');
   const [lrNo, setLrNo] = useState<string>(() => initialDraft?.lrNo || '');
-  const [lrDate, setLrDate] = useState<string>(() => initialDraft?.lrDate || getTodayDateStr());
+  const [lrDate, setLrDate] = useState<string>(() => getTodayDateStr());
   const [totalCases, setTotalCases] = useState<string>(() => initialDraft?.totalCases || '0');
   const [totalCasesManual, setTotalCasesManual] = useState<boolean>(false);
 
@@ -195,6 +197,7 @@ export const GstBillPage: FC = () => {
   const quickCodeInputRef = useRef<HTMLInputElement>(null);
   const quickHsnInputRef = useRef<HTMLInputElement>(null);
   const quickQtyInputRef = useRef<HTMLInputElement>(null);
+  const quickPcsInputRef = useRef<HTMLInputElement>(null);
   const quickUnitInputRef = useRef<HTMLInputElement>(null);
   const quickRateInputRef = useRef<HTMLInputElement>(null);
 
@@ -202,6 +205,7 @@ export const GstBillPage: FC = () => {
   const [selectedCatalogProduct, setSelectedCatalogProduct] = useState<ProductCatalogOption | null>(null);
   const [quickHsn, setQuickHsn] = useState<string>('3604');
   const [quickQty, setQuickQty] = useState<string>('1');
+  const [quickPcs, setQuickPcs] = useState<string>('0');
   const [quickUnit, setQuickUnit] = useState<string>('Case');
   const [quickRate, setQuickRate] = useState<string>('0');
   const [productCatalogModalOpen, setProductCatalogModalOpen] = useState<boolean>(false);
@@ -210,9 +214,12 @@ export const GstBillPage: FC = () => {
   // 5. Product List Table State
   const [productRows, setProductRows] = useState<GstRowItem[]>(() => {
     if (initialDraft?.productRows && initialDraft.productRows.length > 0) {
-      return initialDraft.productRows;
+      if (initialDraft.productRows.length === 1 && (!initialDraft.productRows[0].particular || !initialDraft.productRows[0].particular.trim())) {
+        return [{ ...initialDraft.productRows[0], particular: 'Assorted Crackers', quantity: initialDraft.productRows[0].quantity || '1', pcs: initialDraft.productRows[0].pcs || '0' }];
+      }
+      return initialDraft.productRows.map((r: any) => ({ ...r, pcs: r.pcs !== undefined ? String(r.pcs) : '0' }));
     }
-    return [{ id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' }];
+    return [{ id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', pcs: '0', unit: 'Case', rate: '', amount: '0' }];
   });
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
@@ -237,11 +244,13 @@ export const GstBillPage: FC = () => {
     setLrDate(sess.lrDate || getTodayDateStr());
     setTotalCases(sess.totalCases || '0');
     setTotalCasesManual(false);
-    setProductRows(
+    const rowsToApply =
       sess.productRows && sess.productRows.length > 0
-        ? sess.productRows
-        : [{ id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' }]
-    );
+        ? (sess.productRows.length === 1 && (!sess.productRows[0].particular || !sess.productRows[0].particular.trim())
+            ? [{ ...sess.productRows[0], particular: 'Assorted Crackers', quantity: sess.productRows[0].quantity || '1', pcs: sess.productRows[0].pcs || '0' }]
+            : sess.productRows.map((r: any) => ({ ...r, pcs: r.pcs !== undefined ? String(r.pcs) : '0' })))
+        : [{ id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', pcs: '0', unit: 'Case', rate: '', amount: '0' }];
+    setProductRows(rowsToApply);
     setSelectedRowId(null);
     setTaxType((sess.taxType as any) || 'IGST');
     setTaxPercent(sess.taxPercent || '18');
@@ -335,7 +344,7 @@ export const GstBillPage: FC = () => {
       lrDate: getTodayDateStr(),
       totalCases: '0',
       productRows: [
-        { id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
+        { id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', pcs: '0', unit: 'Case', rate: '', amount: '0' },
       ],
       taxPercent: '18',
       taxType: 'IGST',
@@ -560,9 +569,30 @@ export const GstBillPage: FC = () => {
         unit: p.unit || 'Case',
         hsn: p.hsn || '3604',
         category: p.category || 'General',
+        pcs: typeof p.pcs === 'number' ? p.pcs : (Number(p.pcs) || 0),
       }));
 
-      setProductOptions(options);
+      // Ensure "Assorted Crackers" option is available in the dropdown
+      const hasAssorted = options.some((p) => p.name.toLowerCase().trim() === 'assorted crackers');
+      const finalOptions: ProductCatalogOption[] = hasAssorted
+        ? options
+        : [
+            {
+              id: 'assorted_crackers_opt',
+              code: '',
+              slNo: '',
+              sku: '',
+              name: 'Assorted Crackers',
+              rate: 0,
+              unit: 'Case',
+              hsn: '3604',
+              category: 'General',
+              pcs: 0,
+            },
+            ...options,
+          ];
+
+      setProductOptions(finalOptions);
       await fetchNextGstBillNo(effectiveYear);
     } catch (e) {
       console.warn('Failed to load initial GST bill data', e);
@@ -707,8 +737,9 @@ export const GstBillPage: FC = () => {
     setTaxType('IGST');
     setTaxPercent('18');
     setBillFlag(true);
+    setQuickPcs('0');
     setProductRows([
-      { id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' },
+      { id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', pcs: '0', unit: 'Case', rate: '', amount: '0' },
     ]);
     setSelectedRowId(null);
     await fetchNextGstBillNo(targetYear);
@@ -759,6 +790,7 @@ export const GstBillPage: FC = () => {
         particular: p.particular || p.name || '',
         hsnCode: p.hsnCode || p.hsn || '3604',
         quantity: q,
+        pcs: String(p.pcs !== undefined ? p.pcs : '0'),
         unit: p.unit || p.pktUnit || p.per || 'Case',
         rate: r,
         amount: amt,
@@ -768,7 +800,7 @@ export const GstBillPage: FC = () => {
     setProductRows(
       formattedRows.length > 0
         ? formattedRows
-        : [{ id: '1', code: '', particular: '', hsnCode: '3604', quantity: '', unit: 'Case', rate: '', amount: '0' }]
+        : [{ id: '1', code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', pcs: '0', unit: 'Case', rate: '', amount: '0' }]
     );
     setSelectedRowId(null);
 
@@ -789,7 +821,7 @@ export const GstBillPage: FC = () => {
     const newId = String(Date.now());
     setProductRows((prev) => [
       ...prev,
-      { id: newId, code: '', particular: '', hsnCode: '3604', quantity: '1', unit: 'Case', rate: '0', amount: '0' },
+      { id: newId, code: '', particular: 'Assorted Crackers', hsnCode: '3604', quantity: '1', pcs: '0', unit: 'Case', rate: '0', amount: '0' },
     ]);
     setSelectedRowId(newId);
   };
@@ -824,6 +856,11 @@ export const GstBillPage: FC = () => {
               const q = parseFloat(updated.quantity) || 1;
               const rt = matched.rate || 0;
               updated.amount = (q * rt).toFixed(2);
+              if (matched.pcs !== undefined && matched.pcs !== null && matched.pcs > 0) {
+                updated.pcs = String(Number(matched.pcs) * q);
+              } else if (matched.pcs !== undefined) {
+                updated.pcs = String(matched.pcs);
+              }
             }
           } else if (field === 'particular') {
             const matched = productOptions.find(
@@ -836,12 +873,29 @@ export const GstBillPage: FC = () => {
               const q = parseFloat(updated.quantity) || 1;
               const rt = parseFloat(updated.rate) || 0;
               updated.amount = (q * rt).toFixed(2);
+              if (matched.pcs !== undefined && matched.pcs !== null && matched.pcs > 0) {
+                updated.pcs = String(Number(matched.pcs) * q);
+              } else if (matched.pcs !== undefined) {
+                updated.pcs = String(matched.pcs);
+              }
             }
           }
           if (field === 'quantity' || field === 'rate') {
             const q = parseFloat(field === 'quantity' ? val : r.quantity) || 0;
             const rt = parseFloat(field === 'rate' ? val : r.rate) || 0;
             updated.amount = (q * rt).toFixed(2);
+
+            // Auto calculate pcs when quantity changes
+            if (field === 'quantity') {
+              const matched = productOptions.find(
+                (p) =>
+                  p.name.toLowerCase().trim() === updated.particular.toLowerCase().trim() ||
+                  (updated.code && String(p.code || p.slNo || '').toLowerCase().trim() === updated.code.toLowerCase().trim())
+              );
+              if (matched && matched.pcs !== undefined && matched.pcs !== null && matched.pcs > 0) {
+                updated.pcs = String(Number(matched.pcs) * (q || 1));
+              }
+            }
           }
           return updated;
         }
@@ -857,6 +911,7 @@ export const GstBillPage: FC = () => {
     const amt = (qNum * rNum).toFixed(2);
     const itemCode = prod.code || (prod.slNo !== undefined ? String(prod.slNo) : quickCode);
     const itemHsn = quickHsn || prod.hsn || '3604';
+    const itemPcs = quickPcs !== '0' && quickPcs ? quickPcs : (prod.pcs ? String(Number(prod.pcs) * qNum) : '0');
 
     const existingBlankIdx = productRows.findIndex((r) => !r.particular.trim());
     if (existingBlankIdx !== -1) {
@@ -869,6 +924,7 @@ export const GstBillPage: FC = () => {
               particular: prod.name,
               hsnCode: itemHsn,
               quantity: String(qNum),
+              pcs: itemPcs,
               unit: quickUnit || prod.unit || 'Case',
               rate: String(rNum),
               amount: amt,
@@ -886,6 +942,7 @@ export const GstBillPage: FC = () => {
           particular: prod.name,
           hsnCode: itemHsn,
           quantity: String(qNum),
+          pcs: itemPcs,
           unit: quickUnit || prod.unit || 'Case',
           rate: String(rNum),
           amount: amt,
@@ -897,6 +954,7 @@ export const GstBillPage: FC = () => {
     setQuickCode('');
     setQuickHsn('3604');
     setQuickQty('1');
+    setQuickPcs('0');
     setQuickRate('0');
     setTimeout(() => {
       quickCodeInputRef.current?.focus();
@@ -914,6 +972,7 @@ export const GstBillPage: FC = () => {
       const amt = (qNum * rNum).toFixed(2);
       const itemCode = quickCode.trim();
       const itemHsn = quickHsn || '3604';
+      const itemPcs = quickPcs || '0';
 
       const existingBlankIdx = productRows.findIndex((r) => !r.particular.trim());
       if (existingBlankIdx !== -1) {
@@ -923,9 +982,10 @@ export const GstBillPage: FC = () => {
               return {
                 ...r,
                 code: itemCode,
-                particular: itemCode || 'Product Item',
+                particular: itemCode || 'Assorted Crackers',
                 hsnCode: itemHsn,
                 quantity: String(qNum),
+                pcs: itemPcs,
                 unit: quickUnit || 'Case',
                 rate: String(rNum),
                 amount: amt,
@@ -940,9 +1000,10 @@ export const GstBillPage: FC = () => {
           {
             id: String(Date.now()),
             code: itemCode,
-            particular: itemCode || 'Product Item',
+            particular: itemCode || 'Assorted Crackers',
             hsnCode: itemHsn,
             quantity: String(qNum),
+            pcs: itemPcs,
             unit: quickUnit || 'Case',
             rate: String(rNum),
             amount: amt,
@@ -954,6 +1015,7 @@ export const GstBillPage: FC = () => {
       setQuickCode('');
       setQuickHsn('3604');
       setQuickQty('1');
+      setQuickPcs('0');
       setQuickRate('0');
       setTimeout(() => {
         quickCodeInputRef.current?.focus();
@@ -987,6 +1049,7 @@ export const GstBillPage: FC = () => {
         particular: r.particular.trim(),
         hsnCode: r.hsnCode || '3604',
         quantity: r.quantity || '0',
+        pcs: r.pcs || '0',
         unit: r.unit || 'Case',
         per: r.unit || 'Case',
         rate: r.rate || '0',
@@ -1095,6 +1158,7 @@ export const GstBillPage: FC = () => {
       products: billData.products.map((p) => ({
         particular: p.particular,
         quantity: String(p.quantity),
+        pcs: String(p.pcs || '0'),
         rate: String(p.rate),
         pktUnit: String(p.unit || 'Case'),
         amount: String(p.amount),
@@ -1188,6 +1252,7 @@ export const GstBillPage: FC = () => {
         products: billData.products.map((p) => ({
           particular: p.particular,
           quantity: String(p.quantity),
+          pcs: String(p.pcs || '0'),
           rate: String(p.rate),
           pktUnit: String(p.unit || 'Case'),
           amount: String(p.amount),
@@ -1682,12 +1747,13 @@ export const GstBillPage: FC = () => {
                         tabIndex={-1}
                         style={{
                           position: 'absolute',
-                          opacity: 0,
-                          width: '1px',
-                          height: '1px',
-                          bottom: 0,
                           right: 0,
-                          pointerEvents: 'none',
+                          top: 0,
+                          width: '28px',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                          zIndex: 2,
                         }}
                       />
                     </Box>
@@ -1939,12 +2005,13 @@ export const GstBillPage: FC = () => {
                         tabIndex={-1}
                         style={{
                           position: 'absolute',
-                          opacity: 0,
-                          width: '1px',
-                          height: '1px',
-                          bottom: 0,
                           right: 0,
-                          pointerEvents: 'none',
+                          top: 0,
+                          width: '28px',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                          zIndex: 2,
                         }}
                       />
                     </Box>
@@ -2001,8 +2068,11 @@ export const GstBillPage: FC = () => {
                     setSelectedCatalogProduct(matched);
                     setQuickRate(String(matched.rate || 0));
                     setQuickUnit(matched.unit || 'Case');
+                    const qVal = parseFloat(quickQty) || 1;
+                    setQuickPcs(matched.pcs ? String(Number(matched.pcs) * qVal) : '0');
                   } else if (!val.trim()) {
                     setSelectedCatalogProduct(null);
+                    setQuickPcs('0');
                   }
                 }}
                 onKeyDown={(e) => {
@@ -2052,6 +2122,8 @@ export const GstBillPage: FC = () => {
                     setQuickUnit(opt.unit || 'Case');
                     setQuickRate(String(opt.rate || 0));
                     setQuickHsn(opt.hsn || '3604');
+                    const qVal = parseFloat(quickQty) || 1;
+                    setQuickPcs(opt.pcs ? String(Number(opt.pcs) * qVal) : '0');
                     setTimeout(() => {
                       quickHsnInputRef.current?.focus();
                       quickHsnInputRef.current?.select();
@@ -2100,17 +2172,46 @@ export const GstBillPage: FC = () => {
                 ref={quickQtyInputRef}
                 type="number"
                 value={quickQty}
-                onChange={(e) => setQuickQty(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setQuickQty(val);
+                  const qVal = parseFloat(val) || 1;
+                  const prod = selectedCatalogProduct || findProductByCode(quickCode);
+                  if (prod && prod.pcs) {
+                    setQuickPcs(String(Number(prod.pcs) * qVal));
+                  }
+                }}
                 onWheel={(e) => (e.target as HTMLElement).blur()}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    quickRateInputRef.current?.focus();
-                    quickRateInputRef.current?.select();
+                    quickPcsInputRef.current?.focus();
+                    quickPcsInputRef.current?.select();
                   }
                 }}
                 className="erp-input"
                 style={{ width: '60px', textAlign: 'center' }}
+              />
+
+              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
+                Pcs
+              </Typography>
+              <input
+                ref={quickPcsInputRef}
+                type="number"
+                min="0"
+                value={quickPcs}
+                onChange={(e) => setQuickPcs(e.target.value)}
+                onWheel={(e) => (e.target as HTMLElement).blur()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    quickUnitInputRef.current?.focus();
+                    quickUnitInputRef.current?.select();
+                  }
+                }}
+                className="erp-input"
+                style={{ width: '60px', textAlign: 'center', fontWeight: 600, color: '#2563EB' }}
               />
 
               <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
@@ -2213,6 +2314,9 @@ export const GstBillPage: FC = () => {
                           <TableCell sx={{ width: '60px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Qty
                           </TableCell>
+                          <TableCell sx={{ width: '65px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
+                            Pcs
+                          </TableCell>
                           <TableCell sx={{ width: '60px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', py: 0.6 }}>
                             Unit
                           </TableCell>
@@ -2266,7 +2370,7 @@ export const GstBillPage: FC = () => {
                                 type="text"
                                 value={row.particular}
                                 onChange={(e) => handleRowChange(row.id, 'particular', e.target.value)}
-                                placeholder="Enter product item..."
+                                placeholder="Assorted Crackers"
                                 style={{
                                   width: '100%',
                                   border: 'none',
@@ -2315,6 +2419,27 @@ export const GstBillPage: FC = () => {
                                   textAlign: 'center',
                                   fontWeight: 600,
                                   color: '#0F172A',
+                                }}
+                              />
+                            </TableCell>
+
+                            {/* Pcs */}
+                            <TableCell sx={{ textAlign: 'center', p: 0.4 }}>
+                              <input
+                                type="number"
+                                min="0"
+                                value={row.pcs ?? '0'}
+                                onChange={(e) => handleRowChange(row.id, 'pcs', e.target.value)}
+                                onWheel={(e) => (e.target as HTMLElement).blur()}
+                                style={{
+                                  width: '100%',
+                                  border: 'none',
+                                  outline: 'none',
+                                  background: 'transparent',
+                                  fontSize: '12px',
+                                  textAlign: 'center',
+                                  fontWeight: 600,
+                                  color: '#2563EB',
                                 }}
                               />
                             </TableCell>
@@ -2957,6 +3082,7 @@ export const GstBillPage: FC = () => {
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Product Name</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Category</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Unit</TableCell>
+                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, width: '65px', textAlign: 'center' }}>Pcs</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, textAlign: 'right' }}>Rate</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, textAlign: 'center' }}>Action</TableCell>
                 </TableRow>
@@ -2970,6 +3096,9 @@ export const GstBillPage: FC = () => {
                     <TableCell sx={{ fontSize: '12.5px', fontWeight: 600 }}>{prod.name}</TableCell>
                     <TableCell sx={{ fontSize: '12px', color: '#475569' }}>{prod.category || 'Crackers'}</TableCell>
                     <TableCell sx={{ fontSize: '12px' }}>{prod.unit || 'Case'}</TableCell>
+                    <TableCell sx={{ fontSize: '12px', textAlign: 'center', fontWeight: 600, color: '#2563EB' }}>
+                      {prod.pcs || 0}
+                    </TableCell>
                     <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, textAlign: 'right' }}>
                       ₹ {prod.rate || 0}
                     </TableCell>
@@ -2983,6 +3112,8 @@ export const GstBillPage: FC = () => {
                           setQuickUnit(prod.unit || 'Case');
                           setQuickRate(String(prod.rate || 0));
                           setQuickHsn(prod.hsn || '3604');
+                          const qVal = parseFloat(quickQty) || 1;
+                          setQuickPcs(prod.pcs ? String(Number(prod.pcs) * qVal) : '0');
                           setProductCatalogModalOpen(false);
                           setTimeout(() => {
                             quickHsnInputRef.current?.focus();
