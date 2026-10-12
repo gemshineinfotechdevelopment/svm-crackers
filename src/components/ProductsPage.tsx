@@ -45,6 +45,7 @@ import { ProductSubPageHeader } from './ProductSubPageHeader';
 import { PriceMapMasterPage } from './PriceMapMasterPage';
 import { ProductPriceMapPage } from './ProductPriceMapPage';
 import { type ProductSubPage } from '../types/productSubPages';
+import { getNormalizedRetailProducts } from '../utils/productUtils';
 
 export type ProductType = 'Retail' | 'Wholesale' | 'Both';
 
@@ -260,10 +261,25 @@ export const ProductsPage: FC<ProductsPageProps> = ({
 
   // Tab Filtering & Search with Guaranteed Unique Product IDs
   const tabProducts = useMemo(() => {
-    let list: ProductItem[] = [];
     if (activeTabType === 'Retail') {
-      list = products.filter((p) => !p.productType || p.productType === 'Retail' || p.productType === 'Both');
-    } else if (activeTabType === 'Wholesale') {
+      const normalized = getNormalizedRetailProducts(products);
+      return normalized.map((p) => ({
+        _id: p.id,
+        id: p.id,
+        slNo: p.slNo,
+        name: p.name,
+        category: p.category,
+        rate: p.rate,
+        mrp: p.mrp,
+        unit: p.unit,
+        qty: p.qty,
+        productType: p.productType,
+        year: p.year,
+      }));
+    }
+
+    let list: ProductItem[] = [];
+    if (activeTabType === 'Wholesale') {
       list = products.filter((p) => p.productType === 'Wholesale' || p.productType === 'Both');
     } else {
       list = [...products];

@@ -37,9 +37,9 @@ import {
 import {
   fetchPriceMaps,
   DEFAULT_PRICE_MAP_NAMES,
-  REFERENCE_RETAIL_PRODUCTS,
   PRICEMAP_CHANGE_EVENT,
 } from '../utils/priceMapStorage';
+import { getNormalizedRetailProducts } from '../utils/productUtils';
 import { getStoredSettings } from './SettingsPage';
 import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
@@ -497,7 +497,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     }
   };
 
-  // Helper to build product options matching Product Price Map page data exactly
+  // Helper to build product options strictly matching Product Master Retail Sales products
   const buildProductOptions = (
     prodList: any[],
     priceMapsList: PriceMapRecord[],
@@ -505,7 +505,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   ): ProductCatalogOption[] => {
     const cleanMap = (mapName || '').trim().toLowerCase().replace(/[\s\-_]/g, '');
 
-    // Find matching price map record from Price Map Master
+    // Find matching price map record from Price Map Master if selected
     const targetMap = cleanMap
       ? priceMapsList.find((m) => (m.name || '').trim().toLowerCase().replace(/[\s\-_]/g, '') === cleanMap)
       : priceMapsList.find((m) => (m.name || '').trim().toLowerCase() === 'svm') || priceMapsList[0];
@@ -524,156 +524,40 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       });
     }
 
-    // Reference rates map for SVM
-    const refMap = new Map<string, number>();
-    REFERENCE_RETAIL_PRODUCTS.forEach((rp) => {
-      refMap.set(rp.productName.trim().toLowerCase(), rp.rate);
-    });
+    // 1. Strictly use Product Master Retail Sales products only (with 100% unique slNo 1, 2, 3...)
+    const retailProducts = getNormalizedRetailProducts(prodList);
 
-    const combinedOptions: ProductCatalogOption[] = [];
-    const processedNames = new Set<string>();
+    const combinedOptions: ProductCatalogOption[] = retailProducts.map((p) => {
+      const lowerKey = p.name.trim().toLowerCase();
+      const slStr = String(p.slNo).trim().toLowerCase();
 
-    // 1. Process website / catalog products
-    if (Array.isArray(prodList) && prodList.length > 0) {
-      prodList.forEach((p: any, idx: number) => {
-        const key = String(p.name || '').trim();
-        if (!key) return;
-        const lowerKey = key.toLowerCase();
-        if (processedNames.has(lowerKey)) return;
-        processedNames.add(lowerKey);
+      let rateVal = p.rate;
 
-        const mrpVal = typeof p.mrp === 'number' ? p.mrp : parseFloat(p.mrp) || 0;
-        let rateVal = typeof p.rate === 'number' ? p.rate : parseFloat(p.rate) || 0;
-        const pType = p.productType || 'Retail';
-        const slNumber = p.slNo !== undefined && p.slNo !== null ? String(p.slNo) : String(idx + 1);
-        const skuCode = p.sku ? String(p.sku) : slNumber;
-        const unitVal = p.unit || '1 Box';
-
-        // Check if rate is defined in active price map
-        if (existingRatesMap.has(lowerKey)) {
-          rateVal = existingRatesMap.get(lowerKey)!;
-        } else if (codeLookup.has(slNumber.trim().toLowerCase())) {
-          rateVal = codeLookup.get(slNumber.trim().toLowerCase())!;
-        } else if (codeLookup.has(skuCode.trim().toLowerCase())) {
-          rateVal = codeLookup.get(skuCode.trim().toLowerCase())!;
-        } else if ((!cleanMap || cleanMap === 'svm') && refMap.has(lowerKey)) {
-          rateVal = refMap.get(lowerKey)!;
-        } else if (p.priceMaps && typeof p.priceMaps === 'object') {
-          for (const [mK, mV] of Object.entries(p.priceMaps)) {
-            if (mK.toLowerCase().replace(/[\s\-_]/g, '') === cleanMap && typeof mV === 'number') {
-              rateVal = mV;
-              break;
-            }
-          }
-        }
-
-        const finalRate = rateVal;
-        combinedOptions.push({
-          id: p._id || p.id,
-          sku: skuCode,
-          slNo: slNumber,
-          name: key,
-          category: p.category || 'General',
-          rate: finalRate,
-          mrp: (cleanMap && targetMap) ? finalRate : (mrpVal || finalRate),
-          wholesaleRate: finalRate,
-          retailRate: finalRate,
-          productType: pType,
-          unit: unitVal,
-          qty: typeof p.qty === 'number' ? p.qty : (typeof p.stock === 'number' ? p.stock : (typeof p.totalStock === 'number' ? p.totalStock : 0)),
-        });
-      });
-    }
-
-    // 2. Ensure all REFERENCE_RETAIL_PRODUCTS from Product Price Map are included
-    REFERENCE_RETAIL_PRODUCTS.forEach((rp) => {
-      const rpKey = rp.productName.trim().toLowerCase();
-      if (!processedNames.has(rpKey)) {
-        processedNames.add(rpKey);
-        let rateVal = rp.rate;
-
-        if (existingRatesMap.has(rpKey)) {
-          rateVal = existingRatesMap.get(rpKey)!;
-        } else if (!cleanMap || cleanMap === 'svm') {
-          rateVal = rp.rate;
-        }
-
-        combinedOptions.push({
-          id: `ref-${rp.code}`,
-          sku: String(rp.code),
-          slNo: String(rp.code),
-          name: rp.productName,
-          category: 'General',
-          rate: rateVal,
-          mrp: rateVal,
-          wholesaleRate: rateVal,
-          retailRate: rateVal,
-          productType: 'Retail',
-          unit: '1 Box',
-          qty: 1,
-        });
+      // Check if rate is defined in active price map
+      if (existingRatesMap.has(lowerKey)) {
+        rateVal = existingRatesMap.get(lowerKey)!;
+      } else if (codeLookup.has(slStr)) {
+        rateVal = codeLookup.get(slStr)!;
       }
+
+      return {
+        id: p.id,
+        sku: String(p.slNo),
+        slNo: String(p.slNo),
+        name: p.name,
+        category: p.category || 'General',
+        rate: rateVal,
+        mrp: (cleanMap && targetMap) ? rateVal : (p.mrp || rateVal),
+        wholesaleRate: rateVal,
+        retailRate: rateVal,
+        productType: p.productType,
+        unit: p.unit || '1 Box',
+        qty: p.qty || 1,
+      };
     });
 
-    // 3. Include any extra custom products defined in targetMap.rates
-    if (targetMap && Array.isArray(targetMap.rates)) {
-      targetMap.rates.forEach((r, idx) => {
-        const rName = String(r.productName || '').trim();
-        const rKey = rName.toLowerCase();
-        if (rName && !processedNames.has(rKey)) {
-          processedNames.add(rKey);
-          const rRate = Number(r.rate) || 0;
-          combinedOptions.push({
-            id: r.productId || `pm-${idx}`,
-            sku: String(r.code || idx + 1),
-            slNo: String(r.code || idx + 1),
-            name: rName,
-            category: 'General',
-            rate: rRate,
-            mrp: rRate,
-            wholesaleRate: rRate,
-            retailRate: rRate,
-            productType: 'Retail',
-            unit: '1 Box',
-            qty: typeof r.quantity === 'number' ? r.quantity : 1,
-          });
-        }
-      });
-    }
-
-    // 4. Ensure 100% strictly UNIQUE Product ID (code/slNo) for every single product - no duplicates!
-    const usedCodes = new Set<number>();
-    let nextAvailableCode = 1;
-
-    // First pass: register unique positive integer codes
-    combinedOptions.forEach((opt) => {
-      const numCode = Number(opt.slNo || opt.sku);
-      if (Number.isInteger(numCode) && numCode > 0 && !usedCodes.has(numCode)) {
-        usedCodes.add(numCode);
-        opt.slNo = String(numCode);
-        opt.sku = String(numCode);
-      } else {
-        opt.slNo = '-1';
-        opt.sku = '-1';
-      }
-    });
-
-    // Second pass: resolve collisions and invalid codes with next available unique number
-    combinedOptions.forEach((opt) => {
-      if (opt.slNo === '-1') {
-        while (usedCodes.has(nextAvailableCode)) {
-          nextAvailableCode++;
-        }
-        opt.slNo = String(nextAvailableCode);
-        opt.sku = String(nextAvailableCode);
-        usedCodes.add(nextAvailableCode);
-      }
-    });
-
-    // Sort by slNo numeric order ascending (1, 2, 3...)
-    combinedOptions.sort((a, b) => Number(a.slNo) - Number(b.slNo));
-
-    return combinedOptions;
+    // Strictly sort by slNo numeric order ascending (1, 2, 3...)
+    return combinedOptions.sort((a, b) => Number(a.slNo) - Number(b.slNo));
   };
 
   // Switch Price Map and recalculate rates for all rows in the bill
@@ -2499,7 +2383,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>SKU</TableCell>
+                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, width: '65px', textAlign: 'center' }}>S.No</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Product Name</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Category</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Unit</TableCell>
@@ -2512,7 +2396,9 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               <TableBody>
                 {filteredCatalog.map((prod) => (
                   <TableRow key={prod.id} hover>
-                    <TableCell sx={{ fontSize: '11.5px', color: '#64748B' }}>{prod.sku || '-'}</TableCell>
+                    <TableCell sx={{ fontSize: '12px', fontWeight: 700, color: '#1E40AF', textAlign: 'center' }}>
+                      {prod.slNo ? `#${prod.slNo}` : (prod.sku || '-')}
+                    </TableCell>
                     <TableCell sx={{ fontSize: '12.5px', fontWeight: 600 }}>{prod.name}</TableCell>
                     <TableCell sx={{ fontSize: '12px', color: '#475569' }}>{prod.category || 'General'}</TableCell>
                     <TableCell sx={{ fontSize: '12px' }}>{prod.unit || '1 Box'}</TableCell>

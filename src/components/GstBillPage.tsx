@@ -35,9 +35,9 @@ import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import {
   CustomersApi,
   ProductsApi,
-  PriceListsApi,
   ParticularsApi,
 } from '../services/api';
+import { getNormalizedRetailProducts, findRetailProductByCode } from '../utils/productUtils';
 import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { GstBillPrintModal } from './GstBillPrintModal';
 import type { GstBillPrintData, GstProductItem } from './GstBillPrintTemplate';
@@ -530,10 +530,9 @@ export const GstBillPage: FC = () => {
   const loadInitialData = async (targetYear: number | string = selectedYear) => {
     try {
       const effectiveYear = targetYear || getSelectedBillYear();
-      const [custRes, prodRes, priceRes] = await Promise.all([
+      const [custRes, prodRes] = await Promise.all([
         CustomersApi.getAll(effectiveYear).catch(() => []),
         ProductsApi.getAll(undefined, effectiveYear).catch(() => []),
-        PriceListsApi.getAll({ year: effectiveYear }).catch(() => []),
       ]);
 
       if (Array.isArray(custRes)) {
@@ -549,48 +548,21 @@ export const GstBillPage: FC = () => {
         );
       }
 
-      const pMap = new Map<string, ProductCatalogOption>();
-      if (Array.isArray(prodRes)) {
-        prodRes.forEach((p: any, idx: number) => {
-          if (p.name) {
-            const codeVal = String(p.code || p.sku || (p.slNo !== undefined && p.slNo !== null ? p.slNo : idx + 1));
-            pMap.set(p.name.toLowerCase().trim(), {
-              id: p._id || p.id,
-              code: codeVal,
-              slNo: p.slNo !== undefined && p.slNo !== null ? p.slNo : idx + 1,
-              sku: p.sku || codeVal,
-              name: p.name.trim(),
-              rate: p.rate || 0,
-              unit: p.unit || 'Case',
-              hsn: p.hsn || '3604',
-              category: p.category || 'Crackers',
-            });
-          }
-        });
-      }
+      // Strictly only Retail sales products from Product Master, with 100% unique slNos
+      const normalizedRetail = getNormalizedRetailProducts(prodRes);
+      const options: ProductCatalogOption[] = normalizedRetail.map((p) => ({
+        id: p.id,
+        code: String(p.slNo),
+        slNo: p.slNo,
+        sku: String(p.slNo),
+        name: p.name,
+        rate: p.rate || 0,
+        unit: p.unit || 'Case',
+        hsn: p.hsn || '3604',
+        category: p.category || 'General',
+      }));
 
-      if (Array.isArray(priceRes)) {
-        priceRes.forEach((item: any, idx: number) => {
-          if (item.itemName) {
-            const key = item.itemName.toLowerCase().trim();
-            const existing = pMap.get(key);
-            const codeVal = String(item.code || item.sku || (item.slNo !== undefined && item.slNo !== null ? item.slNo : (prodRes.length + idx + 1)));
-            pMap.set(key, {
-              id: item._id || item.id || key,
-              code: existing?.code || codeVal,
-              slNo: existing?.slNo !== undefined ? existing.slNo : (item.slNo !== undefined && item.slNo !== null ? item.slNo : idx + 1),
-              sku: existing?.sku || item.sku || codeVal,
-              name: item.itemName.trim(),
-              rate: item.rate && item.rate > 0 ? item.rate : (existing?.rate || 0),
-              unit: item.unit || existing?.unit || 'Case',
-              hsn: item.hsn || existing?.hsn || '3604',
-              category: item.category || existing?.category || 'Crackers',
-            });
-          }
-        });
-      }
-
-      setProductOptions(Array.from(pMap.values()));
+      setProductOptions(options);
       await fetchNextGstBillNo(effectiveYear);
     } catch (e) {
       console.warn('Failed to load initial GST bill data', e);
@@ -809,30 +781,7 @@ export const GstBillPage: FC = () => {
 
   // Product Code Lookup Helper
   const findProductByCode = (codeStr: string): ProductCatalogOption | undefined => {
-    if (!codeStr || !codeStr.trim()) return undefined;
-    const clean = codeStr.trim().toLowerCase();
-    // 1. Exact match on code, sku, or slNo string
-    let found = productOptions.find(
-      (p) =>
-        (p.code && p.code.toLowerCase() === clean) ||
-        (p.sku && p.sku.toLowerCase() === clean) ||
-        (p.slNo !== undefined && String(p.slNo).toLowerCase() === clean) ||
-        (p.id && p.id.toLowerCase() === clean)
-    );
-    if (found) return found;
-
-    // 2. Numeric match (e.g. typing "1" or "01")
-    const num = parseInt(clean, 10);
-    if (!isNaN(num)) {
-      found = productOptions.find(
-        (p) =>
-          (p.slNo !== undefined && Number(p.slNo) === num) ||
-          (p.code && parseInt(p.code, 10) === num)
-      );
-      if (found) return found;
-    }
-
-    return undefined;
+    return findRetailProductByCode(codeStr, productOptions);
   };
 
   // Add Item to Product List
@@ -2094,7 +2043,7 @@ export const GstBillPage: FC = () => {
                 size="small"
                 sx={{ flex: 1, minWidth: '200px' }}
                 options={productOptions}
-                getOptionLabel={(opt) => `${opt.code ? `[${opt.code}] ` : ''}${opt.name} - ₹${opt.rate || 0}`}
+                getOptionLabel={(opt) => `${opt.code ? `[#${opt.code}] ` : ''}${opt.name} - ₹${opt.rate || 0}`}
                 value={selectedCatalogProduct}
                 onChange={(_, opt) => {
                   setSelectedCatalogProduct(opt);
@@ -3004,7 +2953,7 @@ export const GstBillPage: FC = () => {
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, width: '70px', textAlign: 'center' }}>Code</TableCell>
+                  <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700, width: '80px', textAlign: 'center' }}>S.No</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Product Name</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Category</TableCell>
                   <TableCell sx={{ bgcolor: '#DCE7F5', fontWeight: 700 }}>Unit</TableCell>
@@ -3016,7 +2965,7 @@ export const GstBillPage: FC = () => {
                 {filteredCatalog.map((prod) => (
                   <TableRow key={prod.id} hover>
                     <TableCell sx={{ fontSize: '12px', fontWeight: 700, color: '#1E40AF', textAlign: 'center' }}>
-                      {prod.code || prod.slNo || '-'}
+                      #{prod.code || prod.slNo || '-'}
                     </TableCell>
                     <TableCell sx={{ fontSize: '12.5px', fontWeight: 600 }}>{prod.name}</TableCell>
                     <TableCell sx={{ fontSize: '12px', color: '#475569' }}>{prod.category || 'Crackers'}</TableCell>
