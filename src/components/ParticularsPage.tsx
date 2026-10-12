@@ -64,6 +64,7 @@ interface ProductRowItem {
   code?: string;
   particular: string;
   quantity: string;
+  pcs?: string;
   rate: string;
   pktUnit: string;
   amount: string;
@@ -100,6 +101,7 @@ interface ProductCatalogOption {
   productType?: string;
   unit?: string;
   qty?: number;
+  pcs?: number;
 }
 
 const findProductByCode = (code: string | undefined | null, options: ProductCatalogOption[]): ProductCatalogOption | null => {
@@ -264,7 +266,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     if (initialDraft?.productRows && initialDraft.productRows.length > 0) {
       return initialDraft.productRows;
     }
-    return [{ id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', amount: '0' }];
+    return [{ id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', pcs: '0', amount: '0' }];
   });
 
   // 5. Payment Info Right Box State
@@ -291,7 +293,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setProductRows(
       sess.productRows && sess.productRows.length > 0
         ? sess.productRows
-        : [{ id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', amount: '0' }]
+        : [{ id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', pcs: '0', amount: '0' }]
     );
     setDiscountPercent(sess.discountPercent || '0');
     setDiscountRs(sess.discountRs || '0');
@@ -381,7 +383,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       customerMobile: '',
       customerAddress: '',
       companyName: storeSettings.companyName || 'Manjula Crackers',
-      productRows: [{ id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', amount: '0' }],
+      productRows: [{ id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', pcs: '0', amount: '0' }],
       discountPercent: '0',
       discountRs: '0',
       packingRs: '',
@@ -753,6 +755,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             code: p.code ? String(p.code) : (p.itemCode ? String(p.itemCode) : (p.slNo ? String(p.slNo) : '')),
             particular: p.particular || p.name || '',
             quantity: String(p.quantity ?? '1'),
+            pcs: String(p.pcs ?? '0'),
             rate: String(p.rate ?? '0'),
             pktUnit: p.pktUnit || p.unit || '1 Box',
             amount: String(p.amount ?? ((parseFloat(p.quantity) || 0) * (parseFloat(p.rate) || 0)).toFixed(2)),
@@ -901,6 +904,12 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             updated.rate = String(calculatedRate);
             if (match.unit) updated.pktUnit = match.unit;
             if (match.slNo || match.sku) updated.code = String(match.slNo || match.sku);
+            if (match.pcs !== undefined && match.pcs !== null && match.pcs > 0) {
+              const qVal = parseFloat(updated.quantity) || 1;
+              updated.pcs = String(Number(match.pcs) * qVal);
+            } else if (match.pcs !== undefined) {
+              updated.pcs = String(match.pcs);
+            }
           }
         }
 
@@ -909,6 +918,15 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         const r = parseFloat(field === 'rate' ? val : updated.rate) || 0;
         updated.quantity = rawQty;
         updated.amount = String(Math.round(q * r));
+
+        // When quantity changes, auto update pieces if product has pcs defined
+        if (field === 'quantity') {
+          const match = productOptions.find((p) => p.name.trim().toLowerCase() === updated.particular.trim().toLowerCase());
+          if (match && match.pcs !== undefined && match.pcs !== null && match.pcs > 0) {
+            updated.pcs = String(Number(match.pcs) * (q || 1));
+          }
+        }
+
         return updated;
       })
     );
@@ -971,11 +989,13 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
     const rateVal = getRateForType(prod, rateType, Boolean(selectedPriceMap));
     const validQ = isNaN(q) || q <= 0 ? 1 : q;
+    const computedPcs = prod.pcs ? String(Number(prod.pcs) * validQ) : '0';
     const newRow: ProductRowItem = {
       id: String(Date.now()),
       code: String(prod.slNo || prod.sku || ''),
       particular: prod.name,
       pktUnit: prod.unit || quickUnit || '1 Box',
+      pcs: computedPcs,
       rate: String(rateVal),
       quantity: String(validQ),
       amount: String(Math.round(validQ * rateVal)),
@@ -1088,6 +1108,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         products: validRows.map((r) => ({
           particular: r.particular,
           quantity: r.quantity,
+          pcs: r.pcs || '0',
           rate: r.rate,
           pktUnit: r.pktUnit,
           amount: r.amount,
@@ -1221,6 +1242,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           products: validRows.map((r) => ({
             particular: r.particular,
             quantity: r.quantity,
+            pcs: r.pcs || '0',
             rate: r.rate,
             pktUnit: r.pktUnit,
             amount: r.amount,
@@ -1323,7 +1345,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setCustomerGst('');
     setSelectedCustomer(null);
     setProductRows([
-      { id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', amount: '0' },
+      { id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', pcs: '0', amount: '0' },
     ]);
     setDiscountRs('0');
     setDiscountPercent('0');
@@ -2017,13 +2039,13 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                       <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5' }}>
                         Product
                       </TableCell>
-                      <TableCell sx={{ width: '90px', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                      <TableCell sx={{ width: '85px', fontWeight: 700, bgcolor: '#DCE7F5' }}>
                         Content
                       </TableCell>
                       <TableCell
                         sx={{
-                          width: '125px',
-                          minWidth: '120px',
+                          width: '115px',
+                          minWidth: '110px',
                           whiteSpace: 'nowrap',
                           textAlign: 'right',
                           fontWeight: 700,
@@ -2033,10 +2055,13 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                       >
                         Rate (Rs.)
                       </TableCell>
-                      <TableCell sx={{ width: '70px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                      <TableCell sx={{ width: '65px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5' }}>
                         Qty
                       </TableCell>
-                      <TableCell sx={{ width: '95px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                      <TableCell sx={{ width: '65px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5' }}>
+                        Pcs
+                      </TableCell>
+                      <TableCell sx={{ width: '90px', textAlign: 'right', fontWeight: 700, bgcolor: '#DCE7F5' }}>
                         Total
                       </TableCell>
                       <TableCell sx={{ width: '35px', textAlign: 'center', bgcolor: '#DCE7F5', p: 0.5 }} />
@@ -2134,6 +2159,27 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                           />
                         </TableCell>
 
+                        {/* Pcs */}
+                        <TableCell sx={{ textAlign: 'center', p: 0.5 }}>
+                          <input
+                            type="number"
+                            min="0"
+                            value={row.pcs ?? '0'}
+                            onChange={(e) => handleRowChange(row.id, 'pcs', e.target.value)}
+                            onWheel={(e) => (e.target as HTMLElement).blur()}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              outline: 'none',
+                              background: 'transparent',
+                              fontSize: '12.5px',
+                              textAlign: 'center',
+                              fontWeight: 600,
+                              color: '#2563EB',
+                            }}
+                          />
+                        </TableCell>
+
                         {/* Total */}
                         <TableCell sx={{ textAlign: 'right', fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
                           {row.amount}
@@ -2158,6 +2204,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                         <TableCell sx={{ textAlign: 'center', color: '#CBD5E1', fontSize: '11px' }}>
                           {productRows.length + i + 1}
                         </TableCell>
+                        <TableCell />
                         <TableCell />
                         <TableCell />
                         <TableCell />

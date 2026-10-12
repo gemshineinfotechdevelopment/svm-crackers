@@ -16,6 +16,7 @@ export interface RetailProductItem {
   mrp: number;
   unit: string;
   qty?: number;
+  pcs?: number;
   productType: string;
   hsn?: string;
   year?: number;
@@ -82,6 +83,7 @@ export function getNormalizedRetailProducts(rawProducts: any[]): RetailProductIt
       mrp,
       unit,
       qty: typeof p.qty === 'number' && p.qty > 0 ? p.qty : 1,
+      pcs: typeof p.pcs === 'number' && p.pcs >= 0 ? p.pcs : (Number(p.pcs) || 0),
       productType: p.productType || 'Retail',
       hsn,
       year: p.year ? Number(p.year) : undefined,

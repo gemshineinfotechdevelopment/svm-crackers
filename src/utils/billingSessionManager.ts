@@ -17,6 +17,7 @@ export interface ParticularDraftSession {
     id: string;
     particular: string;
     quantity: string;
+    pcs?: string;
     rate: string;
     pktUnit: string;
     amount: string;
@@ -54,6 +55,7 @@ export interface GstDraftSession {
     particular: string;
     hsnCode?: string;
     quantity: string;
+    pcs?: string;
     unit: string;
     rate: string;
     amount: string;

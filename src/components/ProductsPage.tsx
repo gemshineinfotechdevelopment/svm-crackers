@@ -59,6 +59,7 @@ export interface ProductItem {
   mrp?: number;
   unit?: string;
   qty?: number;
+  pcs?: number;
   productType?: ProductType | string;
   year?: number;
 }
@@ -114,6 +115,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
   const [productCategory, setProductCategory] = useState('General');
   const [productUnit, setProductUnit] = useState('Box');
   const [productQty, setProductQty] = useState<number>(1);
+  const [productPcs, setProductPcs] = useState<number>(0);
   const [productRate, setProductRate] = useState<string>('0');
   const [productMrp, setProductMrp] = useState<string>('0');
   const [modalLoading, setModalLoading] = useState(false);
@@ -164,6 +166,8 @@ export const ProductsPage: FC<ProductsPageProps> = ({
           rate: Number(p.rate) || 0,
           mrp: Number(p.mrp) || 0,
           unit: p.unit || 'Box',
+          qty: p.qty !== undefined && p.qty !== null ? Number(p.qty) : 1,
+          pcs: p.pcs !== undefined && p.pcs !== null ? Number(p.pcs) : 0,
           productType: (p.productType as ProductType) || 'Retail',
           year: p.year ? Number(p.year) : Number(effectiveYear),
         }));
@@ -273,6 +277,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         mrp: p.mrp,
         unit: p.unit,
         qty: p.qty,
+        pcs: p.pcs,
         productType: p.productType,
         year: p.year,
       }));
@@ -410,6 +415,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
     );
     setProductUnit('Box');
     setProductQty(1);
+    setProductPcs(0);
     setProductRate('0');
     setProductMrp('0');
     setOpenModal(true);
@@ -444,6 +450,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
     setProductCategory(product.category || 'General');
     setProductUnit(product.unit || 'Box');
     setProductQty(product.qty !== undefined && product.qty !== null && product.qty > 0 ? product.qty : 1);
+    setProductPcs(product.pcs !== undefined && product.pcs !== null && product.pcs >= 0 ? product.pcs : 0);
     setProductRate(String(product.rate || 0));
     setProductMrp(String(product.mrp || 0));
     setOpenModal(true);
@@ -477,6 +484,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         category: productCategory || 'General',
         unit: productUnit || 'Box',
         qty: Number(productQty) > 0 ? Number(productQty) : 1,
+        pcs: Math.max(0, Number(productPcs) || 0),
         rate: Number(productRate) || 0,
         mrp: Number(productMrp) || 0,
         productType: productType,
@@ -625,6 +633,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         let catCol = -1;
         let unitCol = -1;
         let qtyCol = -1;
+        let pcsCol = -1;
         let mrpCol = -1;
         let rateCol = -1;
         let typeCol = -1;
@@ -644,6 +653,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
               else if (c.includes('cat') || c.includes('group') || (c.includes('type') && !c.includes('product type'))) catCol = idx;
               else if (c.includes('unit') || c.includes('pkg') || c.includes('packing') || c.includes('per')) unitCol = idx;
               else if (c.includes('qty') || c.includes('quantity') || c.includes('stock')) qtyCol = idx;
+              else if (c.includes('pcs') || c.includes('piece')) pcsCol = idx;
               else if (c.includes('mrp') || c.includes('m.r.p')) mrpCol = idx;
               else if (c.includes('rate') || c.includes('price') || c.includes('net') || c.includes('selling')) rateCol = idx;
               else if (c.includes('product type') || c.includes('mode') || c === 'type') typeCol = idx;
@@ -665,6 +675,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
           let pCat = currentCategory;
           let pUnit = 'Box';
           let pQty = 1;
+          let pPcs = 0;
           let pMrp = 0;
           let pRate = 0;
           let pSlNo = startingSl + parsedList.length + 1;
@@ -679,6 +690,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
             }
             if (unitCol !== -1 && row[unitCol] && String(row[unitCol]).trim()) pUnit = String(row[unitCol]).trim();
             if (qtyCol !== -1 && row[qtyCol]) pQty = Math.max(1, Number(String(row[qtyCol]).replace(/[^\d.]/g, '')) || 1);
+            if (pcsCol !== -1 && row[pcsCol]) pPcs = Math.max(0, Number(String(row[pcsCol]).replace(/[^\d.]/g, '')) || 0);
             if (mrpCol !== -1 && row[mrpCol]) pMrp = Number(String(row[mrpCol]).replace(/[^\d.]/g, '')) || 0;
             if (rateCol !== -1 && row[rateCol]) pRate = Number(String(row[rateCol]).replace(/[^\d.]/g, '')) || 0;
             if (typeCol !== -1 && row[typeCol]) {
@@ -718,6 +730,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
               category: pCat || 'General',
               unit: pUnit || 'Box',
               qty: pQty || 1,
+              pcs: pPcs || 0,
               mrp: pMrp,
               rate: pRate,
               productType: pType,
@@ -1162,8 +1175,11 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                     <TableCell sx={{ width: '70px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Unit
                     </TableCell>
-                    <TableCell sx={{ width: '80px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                    <TableCell sx={{ width: '75px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Qty
+                    </TableCell>
+                    <TableCell sx={{ width: '75px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Pcs
                     </TableCell>
                     <TableCell align="center" sx={{ width: '120px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Actions
@@ -1173,13 +1189,13 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                      <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
                         <CircularProgress size={24} sx={{ color: '#1E40AF' }} />
                       </TableCell>
                     </TableRow>
                   ) : filteredProducts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
+                      <TableCell colSpan={8} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
                         {searchTerm ? 'No products match your search.' : `No ${activeTabType} products found for year ${selectedYear}. Click "+ Add Product" or "Bulk Upload" to add.`}
                       </TableCell>
                     </TableRow>
@@ -1228,6 +1244,52 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                             <Typography sx={{ fontSize: '12.5px', fontWeight: 800, color: '#16A34A' }}>
                               {displayQty}
                             </Typography>
+                          </TableCell>
+
+                          {/* Pcs Column (Editable directly or via modal) */}
+                          <TableCell sx={{ textAlign: 'center', p: 0.5 }}>
+                            <input
+                              type="number"
+                              min="0"
+                              defaultValue={p.pcs ?? 0}
+                              key={`pcs-${pId}-${p.pcs}`}
+                              onBlur={async (e) => {
+                                const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                if (val !== (p.pcs ?? 0)) {
+                                  try {
+                                    await ProductsApi.update(pId, { pcs: val });
+                                    setProducts((prev) =>
+                                      prev.map((item) => ((item._id || item.id) === pId ? { ...item, pcs: val } : item))
+                                    );
+                                    setToast({
+                                      open: true,
+                                      message: `Updated "${p.name}" to ${val} Pcs`,
+                                      severity: 'success',
+                                    });
+                                  } catch (err) {
+                                    console.error('Failed to update pcs:', err);
+                                  }
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  (e.target as HTMLElement).blur();
+                                }
+                              }}
+                              style={{
+                                width: '60px',
+                                textAlign: 'center',
+                                fontWeight: 800,
+                                fontSize: '12.5px',
+                                color: '#1D4ED8',
+                                backgroundColor: '#EFF6FF',
+                                border: '1px solid #BFDBFE',
+                                borderRadius: '4px',
+                                padding: '2px 4px',
+                                outline: 'none',
+                              }}
+                              title="Click to edit pieces directly"
+                            />
                           </TableCell>
 
                           <TableCell align="center">
@@ -1465,19 +1527,35 @@ export const ProductsPage: FC<ProductsPageProps> = ({
               </select>
             </Box>
 
-            {/* Quantity / Stock Qty (Default 1) */}
-            <Box>
-              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
-                Qty (எண்ணிக்கை): *
-              </Typography>
-              <input
-                type="number"
-                min="1"
-                value={productQty}
-                onChange={(e) => setProductQty(Math.max(1, Number(e.target.value) || 1))}
-                className="erp-input"
-                style={{ width: '100%', fontSize: '12px', padding: '6px 8px', fontWeight: 700 }}
-              />
+            {/* Quantity and Pcs */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+              <Box>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                  Qty (எண்ணிக்கை): *
+                </Typography>
+                <input
+                  type="number"
+                  min="1"
+                  value={productQty}
+                  onChange={(e) => setProductQty(Math.max(1, Number(e.target.value) || 1))}
+                  className="erp-input"
+                  style={{ width: '100%', fontSize: '12px', padding: '6px 8px', fontWeight: 700 }}
+                />
+              </Box>
+
+              <Box>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
+                  Pcs:
+                </Typography>
+                <input
+                  type="number"
+                  min="0"
+                  value={productPcs}
+                  onChange={(e) => setProductPcs(Math.max(0, Number(e.target.value) || 0))}
+                  className="erp-input"
+                  style={{ width: '100%', fontSize: '12px', padding: '6px 8px', fontWeight: 700 }}
+                />
+              </Box>
             </Box>
           </Box>
         </DialogContent>

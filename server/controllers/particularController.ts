@@ -18,7 +18,8 @@ const adjustStock = async (products: any[], multiplier: number): Promise<void> =
     const rawName = String(item.particular || item.name || '').trim();
     if (!rawName) continue;
     const soldQty = parseFloat(String(item.quantity || 0)) || 0;
-    if (soldQty <= 0) continue;
+    const soldPcs = parseFloat(String(item.pcs || 0)) || 0;
+    if (soldQty <= 0 && soldPcs <= 0) continue;
 
     try {
       // Find matching product in Product collection (case-insensitive name match)
@@ -28,18 +29,18 @@ const adjustStock = async (products: any[], multiplier: number): Promise<void> =
       });
 
       if (product) {
-        const currentQty = typeof product.qty === 'number' ? product.qty : 1;
-        let newQty: number;
-
-        if (multiplier < 0) {
-          // Deduct stock for Estimate/Regular bill - NEVER go negative
-          newQty = Math.max(0, currentQty - soldQty);
-        } else {
-          // Restore stock on bill delete
-          newQty = currentQty + soldQty;
+        if (soldQty > 0) {
+          const currentQty = typeof product.qty === 'number' ? product.qty : 1;
+          const newQty = multiplier < 0 ? Math.max(0, currentQty - soldQty) : currentQty + soldQty;
+          product.qty = newQty;
         }
 
-        product.qty = newQty;
+        if (soldPcs > 0) {
+          const currentPcs = typeof product.pcs === 'number' ? product.pcs : 0;
+          const newPcs = multiplier < 0 ? Math.max(0, currentPcs - soldPcs) : currentPcs + soldPcs;
+          product.pcs = newPcs;
+        }
+
         await product.save();
       }
 

@@ -4,7 +4,6 @@ import {
   formatBillDate,
   numberToWordsClean,
   getProductCode,
-  formatRateAndContent,
   splitRateAndContent,
   splitProductParticular,
   paginateProducts,
@@ -555,6 +554,9 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
             <td style="border-right: 1px solid #000000; text-align: center; padding: 3px 2px;">
               ${item.quantity}
             </td>
+            <td style="border-right: 1px solid #000000; text-align: center; padding: 3px 2px;">
+              ${(item as any).pcs || '0'}
+            </td>
             <td style="border-right: 1px solid #000000; text-align: right; padding: 3px 6px;">
               ${formatCur(item.rate)}
             </td>
@@ -648,12 +650,13 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
             <thead>
               <tr style="background-color: #FFFFFF; color: #000000; font-size: 11.5px; font-weight: 700; border-bottom: 1px solid #000000;">
                 <th style="width: 6%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">S.No.</th>
-                <th style="width: 44%; border-right: 1px solid #000000; padding: 4px 8px; text-align: center;">Particulars</th>
-                <th style="width: 10%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">HSN</th>
-                <th style="width: 8%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">Qty</th>
-                <th style="width: 12%; border-right: 1px solid #000000; padding: 4px 6px; text-align: center;">Rate ₹</th>
+                <th style="width: 38%; border-right: 1px solid #000000; padding: 4px 8px; text-align: center;">Particulars</th>
+                <th style="width: 9%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">HSN</th>
+                <th style="width: 7%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">Qty</th>
+                <th style="width: 8%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">Pcs</th>
+                <th style="width: 11%; border-right: 1px solid #000000; padding: 4px 6px; text-align: center;">Rate ₹</th>
                 <th style="width: 8%; border-right: 1px solid #000000; padding: 4px 2px; text-align: center;">Per</th>
-                <th style="width: 12%; padding: 4px 6px; text-align: center;">Total ₹</th>
+                <th style="width: 13%; padding: 4px 6px; text-align: center;">Total ₹</th>
               </tr>
             </thead>
             <tbody>
@@ -661,6 +664,7 @@ export const generateGstBillHtml = (bill: GstBillPrintData, copiesCount: number 
 
               <!-- Continuous Vertical Lines Spacer to fill the A4 page -->
               <tr style="height: ${spacerMinHeight}px;">
+                <td style="border-right: 1px solid #000000;">&nbsp;</td>
                 <td style="border-right: 1px solid #000000;">&nbsp;</td>
                 <td style="border-right: 1px solid #000000;">&nbsp;</td>
                 <td style="border-right: 1px solid #000000;">&nbsp;</td>

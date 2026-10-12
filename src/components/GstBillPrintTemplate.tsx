@@ -6,6 +6,7 @@ export interface GstProductItem {
   particular: string;
   hsnCode?: string;
   quantity: string | number;
+  pcs?: string | number;
   unit?: string;
   rate: string | number;
   discount?: string | number;
@@ -497,7 +498,7 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                 </th>
                 <th
                   style={{
-                    width: '44%',
+                    width: '38%',
                     borderRight: '1px solid #000000',
                     padding: '4px 8px',
                     textAlign: 'center',
@@ -507,7 +508,7 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                 </th>
                 <th
                   style={{
-                    width: '10%',
+                    width: '9%',
                     borderRight: '1px solid #000000',
                     padding: '4px 2px',
                     textAlign: 'center',
@@ -517,7 +518,7 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                 </th>
                 <th
                   style={{
-                    width: '8%',
+                    width: '7%',
                     borderRight: '1px solid #000000',
                     padding: '4px 2px',
                     textAlign: 'center',
@@ -527,7 +528,17 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                 </th>
                 <th
                   style={{
-                    width: '12%',
+                    width: '8%',
+                    borderRight: '1px solid #000000',
+                    padding: '4px 2px',
+                    textAlign: 'center',
+                  }}
+                >
+                  Pcs
+                </th>
+                <th
+                  style={{
+                    width: '11%',
                     borderRight: '1px solid #000000',
                     padding: '4px 6px',
                     textAlign: 'center',
@@ -547,7 +558,7 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                 </th>
                 <th
                   style={{
-                    width: '12%',
+                    width: '13%',
                     padding: '4px 6px',
                     textAlign: 'center',
                   }}
@@ -563,6 +574,7 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                   <td style={{ borderRight: '1px solid #000000', padding: '4px 8px', fontWeight: 500 }}>ASSORTED CRACKERS</td>
                   <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '4px 2px' }}>3604</td>
                   <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '4px 2px' }}>1</td>
+                  <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '4px 2px' }}>0</td>
                   <td style={{ borderRight: '1px solid #000000', textAlign: 'right', padding: '4px 6px' }}>2300.00</td>
                   <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '4px 2px' }}>Case</td>
                   <td style={{ textAlign: 'right', padding: '4px 6px' }}>2300.00</td>
@@ -618,6 +630,15 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                       <td
                         style={{
                           borderRight: '1px solid #000000',
+                          textAlign: 'center',
+                          padding: '3px 2px',
+                        }}
+                      >
+                        {item.pcs || '0'}
+                      </td>
+                      <td
+                        style={{
+                          borderRight: '1px solid #000000',
                           textAlign: 'right',
                           padding: '3px 6px',
                         }}
@@ -649,6 +670,7 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
 
               {/* Continuous Vertical Lines Spacer to fill the A4 page */}
               <tr style={{ height: `${spacerMinHeight}px` }}>
+                <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
                 <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
                 <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
                 <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
