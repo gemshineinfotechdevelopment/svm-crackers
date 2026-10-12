@@ -39,7 +39,6 @@ export interface ProductSaleStat {
   productName: string;
   category: string;
   stockPcs: number;
-  soldPcs: number;
   totalQuantity: number;      // Units sold
   totalRevenue: number;
   billsCount: number;
@@ -76,7 +75,7 @@ export const extractBillYear = (bill: any): number => {
 
 export const StockPage: FC = () => {
   const [selectedYear, setSelectedYear] = useState<number>(() => getActiveBillingYear() || new Date().getFullYear());
-  const [sortBy, setSortBy] = useState<'quantity' | 'pcs' | 'stock' | 'name'>('quantity');
+  const [sortBy, setSortBy] = useState<'quantity' | 'stock' | 'name'>('quantity');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [loading, setLoading] = useState<boolean>(true);
@@ -197,7 +196,6 @@ export const StockPage: FC = () => {
         productName: string;
         category: string;
         stockPcs: number;
-        soldPcs: number;
         totalQuantity: number;
         totalRevenue: number;
         billsCount: number;
@@ -211,7 +209,6 @@ export const StockPage: FC = () => {
         productName: item.productName,
         category: item.category,
         stockPcs: item.pcs,
-        soldPcs: 0,
         totalQuantity: 0,
         totalRevenue: 0,
         billsCount: 0,
@@ -234,7 +231,6 @@ export const StockPage: FC = () => {
           if (!name) return;
 
           const qty = Number(p.quantity) || 0;
-          const pcs = Number(p.pcs) || 0;
           const rate = Number(p.rate) || 0;
           const amount = Number(p.amount) || qty * rate;
 
@@ -245,7 +241,6 @@ export const StockPage: FC = () => {
             productName: catalogItem?.productName || name,
             category: catalogItem?.category || p.category || 'General',
             stockPcs: catalogItem?.pcs || 0,
-            soldPcs: 0,
             totalQuantity: 0,
             totalRevenue: 0,
             billsCount: 0,
@@ -253,7 +248,6 @@ export const StockPage: FC = () => {
           };
 
           existing.totalQuantity += qty;
-          existing.soldPcs += pcs;
           existing.totalRevenue += amount;
           existing.billsCount += 1;
           existing.years.add(billYear);
@@ -268,7 +262,6 @@ export const StockPage: FC = () => {
         productName: item.productName,
         category: item.category,
         stockPcs: item.stockPcs,
-        soldPcs: item.soldPcs,
         totalQuantity: item.totalQuantity,
         totalRevenue: item.totalRevenue,
         billsCount: item.billsCount,
@@ -279,7 +272,6 @@ export const StockPage: FC = () => {
     // Sort according to user preference
     list.sort((a, b) => {
       if (sortBy === 'name') return a.productName.localeCompare(b.productName);
-      if (sortBy === 'pcs') return b.soldPcs - a.soldPcs;
       if (sortBy === 'stock') return b.stockPcs - a.stockPcs;
       return b.totalQuantity - a.totalQuantity;
     });
@@ -306,7 +298,6 @@ export const StockPage: FC = () => {
   // Summary Metrics
   const summaryMetrics = useMemo(() => {
     const totalQty = productStats.reduce((sum, item) => sum + item.totalQuantity, 0);
-    const totalSoldPcs = productStats.reduce((sum, item) => sum + item.soldPcs, 0);
     const totalStockPcs = productStats.reduce((sum, item) => sum + item.stockPcs, 0);
     const totalRev = productStats.reduce((sum, item) => sum + item.totalRevenue, 0);
     const totalBills = productStats.reduce((sum, item) => sum + item.billsCount, 0);
@@ -314,7 +305,6 @@ export const StockPage: FC = () => {
 
     return {
       totalQty,
-      totalSoldPcs,
       totalStockPcs,
       totalRev,
       totalBills,
@@ -393,7 +383,6 @@ export const StockPage: FC = () => {
       'Product Name': item.productName,
       Category: item.category,
       'Stock Pcs': item.stockPcs,
-      'Sold Pcs': item.soldPcs,
       'Units Sold (Qty)': item.totalQuantity,
       Year: selectedYear,
     }));
@@ -436,7 +425,6 @@ export const StockPage: FC = () => {
                 <th>Product Name</th>
                 <th>Category</th>
                 <th class="text-center">Stock Pcs</th>
-                <th class="text-center">Sold Pcs</th>
                 <th class="text-right">Units Sold (Qty)</th>
               </tr>
             </thead>
@@ -449,7 +437,6 @@ export const StockPage: FC = () => {
                   <td><b>${item.productName}</b></td>
                   <td>${item.category}</td>
                   <td class="text-center" style="color: #1D4ED8; font-weight: bold;">${item.stockPcs.toLocaleString('en-IN')} pcs</td>
-                  <td class="text-center" style="color: #B45309; font-weight: bold;">${item.soldPcs.toLocaleString('en-IN')} pcs</td>
                   <td class="text-right"><b>${item.totalQuantity.toLocaleString('en-IN')} units</b></td>
                 </tr>
               `
@@ -741,7 +728,7 @@ export const StockPage: FC = () => {
           )}
 
           {/* 2. Key Performance Metric Cards */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
             {/* 🏆 Top Product */}
             <Box
               sx={{
@@ -796,35 +783,6 @@ export const StockPage: FC = () => {
                 </Typography>
                 <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
                   Across {summaryMetrics.totalProductsCount} products
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* 🔢 Total Sold Pcs */}
-            <Box
-              sx={{
-                bgcolor: '#FFFFFF',
-                border: '1px solid #FED7AA',
-                borderRadius: '8px',
-                p: 1.8,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-              }}
-            >
-              <Box sx={{ p: 1.2, bgcolor: '#FFEDD5', borderRadius: '8px', display: 'flex', fontSize: '24px' }}>
-                🔢
-              </Box>
-              <Box>
-                <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
-                  Total Sold Pcs
-                </Typography>
-                <Typography sx={{ fontSize: '18px', fontWeight: 800, color: '#C2410C' }}>
-                  {summaryMetrics.totalSoldPcs.toLocaleString('en-IN')} Pcs
-                </Typography>
-                <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
-                  In {selectedYear} Estimate Bills
                 </Typography>
               </Box>
             </Box>
@@ -951,7 +909,6 @@ export const StockPage: FC = () => {
                 }}
               >
                 <option value="quantity">🔥 Most Sold Units (Qty)</option>
-                <option value="pcs">🔢 Most Sold Pcs</option>
                 <option value="stock">🏢 Most Stock Pcs</option>
                 <option value="name">🔤 Product Name (A-Z)</option>
               </select>
@@ -980,15 +937,14 @@ export const StockPage: FC = () => {
                   <TableCell align="center" sx={{ width: '55px' }}>Rank</TableCell>
                   <TableCell>Product Name</TableCell>
                   <TableCell sx={{ width: '150px' }}>Category</TableCell>
-                  <TableCell align="center" sx={{ width: '130px' }}>Stock Pcs (இருப்பு)</TableCell>
-                  <TableCell align="center" sx={{ width: '130px' }}>Sold Pcs (விற்பனை)</TableCell>
-                  <TableCell align="right" sx={{ width: '150px' }}>Units Sold (Qty)</TableCell>
+                  <TableCell align="center" sx={{ width: '140px' }}>Stock Pcs (இருப்பு)</TableCell>
+                  <TableCell align="right" sx={{ width: '160px' }}>Units Sold (Qty)</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredStats.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#64748B', fontSize: '13px' }}>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4, color: '#64748B', fontSize: '13px' }}>
                       No product sales records found matching the filter.
                     </TableCell>
                   </TableRow>
@@ -1071,22 +1027,6 @@ export const StockPage: FC = () => {
                               bgcolor: '#EFF6FF',
                               color: '#1D4ED8',
                               border: '1px solid #BFDBFE',
-                            }}
-                          />
-                        </TableCell>
-
-                        {/* Sold Pcs */}
-                        <TableCell align="center">
-                          <Chip
-                            size="small"
-                            label={`${item.soldPcs.toLocaleString('en-IN')} Pcs`}
-                            sx={{
-                              height: '22px',
-                              fontSize: '11px',
-                              fontWeight: 800,
-                              bgcolor: item.soldPcs > 0 ? '#FEF3C7' : '#F8FAFC',
-                              color: item.soldPcs > 0 ? '#B45309' : '#64748B',
-                              border: item.soldPcs > 0 ? '1px solid #FDE68A' : '1px solid #E2E8F0',
                             }}
                           />
                         </TableCell>
