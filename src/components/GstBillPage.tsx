@@ -122,7 +122,7 @@ export const fromIsoDate = (isoStr: string) => {
   if (!isoStr) return '';
   const parts = isoStr.trim().split('-');
   if (parts.length === 3 && parts[0].length === 4) {
-    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`;
   }
   return isoStr;
 };
@@ -171,7 +171,7 @@ export const GstBillPage: FC = () => {
 
   // 1. Bill Info State (Top Left Box)
   const [billNo, setBillNo] = useState<string>(() => initialDraft?.billNo || '0001');
-  const [billDate, setBillDate] = useState<string>(() => initialDraft?.billDate || getTodayDateStr());
+  const [billDate, setBillDate] = useState<string>(() => getTodayDateStr());
   const billDatePickerRef = useRef<HTMLInputElement>(null);
   const lrDatePickerRef = useRef<HTMLInputElement>(null);
 
@@ -187,7 +187,7 @@ export const GstBillPage: FC = () => {
   const [despatchedTo, setDespatchedTo] = useState<string>(() => initialDraft?.despatchedTo || '');
   const [lorryTransport, setLorryTransport] = useState<string>(() => initialDraft?.lorryTransport || '');
   const [lrNo, setLrNo] = useState<string>(() => initialDraft?.lrNo || '');
-  const [lrDate, setLrDate] = useState<string>(() => initialDraft?.lrDate || getTodayDateStr());
+  const [lrDate, setLrDate] = useState<string>(() => getTodayDateStr());
   const [totalCases, setTotalCases] = useState<string>(() => initialDraft?.totalCases || '0');
   const [totalCasesManual, setTotalCasesManual] = useState<boolean>(false);
 
@@ -1706,12 +1706,13 @@ export const GstBillPage: FC = () => {
                         tabIndex={-1}
                         style={{
                           position: 'absolute',
-                          opacity: 0,
-                          width: '1px',
-                          height: '1px',
-                          bottom: 0,
                           right: 0,
-                          pointerEvents: 'none',
+                          top: 0,
+                          width: '28px',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                          zIndex: 2,
                         }}
                       />
                     </Box>
@@ -1963,12 +1964,13 @@ export const GstBillPage: FC = () => {
                         tabIndex={-1}
                         style={{
                           position: 'absolute',
-                          opacity: 0,
-                          width: '1px',
-                          height: '1px',
-                          bottom: 0,
                           right: 0,
-                          pointerEvents: 'none',
+                          top: 0,
+                          width: '28px',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                          zIndex: 2,
                         }}
                       />
                     </Box>

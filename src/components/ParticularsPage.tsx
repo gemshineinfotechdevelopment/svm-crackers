@@ -27,6 +27,7 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
+import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import {
   CustomersApi,
   CompaniesApi,
@@ -44,6 +45,7 @@ import { getStoredSettings } from './SettingsPage';
 import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
 import { DuplicateBillModal } from './DuplicateBillModal';
+import { toIsoDate, fromIsoDate } from './GstBillPage';
 import {
   getActiveBillingYear,
   validateDateMatchesYear,
@@ -224,10 +226,19 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
   // 1. Customer Info Left Box State
   const [customerNo, setCustomerNo] = useState<string>(() => initialDraft?.customerNo || '');
-  const [billDate, setBillDate] = useState<string>(() => initialDraft?.billDate || getInitialDateStr());
+  const [billDate, setBillDate] = useState<string>(() => (isEditMode && editBillData?.date) ? editBillData.date : getInitialDateStr());
+  const billDatePickerRef = useRef<HTMLInputElement>(null);
   const [billNo, setBillNo] = useState<string>(() => initialDraft?.billNo || '');
   const [rateType, setRateType] = useState<string>(() => initialDraft?.rateType || 'Befor Rate');
   const [customerGst, setCustomerGst] = useState<string>(() => initialDraft?.customerGst || '');
+
+  const handleBillDateChange = (newDateStr: string) => {
+    setBillDate(newDateStr);
+    const dateYear = newDateStr.match(/\d{4}$/)?.[0];
+    if (dateYear && Number(dateYear) !== selectedYear) {
+      setSelectedYear(Number(dateYear));
+    }
+  };
 
   // 2. Customer Middle Selection & Right New Customer Form
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOptionItem | null>(null);
@@ -1554,13 +1565,76 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                   <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '75px' }}>
                     Date
                   </Typography>
-                  <input
-                    type="text"
-                    value={billDate}
-                    onChange={(e) => setBillDate(e.target.value)}
-                    className="erp-input"
-                    style={{ width: '120px' }}
-                  />
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      bgcolor: '#FFFFFF',
+                      border: '1px solid #94A3B8',
+                      borderRadius: '2px',
+                      px: 0.5,
+                      width: '120px',
+                      position: 'relative',
+                      '&:focus-within': {
+                        borderColor: '#1E40AF',
+                        boxShadow: '0 0 0 1px rgba(30, 64, 175, 0.2)',
+                      },
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={billDate}
+                      onChange={(e) => handleBillDateChange(e.target.value)}
+                      placeholder="DD-MM-YYYY"
+                      style={{
+                        border: 'none',
+                        outline: 'none',
+                        width: '100%',
+                        fontSize: '12px',
+                        color: '#0F172A',
+                        background: 'transparent',
+                      }}
+                    />
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        try {
+                          billDatePickerRef.current?.showPicker?.();
+                        } catch {
+                          billDatePickerRef.current?.focus();
+                        }
+                      }}
+                      title="Select Date"
+                      sx={{
+                        p: '2px',
+                        color: '#1E40AF',
+                        '&:hover': { bgcolor: '#EFF6FF' },
+                      }}
+                    >
+                      <CalendarMonthRoundedIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                    <input
+                      type="date"
+                      ref={billDatePickerRef}
+                      value={toIsoDate(billDate)}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleBillDateChange(fromIsoDate(e.target.value));
+                        }
+                      }}
+                      tabIndex={-1}
+                      style={{
+                        position: 'absolute',
+                        right: 0,
+                        top: 0,
+                        width: '28px',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer',
+                        zIndex: 2,
+                      }}
+                    />
+                  </Box>
                 </Box>
 
                 {/* Bill No */}

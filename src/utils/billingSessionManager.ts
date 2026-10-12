@@ -85,7 +85,7 @@ export const getParticularSessions = (mode: 'ESTIMATE' | 'QUOTATION'): { session
       if (Array.isArray(parsed.sessions) && parsed.sessions.length > 0) {
         const enrichedSessions = parsed.sessions.map((s: ParticularDraftSession) => ({
           ...s,
-          billDate: s.billDate || getTodayDateStr(),
+          billDate: getTodayDateStr(),
         }));
         return {
           sessions: enrichedSessions,
@@ -150,7 +150,8 @@ export const getGstSessions = (): { sessions: GstDraftSession[]; activeId: strin
           }
           return {
             ...s,
-            billDate: s.billDate || getTodayDateStr(),
+            billDate: getTodayDateStr(),
+            lrDate: getTodayDateStr(),
             productRows: rows,
           };
         });
