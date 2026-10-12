@@ -1502,7 +1502,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
             color: '#0F172A',
           }}
         >
-          {editingProduct ? 'Edit Product Details' : 'Add New Product (தனி பதிவு)'}
+          {editingProduct ? 'Edit Product Details' : 'Add New Product'}
         </DialogTitle>
 
         <DialogContent sx={{ p: 2, bgcolor: '#F8FAFC' }}>
@@ -1510,7 +1510,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
             {/* Type Selection */}
             <Box>
               <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
-                Product Type (வகை): *
+                Product Type: *
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0.8 }}>
                 <Button
@@ -1600,7 +1600,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                 <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155' }}>
-                  Category (பிரிவு): *
+                  Category: *
                 </Typography>
                 <Button
                   size="small"
@@ -1665,7 +1665,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
               <Box>
                 <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
-                  Qty (எண்ணிக்கை): *
+                  Qty: *
                 </Typography>
                 <input
                   type="number"
@@ -1800,13 +1800,13 @@ export const ProductsPage: FC<ProductsPageProps> = ({
           }}
         >
           <CategoryRoundedIcon sx={{ fontSize: 18, color: '#1E40AF' }} />
-          Create New Category (புதிய பிரிவு)
+          Create New Category
         </DialogTitle>
         <DialogContent sx={{ p: 2, bgcolor: '#F8FAFC' }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0.5 }}>
             <Box>
               <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
-                Category Name (பிரிவு பெயர்): *
+                Category Name: *
               </Typography>
               <input
                 type="text"
@@ -1888,7 +1888,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CloudUploadRoundedIcon sx={{ color: '#0284C7', fontSize: 20 }} />
             <Typography sx={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
-              Bulk Product Upload (மொத்த பதிவு)
+              Bulk Product Upload
             </Typography>
           </Box>
           <Button
@@ -1912,7 +1912,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
           {/* Target Type Selector */}
           <Box sx={{ mb: 2, p: 1.5, bgcolor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '4px' }}>
             <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', mb: 1 }}>
-              Step 1: Select Target Product Type (எந்த பிரிவுக்கு சேர்க்க வேண்டும்):
+              Step 1: Select Target Product Type:
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Button

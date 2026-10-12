@@ -1038,7 +1038,7 @@ export const StockPage: FC = () => {
                   <TableCell align="center" sx={{ width: '55px' }}>Rank</TableCell>
                   <TableCell>Product Name</TableCell>
                   <TableCell sx={{ width: '150px' }}>Category</TableCell>
-                  <TableCell align="center" sx={{ width: '160px' }}>Stock Pcs (இருப்பு)</TableCell>
+                  <TableCell align="center" sx={{ width: '160px' }}>Stock Pcs</TableCell>
                   <TableCell align="right" sx={{ width: '160px' }}>Units Sold (Qty)</TableCell>
                 </TableRow>
               </TableHead>
@@ -1130,7 +1130,7 @@ export const StockPage: FC = () => {
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.2 }}>
                               <Chip
                                 size="small"
-                                label="Out of Stock (இருப்பில்லை)"
+                                label="Out of Stock"
                                 sx={{
                                   height: '22px',
                                   fontSize: '10.5px',
