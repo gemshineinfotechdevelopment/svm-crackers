@@ -59,6 +59,7 @@ import {
 
 interface ProductRowItem {
   id: string;
+  code?: string;
   particular: string;
   quantity: string;
   rate: string;
@@ -738,6 +739,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         setProductRows(
           editBillData.products.map((p: any, i: number) => ({
             id: `edit-${i}-${Date.now()}`,
+            code: p.code ? String(p.code) : (p.itemCode ? String(p.itemCode) : (p.slNo ? String(p.slNo) : '')),
             particular: p.particular || p.name || '',
             quantity: String(p.quantity ?? '1'),
             rate: String(p.rate ?? '0'),
@@ -841,6 +843,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       priceMap: selectedPriceMap,
       billType: mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR',
       products: validRows.map((r) => ({
+        code: r.code || '',
         particular: r.particular,
         quantity: r.quantity,
         rate: r.rate,
@@ -886,6 +889,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             const calculatedRate = getRateForType(match, rateType, Boolean(selectedPriceMap));
             updated.rate = String(calculatedRate);
             if (match.unit) updated.pktUnit = match.unit;
+            if (match.slNo || match.sku) updated.code = String(match.slNo || match.sku);
           }
         }
 
@@ -958,6 +962,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     const validQ = isNaN(q) || q <= 0 ? 1 : q;
     const newRow: ProductRowItem = {
       id: String(Date.now()),
+      code: String(prod.slNo || prod.sku || ''),
       particular: prod.name,
       pktUnit: prod.unit || quickUnit || '1 Box',
       rate: String(rateVal),
@@ -1278,14 +1283,19 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       logoUrl: storeSettings.logoUrl,
       subtotal: subtotal,
       discount: discountAmount,
+      discountPercent: discountPercent,
       packing: packingAmount,
+      packingCharges: packingAmount,
+      packingPercent: packingPercent,
       total: netPayment,
       invoiceTitle: mode === 'QUOTATION' ? 'QUOTATION' : 'ESTIMATE',
       products: validRows.map((r) => ({
+        code: r.code || '',
         particular: r.particular,
         quantity: r.quantity,
         rate: r.rate,
         pktUnit: r.pktUnit,
+        content: r.pktUnit || '1',
         amount: r.amount,
       })),
     };
