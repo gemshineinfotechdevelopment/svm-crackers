@@ -67,10 +67,19 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
   try {
     const currentSystemYear = new Date().getFullYear();
     const { shopStock, godownStock, stock, selectedViewYear: _v, viewYear: _vy, ...rest } = req.body;
-    rest.year = rest.year ? Number(rest.year) : (_v ? Number(_v) : currentSystemYear);
     const targetType = rest.productType || 'Retail';
 
-    if (!rest.slNo || Number(rest.slNo) <= 0) {
+    let requestedSlNo = Number(rest.slNo);
+    const existingSlNo = requestedSlNo > 0 ? await Product.findOne({
+      slNo: requestedSlNo,
+      $or: [
+        { productType: targetType },
+        { productType: 'Both' },
+        ...(targetType === 'Retail' ? [{ productType: { $exists: false } }, { productType: null }, { productType: '' }] : []),
+      ],
+    }) : null;
+
+    if (!requestedSlNo || requestedSlNo <= 0 || existingSlNo) {
       const highestProd = await Product.findOne({
         $or: [
           { productType: targetType },
@@ -127,6 +136,22 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
 
     const oldName = oldProduct.name;
     const { shopStock, godownStock, stock, ...updatePayload } = req.body;
+
+    if (updatePayload.slNo && Number(updatePayload.slNo) > 0) {
+      const targetType = updatePayload.productType || oldProduct.productType || 'Retail';
+      const collision = await Product.findOne({
+        _id: { $ne: req.params.id },
+        slNo: Number(updatePayload.slNo),
+        $or: [
+          { productType: targetType },
+          { productType: 'Both' },
+          ...(targetType === 'Retail' ? [{ productType: { $exists: false } }, { productType: null }, { productType: '' }] : []),
+        ],
+      });
+      if (collision) {
+        updatePayload.slNo = oldProduct.slNo;
+      }
+    }
 
     const product = await Product.findByIdAndUpdate(req.params.id, updatePayload, {
       new: true,
@@ -234,27 +259,35 @@ export const bulkImportProducts = async (req: Request, res: Response, next: Next
       }
     }
 
-    let startingSl = 0;
-    if (!replaceExisting) {
-      const highestProd = await Product.findOne({
-        $or: [
-          { productType: defaultType },
-          { productType: 'Both' },
-          ...(defaultType === 'Retail' ? [{ productType: { $exists: false } }, { productType: null }, { productType: '' }] : []),
-        ],
-      }).sort({ slNo: -1 });
-      startingSl = highestProd?.slNo || 0;
-    }
+    const existingProds = await Product.find({
+      $or: [
+        { productType: defaultType },
+        { productType: 'Both' },
+        ...(defaultType === 'Retail' ? [{ productType: { $exists: false } }, { productType: null }, { productType: '' }] : []),
+      ],
+    }).select('slNo');
+
+    const usedSlNos = new Set<number>(replaceExisting ? [] : existingProds.map((p) => Number(p.slNo)).filter((n) => n > 0));
+    let nextAvailable = 1;
 
     const currentYear = new Date().getFullYear();
     const formattedDocs = items
-      .map((item: any, idx: number) => {
+      .map((item: any) => {
         const name = String(item.name || item.itemName || '').trim();
         if (!name) return null;
         const targetType = item.productType || defaultType || 'Retail';
+        let sNum = Number(item.slNo);
+        if (!sNum || sNum <= 0 || usedSlNos.has(sNum)) {
+          while (usedSlNos.has(nextAvailable)) {
+            nextAvailable++;
+          }
+          sNum = nextAvailable;
+        }
+        usedSlNos.add(sNum);
+
         return {
-          slNo: Number(item.slNo) || startingSl + idx + 1,
-          sku: item.sku || undefined,
+          slNo: sNum,
+          sku: item.sku || String(sNum),
           name,
           category: String(item.category || 'General').trim() || 'General',
           rate: Number(item.rate || item.price || 0),

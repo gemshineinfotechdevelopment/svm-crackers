@@ -40,6 +40,7 @@ import {
   REFERENCE_RETAIL_PRODUCTS,
   PRICEMAP_CHANGE_EVENT,
 } from '../utils/priceMapStorage';
+import { getNormalizedRetailProducts } from '../utils/productUtils';
 
 interface ProductPriceMapPageProps {
   onSubPageChange: (newPage: ProductSubPage) => void;
@@ -125,10 +126,9 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
       const mapsData = await fetchPriceMaps(year);
       setPriceMaps(mapsData);
 
-      // 2. Fetch Retail Products ONLY from the website
+      // 2. Fetch Retail Products ONLY from Product Master
       const websiteProds = await ProductsApi.getAll(undefined, year, 'Retail');
-      const retailOnly = (Array.isArray(websiteProds) ? websiteProds : [])
-        .filter((p: any) => !p.productType || p.productType === 'Retail' || p.productType === 'Both');
+      const retailOnly = getNormalizedRetailProducts(websiteProds);
       
       setRetailProducts(retailOnly);
 
@@ -165,120 +165,28 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
       });
     }
 
-    // Reference rates map for SVM (Reference Image 2)
-    const refMap = new Map<string, number>();
-    REFERENCE_RETAIL_PRODUCTS.forEach((rp) => {
-      refMap.set(rp.productName.trim().toLowerCase(), rp.rate);
-    });
+    // Convert website retail products to display rows matching Product Master Retail Sales
+    const retailList = getNormalizedRetailProducts(prods);
+    const combinedRows: DisplayRetailRow[] = retailList.map((prod) => {
+      const pName = prod.name;
+      const pKey = pName.toLowerCase();
+      const savedRateItem = existingRatesMap.get(pKey);
 
-    // 1. Convert all website retail products to display rows
-    const combinedRows: DisplayRetailRow[] = [];
-    const processedNames = new Set<string>();
-
-    if (prods && prods.length > 0) {
-      prods.forEach((prod, idx) => {
-        const pName = String(prod.name || '').trim();
-        const pKey = pName.toLowerCase();
-        if (processedNames.has(pKey)) return;
-        processedNames.add(pKey);
-
-        const savedRateItem = existingRatesMap.get(pKey);
-        let rateVal = Number(prod.rate) || 0;
-
-        if (savedRateItem && savedRateItem.rate !== undefined) {
-          rateVal = savedRateItem.rate;
-        } else if (mapName.toUpperCase() === 'SVM' && refMap.has(pKey)) {
-          rateVal = refMap.get(pKey)!;
-        } else {
-          rateVal = Number(prod.rate) || 0;
-        }
-
-        const explicitCode = savedRateItem?.code !== undefined
-          ? savedRateItem.code
-          : (prod.slNo !== undefined ? prod.slNo : idx + 1);
-
-        combinedRows.push({
-          productId: prod._id || prod.id,
-          code: explicitCode,
-          productName: pName,
-          quantity: 1,
-          rate: rateVal,
-        });
-      });
-    }
-
-    // 2. If website had fewer items, ensure reference retail products from Image 2 are included
-    REFERENCE_RETAIL_PRODUCTS.forEach((rp) => {
-      const rpKey = rp.productName.trim().toLowerCase();
-      if (!processedNames.has(rpKey)) {
-        processedNames.add(rpKey);
-        const savedRateItem = existingRatesMap.get(rpKey);
-        let rateVal = rp.rate;
-
-        if (savedRateItem && savedRateItem.rate !== undefined) {
-          rateVal = savedRateItem.rate;
-        } else if (mapName.toUpperCase() === 'SVM') {
-          rateVal = rp.rate;
-        } else {
-          rateVal = rp.rate;
-        }
-
-        const explicitCode = savedRateItem?.code !== undefined ? savedRateItem.code : rp.code;
-
-        combinedRows.push({
-          code: explicitCode,
-          productName: rp.productName,
-          quantity: 1,
-          rate: rateVal,
-        });
+      let rateVal = prod.rate;
+      if (savedRateItem && savedRateItem.rate !== undefined) {
+        rateVal = savedRateItem.rate;
       }
+
+      return {
+        productId: prod._id || prod.id,
+        code: prod.slNo,
+        productName: pName,
+        quantity: prod.qty || 1,
+        rate: rateVal,
+      };
     });
 
-    // 3. Include any extra custom products saved in currentMap.rates
-    if (currentMap && Array.isArray(currentMap.rates)) {
-      currentMap.rates.forEach((r, idx) => {
-        const rName = String(r.productName || '').trim();
-        const rKey = rName.toLowerCase();
-        if (rName && !processedNames.has(rKey)) {
-          processedNames.add(rKey);
-          combinedRows.push({
-            productId: r.productId,
-            code: r.code !== undefined ? r.code : (combinedRows.length + idx + 1),
-            productName: rName,
-            quantity: typeof r.quantity === 'number' ? r.quantity : 1,
-            rate: Number(r.rate) || 0,
-          });
-        }
-      });
-    }
-
-    // 4. Ensure 100% strictly UNIQUE Product ID (code) for every single product - no duplicates!
-    const usedCodes = new Set<number>();
-    let nextAvailableCode = 1;
-
-    // First pass: register unique positive integer codes
-    combinedRows.forEach((row) => {
-      const numCode = Number(row.code);
-      if (Number.isInteger(numCode) && numCode > 0 && !usedCodes.has(numCode)) {
-        usedCodes.add(numCode);
-        row.code = numCode;
-      } else {
-        row.code = -1; // Collision or invalid -> mark for reassignment
-      }
-    });
-
-    // Second pass: resolve collisions and invalid codes with next available unique number
-    combinedRows.forEach((row) => {
-      if (row.code === -1) {
-        while (usedCodes.has(nextAvailableCode)) {
-          nextAvailableCode++;
-        }
-        row.code = nextAvailableCode;
-        usedCodes.add(nextAvailableCode);
-      }
-    });
-
-    // Sort by code ascending
+    // Strictly sort by serial number ascending (1, 2, 3...)
     combinedRows.sort((a, b) => Number(a.code) - Number(b.code));
 
     setTableRows(combinedRows);
