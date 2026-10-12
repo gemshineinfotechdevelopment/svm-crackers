@@ -2,13 +2,12 @@ import {
   type BillPrintData,
   formatCurrency,
   formatBillDate,
-  numberToWordsClean,
   getProductCode,
   splitRateAndContent,
   splitProductParticular,
   paginateProducts,
 } from '../components/BillPrintTemplate';
-import { formatCompanyAddressLines, type GstBillPrintData } from '../components/GstBillPrintTemplate';
+import { type GstBillPrintData } from '../components/GstBillPrintTemplate';
 import { getStoredSettings } from '../components/SettingsPage';
 import { numberToIndianWords } from './numberToWords';
 
