@@ -1,6 +1,7 @@
 import React from 'react';
 import { getStoredSettings } from './SettingsPage';
 import { numberToIndianWords } from '../utils/numberToWords';
+import { splitProductParticular } from './BillPrintTemplate';
 
 export interface GstProductItem {
   particular: string;
@@ -94,8 +95,8 @@ interface GstBillPrintTemplateProps {
 
 export const formatCompanyAddressLines = (addr?: string): string[] => {
   const fallback = [
-    'No. 2/A13 & 2/A14, Sivakasi - Virudhunagar Road,',
-    'Keela Thiruthangal - 626 130. Tamil Nadu',
+    '2/A13-14, SIVAKASI-VIRUDHUNAGAR MAIN ROAD,',
+    'THIRUTHANGAL, SIVAKASI - 626130.',
   ];
   if (!addr || typeof addr !== 'string' || !addr.trim() || addr === 'false' || addr === 'true' || addr.toLowerCase().includes('rajivgandhi') || addr.toLowerCase().includes('67 - h/e')) {
     return fallback;
@@ -105,7 +106,7 @@ export const formatCompanyAddressLines = (addr?: string): string[] => {
     const parts = clean.split('\n').map((s) => s.trim()).filter(Boolean);
     if (parts.length >= 2) return parts;
   }
-  const match = clean.match(/^(.*?(?:Sivakasi\s*-\s*Virudhunagar\s*Road,?|Road,?))\s*(.+)$/i);
+  const match = clean.match(/^(.*?(?:Sivakasi\s*-\s*Virudhunagar\s*Main\s*Road,?|Road,?))\s*(.+)$/i);
   if (match) {
     let line1 = match[1].trim();
     if (!line1.endsWith(',')) line1 += ',';
@@ -136,7 +137,7 @@ export const formatTurnover = (val: string | number | undefined | null): string 
   return num.toFixed(2);
 };
 
-export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill }) => {
+export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill, copyLabel }) => {
   const [storeSettings, setStoreSettings] = React.useState(() => getStoredSettings());
 
   React.useEffect(() => {
@@ -149,28 +150,35 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
     };
   }, []);
 
-  // Display Company Name from Settings / Bill
-  const displayCompanyName =
-    storeSettings.companyName && typeof storeSettings.companyName === 'string' && storeSettings.companyName.trim() !== '' && storeSettings.companyName !== 'General' && storeSettings.companyName !== 'false'
+  // Company Details
+  const companyNameLine1 =
+    (storeSettings.companyName && typeof storeSettings.companyName === 'string' && storeSettings.companyName.trim() !== '' && storeSettings.companyName !== 'General' && storeSettings.companyName !== 'false'
       ? storeSettings.companyName.trim()
       : bill.companyName && typeof bill.companyName === 'string' && bill.companyName.trim() !== '' && bill.companyName !== 'General' && bill.companyName !== 'SVM Crackers' && bill.companyName !== 'false'
         ? bill.companyName.trim()
-        : 'S.V.M Fireworks Agencies';
+        : 'S.V.M FIREWORKS AGENCIES').toUpperCase();
 
-  // GSTIN & License No
+  const companySubtitle = 'MANJULA TRADERS';
+  const companyAddressLine1 = '2/A13-14, SIVAKASI-VIRUDHUNAGAR MAIN ROAD,';
+  const companyAddressLine2 = 'THIRUTHANGAL, SIVAKASI - 626130.';
+
+  const companyPhones =
+    storeSettings.phone && storeSettings.phone.trim() !== ''
+      ? storeSettings.phone
+      : '+91 96292 85344, 97900 62612';
+
+  const companyEmail =
+    storeSettings.email && storeSettings.email.trim() !== ''
+      ? storeSettings.email
+      : 'crackersbazarsivakasi@gmail.com';
+
   const gstinNo = (storeSettings.gstin && typeof storeSettings.gstin === 'string' ? storeSettings.gstin : bill.gstin) || '33ADBFS7999E1ZO';
   const licNo = (storeSettings.licNo && typeof storeSettings.licNo === 'string' ? storeSettings.licNo : bill.licNo) || 'E/SS/TN/24/83 (E86652)';
-
-  // Company Address from Settings / Bill
-  const companyAddressLines = formatCompanyAddressLines(
-    storeSettings.address && typeof storeSettings.address === 'string' && storeSettings.address !== 'false'
-      ? storeSettings.address
-      : bill.companyAddress
-  );
 
   // Customer Details
   const customerDisplayName = (bill.customerName || '').trim();
   const customerAddressDisplay = (bill.customerAddress || bill.customerCity || '').trim();
+  const customerPhoneDisplay = (bill.customerPhone || '').trim();
   const customerGstDisplay = (bill.customerGst && bill.customerGst !== 'N/A' && bill.customerGst !== '-')
     ? bill.customerGst.trim()
     : '';
@@ -194,7 +202,6 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
   }, 0);
   const subtotal = prodSubtotal > 0 ? prodSubtotal : (parseFloat(String(bill.subtotal || bill.total || 0).replace(/,/g, '')) || 0);
 
-  // Total cases computed / provided
   const totalQtyComputed = products.reduce((acc, p) => acc + (parseFloat(String(p.quantity || 0)) || 0), 0);
   const totalCasesDisplay = (bill.caseCount !== undefined && bill.caseCount !== '' && bill.caseCount !== '0')
     ? String(bill.caseCount)
@@ -238,7 +245,6 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
 
   // Tax calculations
   const taxableBase = Math.max(0, subtotal - discountAmount + packingAmount);
-
   const taxType = bill.taxType || (parseFloat(String(bill.igstTotal || 0)) > 0 ? 'IGST' : (parseFloat(String(bill.cgstTotal || 0)) > 0 ? 'CGST_SGST' : 'IGST'));
   const isIgst = taxType === 'IGST' || (parseFloat(String(bill.igstTotal || 0)) > 0 && parseFloat(String(bill.cgstTotal || 0)) === 0);
 
@@ -250,230 +256,348 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
   let igstAmt = 0;
 
   if (isIgst) {
-    const iRate = bill.igstPercent !== undefined && bill.igstPercent !== null && bill.igstPercent !== ''
-      ? parseFloat(String(bill.igstPercent))
-      : (bill.taxPercent ? parseFloat(String(bill.taxPercent)) : 18);
-    igstPct = String(iRate);
-    igstAmt = parseFloat(String(bill.igstTotal !== undefined ? bill.igstTotal : 0)) || (taxableBase * iRate) / 100;
-    cgstPct = '0';
-    cgstAmt = 0;
-    sgstPct = '0';
-    sgstAmt = 0;
+    if (bill.igstPercent !== undefined && bill.igstPercent !== null && bill.igstPercent !== '') {
+      igstPct = String(bill.igstPercent);
+      igstAmt = (taxableBase * (parseFloat(igstPct) || 0)) / 100;
+    } else if (bill.igstTotal !== undefined && bill.igstTotal !== null && bill.igstTotal !== '') {
+      igstAmt = parseFloat(String(bill.igstTotal).replace(/,/g, '')) || 0;
+      igstPct = taxableBase > 0 ? ((igstAmt / taxableBase) * 100).toFixed(0) : '18';
+    } else if (bill.taxPercent !== undefined && bill.taxPercent !== null && bill.taxPercent !== '') {
+      igstPct = String(bill.taxPercent);
+      igstAmt = (taxableBase * (parseFloat(igstPct) || 0)) / 100;
+    } else {
+      igstPct = '18';
+      igstAmt = (taxableBase * 18) / 100;
+    }
   } else {
-    const cRate = bill.cgstPercent !== undefined && bill.cgstPercent !== null && bill.cgstPercent !== ''
-      ? parseFloat(String(bill.cgstPercent))
-      : (bill.taxPercent ? parseFloat(String(bill.taxPercent)) / 2 : 9);
-    const sRate = bill.sgstPercent !== undefined && bill.sgstPercent !== null && bill.sgstPercent !== ''
-      ? parseFloat(String(bill.sgstPercent))
-      : (bill.taxPercent ? parseFloat(String(bill.taxPercent)) / 2 : 9);
-    cgstPct = String(cRate);
-    cgstAmt = parseFloat(String(bill.cgstTotal !== undefined ? bill.cgstTotal : 0)) || (taxableBase * cRate) / 100;
-    sgstPct = String(sRate);
-    sgstAmt = parseFloat(String(bill.sgstTotal !== undefined ? bill.sgstTotal : 0)) || (taxableBase * sRate) / 100;
-    igstPct = '0';
-    igstAmt = 0;
+    if (bill.cgstPercent !== undefined && bill.cgstPercent !== null && bill.cgstPercent !== '') {
+      cgstPct = String(bill.cgstPercent);
+      cgstAmt = (taxableBase * (parseFloat(cgstPct) || 0)) / 100;
+    } else if (bill.cgstTotal !== undefined && bill.cgstTotal !== null && bill.cgstTotal !== '') {
+      cgstAmt = parseFloat(String(bill.cgstTotal).replace(/,/g, '')) || 0;
+      cgstPct = taxableBase > 0 ? ((cgstAmt / taxableBase) * 100).toFixed(0) : '9';
+    } else {
+      cgstPct = '9';
+      cgstAmt = (taxableBase * 9) / 100;
+    }
+
+    if (bill.sgstPercent !== undefined && bill.sgstPercent !== null && bill.sgstPercent !== '') {
+      sgstPct = String(bill.sgstPercent);
+      sgstAmt = (taxableBase * (parseFloat(sgstPct) || 0)) / 100;
+    } else if (bill.sgstTotal !== undefined && bill.sgstTotal !== null && bill.sgstTotal !== '') {
+      sgstAmt = parseFloat(String(bill.sgstTotal).replace(/,/g, '')) || 0;
+      sgstPct = taxableBase > 0 ? ((sgstAmt / taxableBase) * 100).toFixed(0) : '9';
+    } else {
+      sgstPct = '9';
+      sgstAmt = (taxableBase * 9) / 100;
+    }
   }
 
-  const totalTaxAmount = isIgst ? igstAmt : (cgstAmt + sgstAmt);
-  const netAmountExact = taxableBase + totalTaxAmount;
+  const taxSum = isIgst ? igstAmt : cgstAmt + sgstAmt;
+  const netCalculated = taxableBase + taxSum;
 
-  // Grand Total & Round Off
-  const rawTotalNum = parseFloat(String(bill.netAmount || bill.total || 0).replace(/,/g, '')) || 0;
-  const grandTotalNum = rawTotalNum > 0 ? rawTotalNum : Math.round(netAmountExact);
+  const rawTotalNum = parseFloat(String(bill.total || bill.netAmount || 0).replace(/,/g, '')) || 0;
+  const grandTotalNum = rawTotalNum > 0 ? rawTotalNum : Math.round(netCalculated);
 
-  // Amount in Words
-  const rawWords = numberToIndianWords(grandTotalNum);
-  const wordsClean = rawWords
-    .replace(/\s*Rupees\s*/i, ' ')
-    .replace(/\s*Only\s*/i, '')
+  const amountInWords = numberToIndianWords(Math.round(grandTotalNum));
+  const wordsClean = amountInWords
+    .replace(/\s*Rupees\s*/gi, ' ')
+    .replace(/\s*Only\s*/gi, '')
+    .replace(/\s+/g, ' ')
     .trim();
 
-  // Dynamic spacer height to keep continuous vertical table grid lines running down
-  const spacerMinHeight = Math.max(80, 460 - products.length * 26);
+  // Spacer calculation to push vertical lines down
+  const spacerMinHeight = Math.max(30, (18 - products.length) * 22);
 
   return (
     <div
-      className="gst-bill-print-wrapper"
+      className="gst-bill-container"
       style={{
         width: '100%',
-        maxWidth: '820px',
-        minHeight: '280mm',
+        maxWidth: '794px',
         margin: '0 auto',
         backgroundColor: '#FFFFFF',
         color: '#000000',
         fontFamily: 'Arial, "Helvetica Neue", Helvetica, sans-serif',
         boxSizing: 'border-box',
-        padding: '6px 8px',
-        fontSize: '11.5px',
-        display: 'flex',
-        flexDirection: 'column',
+        fontSize: '11px',
       }}
     >
-      {/* Centered Top Title */}
-      <div
-        style={{
-          textAlign: 'center',
-          marginBottom: '6px',
-        }}
-      >
-        <u
-          style={{
-            fontSize: '14px',
-            fontWeight: 800,
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            color: '#000000',
-          }}
-        >
-          TAX INVOICE
-        </u>
-      </div>
+      <style>
+        {`
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 8mm 6mm;
+            }
+            body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background-color: #FFFFFF !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .gst-bill-container {
+              width: 100% !important;
+              max-width: none !important;
+            }
+            .gst-page-wrapper {
+              page-break-after: always !important;
+              break-after: page !important;
+              box-shadow: none !important;
+              margin-bottom: 0 !important;
+            }
+            .gst-page-wrapper:last-child {
+              page-break-after: auto !important;
+              break-after: auto !important;
+            }
+          }
+        `}
+      </style>
 
-      {/* Main Bordered Bill Container */}
+      {/* Main Outer Box */}
       <div
-        className="bill-box"
+        className="gst-page-wrapper"
         style={{
-          border: '1.5px solid #000000',
+          border: '1px solid #000000',
           boxSizing: 'border-box',
           backgroundColor: '#FFFFFF',
           width: '100%',
-          flex: 1,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
         }}
       >
         <div>
-          {/* Row 1: Company Header (Left) | GSTIN & LIC NO (Right) */}
-          <table
+          {/* Row 1: Company Header (Left 68%) | Contact & GSTIN / LIC (Right 32%) */}
+          <div
             style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              borderBottom: '1.5px solid #000000',
-              fontSize: '11.5px',
+              display: 'flex',
+              alignItems: 'stretch',
+              borderBottom: '1px solid #000000',
+              minHeight: '76px',
             }}
           >
-            <tbody>
-              <tr>
-                {/* Left Column: Company Name & Address */}
-                <td
-                  style={{
-                    width: '63%',
-                    padding: '8px 10px',
-                    verticalAlign: 'middle',
-                    borderRight: '1.5px solid #000000',
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: '17px',
-                      fontWeight: 800,
-                      color: '#000000',
-                      marginBottom: '3px',
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {displayCompanyName}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      color: '#000000',
-                      lineHeight: 1.35,
-                    }}
-                  >
-                    {companyAddressLines.map((line, idx) => (
-                      <div key={idx}>{line}</div>
-                    ))}
-                  </div>
-                </td>
+            {/* Left 68%: Company Details */}
+            <div
+              style={{
+                width: '68%',
+                borderRight: '1px solid #000000',
+                textAlign: 'center',
+                padding: '6px 8px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 800,
+                  letterSpacing: '0.04em',
+                  lineHeight: 1.2,
+                  color: '#000000',
+                }}
+              >
+                {companyNameLine1}
+              </div>
+              <div
+                style={{
+                  fontSize: '13.5px',
+                  fontWeight: 800,
+                  letterSpacing: '0.03em',
+                  lineHeight: 1.25,
+                  marginTop: '1px',
+                  color: '#000000',
+                }}
+              >
+                {companySubtitle}
+              </div>
+              <div
+                style={{
+                  fontSize: '10.5px',
+                  fontWeight: 700,
+                  lineHeight: 1.25,
+                  marginTop: '2px',
+                  color: '#000000',
+                }}
+              >
+                {companyAddressLine1}
+              </div>
+              <div
+                style={{
+                  fontSize: '10.5px',
+                  fontWeight: 700,
+                  lineHeight: 1.25,
+                  color: '#000000',
+                }}
+              >
+                {companyAddressLine2}
+              </div>
+            </div>
 
-                {/* Right Column: GSTIN & LIC NO */}
-                <td
-                  style={{
-                    width: '37%',
-                    padding: '8px 10px',
-                    verticalAlign: 'middle',
-                    lineHeight: 1.6,
-                  }}
-                >
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#000000', marginBottom: '2px' }}>
-                    GSTIN &nbsp;: &nbsp;<strong>{gstinNo}</strong>
-                  </div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#000000' }}>
-                    LIC NO &nbsp;: &nbsp;<strong>{licNo}</strong>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+            {/* Right 32%: Contact, GSTIN, LIC NO */}
+            <div
+              style={{
+                width: '32%',
+                padding: '6px 10px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                fontSize: '10.5px',
+                lineHeight: 1.45,
+                color: '#000000',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+                  <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2a1 1 0 011.02-.24c1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                </svg>
+                <span style={{ fontWeight: 600 }}>{companyPhones}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+                  <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                </svg>
+                <span style={{ fontWeight: 500, wordBreak: 'break-all' }}>{companyEmail}</span>
+              </div>
+              <div style={{ marginTop: '2px', fontWeight: 700 }}>
+                GSTIN : <span>{gstinNo}</span>
+              </div>
+              <div style={{ fontWeight: 700 }}>
+                LIC NO : <span>{licNo}</span>
+              </div>
+            </div>
+          </div>
 
-          {/* Row 2: Customer (To) (Left) | Invoice No & Date (Right) */}
-          <table
+          {/* Row 2: Title Bar (TAX INVOICE) */}
+          <div
             style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              borderBottom: '1.5px solid #000000',
-              fontSize: '11.5px',
+              borderBottom: '1px solid #000000',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '2px 8px',
             }}
           >
-            <tbody>
-              <tr>
-                {/* Left Column: Customer (To) */}
-                <td
+            <div style={{ width: '80px' }}></div>
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <span
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '2px',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                TAX INVOICE
+              </span>
+            </div>
+            <div style={{ width: '80px', textAlign: 'right', fontSize: '10px', fontWeight: 700 }}>
+              {bill.invoiceCopy || copyLabel || ''}
+            </div>
+          </div>
+
+          {/* Row 3: Customer (To) (Left 63%) | Invoice No & Date (Right 37%) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'stretch',
+              borderBottom: '1px solid #000000',
+              fontSize: '11px',
+            }}
+          >
+            {/* Left 63%: Customer (To) */}
+            <div
+              style={{
+                width: '63%',
+                borderRight: '1px solid #000000',
+                padding: '4px 8px',
+                lineHeight: 1.35,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span
                   style={{
-                    width: '63%',
-                    padding: '6px 10px',
-                    verticalAlign: 'top',
-                    borderRight: '1.5px solid #000000',
-                    lineHeight: 1.38,
+                    border: '1px solid #000000',
+                    padding: '0.5px 4px',
+                    fontWeight: 700,
+                    fontSize: '11px',
+                    marginRight: '8px',
+                    lineHeight: 1.1,
                   }}
                 >
-                  <div style={{ fontSize: '11.5px', marginBottom: '2px' }}>To</div>
-                  <div style={{ paddingLeft: '14px' }}>
-                    <div style={{ fontWeight: 600, fontSize: '12px' }}>
-                      {customerDisplayName}
-                    </div>
-                    {customerAddressDisplay ? (
-                      <div>{customerAddressDisplay}</div>
-                    ) : null}
-                    <div>
-                      GSTIN : {customerGstDisplay}
-                    </div>
-                    <div>
-                      Aadhar : {customerAadharDisplay}
-                    </div>
-                  </div>
-                </td>
+                  To
+                </span>
+                <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '11.5px' }}>
+                  {customerDisplayName || 'CASH'}
+                </span>
+              </div>
+              {customerAddressDisplay && (
+                <div style={{ paddingLeft: '32px', textTransform: 'capitalize' }}>
+                  {customerAddressDisplay}
+                </div>
+              )}
+              {customerPhoneDisplay && (
+                <div style={{ paddingLeft: '32px', fontWeight: 600 }}>
+                  {customerPhoneDisplay}
+                </div>
+              )}
+              {customerGstDisplay && (
+                <div style={{ paddingLeft: '32px' }}>
+                  GSTIN : <strong>{customerGstDisplay}</strong>
+                </div>
+              )}
+              {customerAadharDisplay && (
+                <div style={{ paddingLeft: '32px' }}>
+                  Aadhar : <strong>{customerAadharDisplay}</strong>
+                </div>
+              )}
+            </div>
 
-                {/* Right Column: Invoice No & Date */}
-                <td
-                  style={{
-                    width: '37%',
-                    padding: '8px 10px',
-                    verticalAlign: 'top',
-                    lineHeight: 1.65,
-                    fontSize: '12px',
-                  }}
-                >
-                  <div>
-                    Invoice No &nbsp;: &nbsp;<strong>{bill.billNo || '202'}</strong>
-                  </div>
-                  <div>
-                    Date &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: &nbsp;<strong>{bill.date}</strong>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+            {/* Right 37%: Invoice No & Date */}
+            <div
+              style={{
+                width: '37%',
+                padding: '4px 12px',
+                lineHeight: 1.45,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'flex-start', gap: '8px' }}>
+                <span style={{ fontWeight: 600 }}>Invoice No:</span>
+                <span style={{ fontWeight: 700 }}>{bill.billNo || '202'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-start', gap: '8px', marginTop: '2px' }}>
+                <span style={{ fontWeight: 600 }}>Date :</span>
+                <span style={{ fontWeight: 700 }}>{bill.date}</span>
+              </div>
+              {bill.placeOfSupply && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start', gap: '8px', marginTop: '2px' }}>
+                  <span style={{ fontWeight: 600 }}>Place of Supply:</span>
+                  <span style={{ fontWeight: 600 }}>{bill.placeOfSupply}</span>
+                </div>
+              )}
+              {bill.vehicleNo && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start', gap: '8px', marginTop: '2px' }}>
+                  <span style={{ fontWeight: 600 }}>Vehicle No:</span>
+                  <span style={{ fontWeight: 600 }}>{bill.vehicleNo}</span>
+                </div>
+              )}
+            </div>
+          </div>
 
-          {/* Row 3: Products Table with Continuous Vertical Lines */}
+          {/* Row 4: Products Table */}
           <table
             style={{
               width: '100%',
               borderCollapse: 'collapse',
-              borderBottom: '1.5px solid #000000',
-              fontSize: '11.5px',
+              borderBottom: '1px solid #000000',
+              fontSize: '11px',
+              tableLayout: 'fixed',
             }}
           >
             <thead>
@@ -481,103 +605,33 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                 style={{
                   backgroundColor: '#FFFFFF',
                   color: '#000000',
-                  fontSize: '11.5px',
+                  fontSize: '11px',
                   fontWeight: 700,
                   borderBottom: '1px solid #000000',
+                  height: '24px',
                 }}
               >
-                <th
-                  style={{
-                    width: '6%',
-                    borderRight: '1px solid #000000',
-                    padding: '4px 2px',
-                    textAlign: 'center',
-                  }}
-                >
-                  S.No.
-                </th>
-                <th
-                  style={{
-                    width: '38%',
-                    borderRight: '1px solid #000000',
-                    padding: '4px 8px',
-                    textAlign: 'center',
-                  }}
-                >
-                  Particulars
-                </th>
-                <th
-                  style={{
-                    width: '9%',
-                    borderRight: '1px solid #000000',
-                    padding: '4px 2px',
-                    textAlign: 'center',
-                  }}
-                >
-                  HSN
-                </th>
-                <th
-                  style={{
-                    width: '7%',
-                    borderRight: '1px solid #000000',
-                    padding: '4px 2px',
-                    textAlign: 'center',
-                  }}
-                >
-                  Qty
-                </th>
-                <th
-                  style={{
-                    width: '8%',
-                    borderRight: '1px solid #000000',
-                    padding: '4px 2px',
-                    textAlign: 'center',
-                  }}
-                >
-                  Pcs
-                </th>
-                <th
-                  style={{
-                    width: '11%',
-                    borderRight: '1px solid #000000',
-                    padding: '4px 6px',
-                    textAlign: 'center',
-                  }}
-                >
-                  Rate ₹
-                </th>
-                <th
-                  style={{
-                    width: '8%',
-                    borderRight: '1px solid #000000',
-                    padding: '4px 2px',
-                    textAlign: 'center',
-                  }}
-                >
-                  Per
-                </th>
-                <th
-                  style={{
-                    width: '13%',
-                    padding: '4px 6px',
-                    textAlign: 'center',
-                  }}
-                >
-                  Total ₹
-                </th>
+                <th style={{ width: '6%', borderRight: '1px solid #000000', textAlign: 'center', padding: '3px 2px' }}>S.No.</th>
+                <th style={{ width: '38%', borderRight: '1px solid #000000', textAlign: 'center', padding: '3px 8px' }}>Particulars</th>
+                <th style={{ width: '9%', borderRight: '1px solid #000000', textAlign: 'center', padding: '3px 2px' }}>HSN</th>
+                <th style={{ width: '7%', borderRight: '1px solid #000000', textAlign: 'center', padding: '3px 2px' }}>Qty</th>
+                <th style={{ width: '8%', borderRight: '1px solid #000000', textAlign: 'center', padding: '3px 2px' }}>Pcs</th>
+                <th style={{ width: '11%', borderRight: '1px solid #000000', textAlign: 'center', padding: '3px 4px' }}>Rate ₹</th>
+                <th style={{ width: '8%', borderRight: '1px solid #000000', textAlign: 'center', padding: '3px 2px' }}>Per</th>
+                <th style={{ width: '13%', textAlign: 'center', padding: '3px 4px' }}>Total ₹</th>
               </tr>
             </thead>
             <tbody>
               {products.length === 0 ? (
-                <tr style={{ verticalAlign: 'top' }}>
-                  <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '4px 2px' }}>1</td>
-                  <td style={{ borderRight: '1px solid #000000', padding: '4px 8px', fontWeight: 500 }}>ASSORTED CRACKERS</td>
-                  <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '4px 2px' }}>3604</td>
-                  <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '4px 2px' }}>1</td>
-                  <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '4px 2px' }}>0</td>
-                  <td style={{ borderRight: '1px solid #000000', textAlign: 'right', padding: '4px 6px' }}>2300.00</td>
-                  <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '4px 2px' }}>Case</td>
-                  <td style={{ textAlign: 'right', padding: '4px 6px' }}>2300.00</td>
+                <tr style={{ height: '22px', verticalAlign: 'middle' }}>
+                  <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '2px 2px' }}>1</td>
+                  <td style={{ borderRight: '1px solid #000000', padding: '2px 8px', fontWeight: 500 }}>ASSORTED CRACKERS</td>
+                  <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '2px 2px' }}>3604</td>
+                  <td style={{ borderRight: '1px solid #000000', textAlign: 'right', paddingRight: '8px' }}>1</td>
+                  <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '2px 2px' }}>0</td>
+                  <td style={{ borderRight: '1px solid #000000', textAlign: 'right', paddingRight: '8px' }}>2300.00</td>
+                  <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '2px 2px' }}>Case</td>
+                  <td style={{ textAlign: 'right', paddingRight: '8px' }}>2300.00</td>
                 </tr>
               ) : (
                 products.map((item, idx) => {
@@ -586,81 +640,39 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                   const rowAmount = item.amount ? parseFloat(String(item.amount).replace(/,/g, '')) : qNum * rNum;
                   const unitDisplay = item.per || item.unit || 'Case';
                   const hsnDisplay = item.hsnCode || bill.hsnNo || '3604';
+                  const { name: prodName, extra: prodExtra } = splitProductParticular(item.particular);
 
                   return (
-                    <tr key={idx} style={{ verticalAlign: 'top' }}>
-                      <td
-                        style={{
-                          borderRight: '1px solid #000000',
-                          textAlign: 'center',
-                          padding: '3px 2px',
-                          fontWeight: 500,
-                        }}
-                      >
+                    <tr key={idx} style={{ height: '22px', verticalAlign: 'middle' }}>
+                      <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '2px 2px', fontWeight: 500 }}>
                         {idx + 1}
                       </td>
-                      <td
-                        style={{
-                          borderRight: '1px solid #000000',
-                          padding: '3px 8px',
-                          fontWeight: 500,
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {item.particular}
+                      <td style={{ borderRight: '1px solid #000000', textAlign: 'left', padding: '2px 8px', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        {prodExtra ? (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                            <span>{prodName}</span>
+                            <span style={{ paddingLeft: '8px', color: '#000000' }}>{prodExtra}</span>
+                          </div>
+                        ) : (
+                          <span>{prodName}</span>
+                        )}
                       </td>
-                      <td
-                        style={{
-                          borderRight: '1px solid #000000',
-                          textAlign: 'center',
-                          padding: '3px 2px',
-                        }}
-                      >
+                      <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '2px 2px' }}>
                         {hsnDisplay}
                       </td>
-                      <td
-                        style={{
-                          borderRight: '1px solid #000000',
-                          textAlign: 'center',
-                          padding: '3px 2px',
-                        }}
-                      >
+                      <td style={{ borderRight: '1px solid #000000', textAlign: 'right', paddingRight: '8px', fontWeight: 700 }}>
                         {item.quantity}
                       </td>
-                      <td
-                        style={{
-                          borderRight: '1px solid #000000',
-                          textAlign: 'center',
-                          padding: '3px 2px',
-                        }}
-                      >
+                      <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '2px 2px' }}>
                         {item.pcs || '0'}
                       </td>
-                      <td
-                        style={{
-                          borderRight: '1px solid #000000',
-                          textAlign: 'right',
-                          padding: '3px 6px',
-                        }}
-                      >
+                      <td style={{ borderRight: '1px solid #000000', textAlign: 'right', paddingRight: '8px', fontWeight: 600 }}>
                         {formatCurrency(item.rate)}
                       </td>
-                      <td
-                        style={{
-                          borderRight: '1px solid #000000',
-                          textAlign: 'center',
-                          padding: '3px 2px',
-                        }}
-                      >
+                      <td style={{ borderRight: '1px solid #000000', textAlign: 'center', padding: '2px 2px' }}>
                         {unitDisplay}
                       </td>
-                      <td
-                        style={{
-                          textAlign: 'right',
-                          padding: '3px 6px',
-                          fontWeight: 500,
-                        }}
-                      >
+                      <td style={{ textAlign: 'right', paddingRight: '8px', fontWeight: 600 }}>
                         {formatCurrency(rowAmount)}
                       </td>
                     </tr>
@@ -668,27 +680,29 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                 })
               )}
 
-              {/* Continuous Vertical Lines Spacer to fill the A4 page */}
-              <tr style={{ height: `${spacerMinHeight}px` }}>
-                <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
-                <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
-                <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
-                <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
-                <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
-                <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
-                <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
-                <td>&nbsp;</td>
-              </tr>
+              {/* Spacer rows */}
+              {spacerMinHeight > 0 && (
+                <tr style={{ height: `${spacerMinHeight}px` }}>
+                  <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
+                  <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
+                  <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
+                  <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
+                  <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
+                  <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
+                  <td style={{ borderRight: '1px solid #000000' }}>&nbsp;</td>
+                  <td>&nbsp;</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Row 4: Bottom Split Section: Transport Info Left | Totals & Signatory Right */}
+        {/* Row 5: Bottom Section: Transport Info (Left 63%) | Totals & Signatory (Right 37%) */}
         <table
           style={{
             width: '100%',
             borderCollapse: 'collapse',
-            fontSize: '11.5px',
+            fontSize: '11px',
           }}
         >
           <tbody>
@@ -697,7 +711,7 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
               <td
                 style={{
                   width: '63%',
-                  borderRight: '1.5px solid #000000',
+                  borderRight: '1px solid #000000',
                   padding: '6px 8px',
                   verticalAlign: 'top',
                 }}
@@ -707,18 +721,18 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    minHeight: '140px',
+                    minHeight: '130px',
                     height: '100%',
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: 700, marginBottom: '4px', fontSize: '11.5px' }}>
+                    <div style={{ fontWeight: 700, marginBottom: '4px', fontSize: '11px' }}>
                       <u>Transport Info</u>
                     </div>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', lineHeight: 1.45 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10.5px', lineHeight: 1.45 }}>
                       <tbody>
                         <tr>
-                          <td style={{ width: '120px', padding: '1px 0' }}>Despatched To</td>
+                          <td style={{ width: '110px', padding: '1px 0' }}>Despatched To</td>
                           <td style={{ padding: '1px 0' }}>: &nbsp;<strong>{despatchToDisplay}</strong></td>
                         </tr>
                         <tr>
@@ -741,7 +755,7 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                     </table>
                   </div>
 
-                  <div style={{ marginTop: '12px', paddingTop: '4px', fontSize: '11.5px' }}>
+                  <div style={{ marginTop: '8px', paddingTop: '4px', fontSize: '11px' }}>
                     Rupees : &nbsp;<strong>{wordsClean}</strong>
                   </div>
                 </div>
@@ -755,79 +769,79 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                   verticalAlign: 'top',
                 }}
               >
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11.5px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                   <tbody>
-                    <tr>
-                      <td style={{ padding: '3px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000', width: '55%' }}>
+                    <tr style={{ height: '22px' }}>
+                      <td style={{ padding: '2px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000', width: '55%', fontWeight: 600 }}>
                         Sub Total
                       </td>
-                      <td style={{ padding: '3px 8px', textAlign: 'right', borderBottom: '1px solid #000000', width: '45%' }}>
+                      <td style={{ padding: '2px 8px', textAlign: 'right', borderBottom: '1px solid #000000', width: '45%', fontWeight: 600 }}>
                         {formatCurrency(subtotal)}
                       </td>
                     </tr>
                     {discountAmount > 0 && (
-                      <tr>
-                        <td style={{ padding: '3px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000' }}>
+                      <tr style={{ height: '22px' }}>
+                        <td style={{ padding: '2px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000', fontWeight: 600 }}>
                           Less : Discount ({discountPercent}%)
                         </td>
-                        <td style={{ padding: '3px 8px', textAlign: 'right', borderBottom: '1px solid #000000' }}>
+                        <td style={{ padding: '2px 8px', textAlign: 'right', borderBottom: '1px solid #000000', fontWeight: 600 }}>
                           {formatCurrency(discountAmount)}
                         </td>
                       </tr>
                     )}
                     {packingAmount > 0 && (
-                      <tr>
-                        <td style={{ padding: '3px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000' }}>
+                      <tr style={{ height: '22px' }}>
+                        <td style={{ padding: '2px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000', fontWeight: 600 }}>
                           ADD : P &amp; F ({packingPercent}%)
                         </td>
-                        <td style={{ padding: '3px 8px', textAlign: 'right', borderBottom: '1px solid #000000' }}>
+                        <td style={{ padding: '2px 8px', textAlign: 'right', borderBottom: '1px solid #000000', fontWeight: 600 }}>
                           {formatCurrency(packingAmount)}
                         </td>
                       </tr>
                     )}
-                    <tr>
-                      <td style={{ padding: '3px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000' }}>
+                    <tr style={{ height: '22px' }}>
+                      <td style={{ padding: '2px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000', fontWeight: 600 }}>
                         CGST - {cgstPct}%
                       </td>
-                      <td style={{ padding: '3px 8px', textAlign: 'right', borderBottom: '1px solid #000000' }}>
+                      <td style={{ padding: '2px 8px', textAlign: 'right', borderBottom: '1px solid #000000', fontWeight: 600 }}>
                         {formatCurrency(cgstAmt)}
                       </td>
                     </tr>
-                    <tr>
-                      <td style={{ padding: '3px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000' }}>
+                    <tr style={{ height: '22px' }}>
+                      <td style={{ padding: '2px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000', fontWeight: 600 }}>
                         SGST - {sgstPct}%
                       </td>
-                      <td style={{ padding: '3px 8px', textAlign: 'right', borderBottom: '1px solid #000000' }}>
+                      <td style={{ padding: '2px 8px', textAlign: 'right', borderBottom: '1px solid #000000', fontWeight: 600 }}>
                         {formatCurrency(sgstAmt)}
                       </td>
                     </tr>
-                    <tr>
-                      <td style={{ padding: '3px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000' }}>
+                    <tr style={{ height: '22px' }}>
+                      <td style={{ padding: '2px 8px', borderBottom: '1px solid #000000', borderRight: '1px solid #000000', fontWeight: 600 }}>
                         IGST - {igstPct}%
                       </td>
-                      <td style={{ padding: '3px 8px', textAlign: 'right', borderBottom: '1px solid #000000' }}>
+                      <td style={{ padding: '2px 8px', textAlign: 'right', borderBottom: '1px solid #000000', fontWeight: 600 }}>
                         {formatCurrency(igstAmt)}
                       </td>
                     </tr>
-                    <tr>
+                    <tr style={{ height: '26px' }}>
                       <td
                         style={{
-                          padding: '4px 8px',
+                          padding: '3px 8px',
                           borderBottom: '1px solid #000000',
                           borderRight: '1px solid #000000',
                           fontWeight: 700,
-                          fontSize: '12.5px',
+                          fontSize: '12px',
                         }}
                       >
                         Net Amount
                       </td>
                       <td
                         style={{
-                          padding: '4px 8px',
+                          padding: '3px 8px',
                           textAlign: 'right',
                           borderBottom: '1px solid #000000',
-                          fontWeight: 700,
-                          fontSize: '12.5px',
+                          fontWeight: 800,
+                          fontSize: '14px',
                         }}
                       >
                         {formatCurrency(grandTotalNum)}
@@ -837,11 +851,11 @@ export const GstBillPrintTemplate: React.FC<GstBillPrintTemplateProps> = ({ bill
                 </table>
 
                 {/* For Company Name & Signature space */}
-                <div style={{ padding: '6px 8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'none' }}>
-                    For {displayCompanyName}
+                <div style={{ padding: '4px 8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '10.5px', fontWeight: 600, textTransform: 'none' }}>
+                    For {companyNameLine1}
                   </div>
-                  <div style={{ height: '36px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                  <div style={{ height: '32px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
                     {/* Space for signature */}
                   </div>
                 </div>
