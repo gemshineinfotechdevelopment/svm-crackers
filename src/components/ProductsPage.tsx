@@ -16,6 +16,7 @@ import {
   DialogActions,
   CircularProgress,
   Checkbox,
+  FormControlLabel,
   Chip,
   Snackbar,
   Alert,
@@ -60,6 +61,7 @@ export interface ProductItem {
   unit?: string;
   qty?: number;
   pcs?: number;
+  isOutOfStock?: boolean;
   productType?: ProductType | string;
   year?: number;
 }
@@ -116,6 +118,8 @@ export const ProductsPage: FC<ProductsPageProps> = ({
   const [productUnit, setProductUnit] = useState('Box');
   const [productQty, setProductQty] = useState<number>(1);
   const [productPcs, setProductPcs] = useState<number>(0);
+  const [productIsOutOfStock, setProductIsOutOfStock] = useState<boolean>(false);
+  const [stockFilter, setStockFilter] = useState<'ALL' | 'IN_STOCK' | 'OUT_OF_STOCK'>('ALL');
   const [productRate, setProductRate] = useState<string>('0');
   const [productMrp, setProductMrp] = useState<string>('0');
   const [modalLoading, setModalLoading] = useState(false);
@@ -141,7 +145,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Toast / Alert notification
-  const [toast, setToast] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
+  const [toast, setToast] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({
     open: false,
     message: '',
     severity: 'info',
@@ -278,6 +282,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         unit: p.unit,
         qty: p.qty,
         pcs: p.pcs,
+        isOutOfStock: p.isOutOfStock,
         productType: p.productType,
         year: p.year,
       }));
@@ -330,9 +335,16 @@ export const ProductsPage: FC<ProductsPageProps> = ({
         (p.category && p.category.toLowerCase().includes(term)) ||
         String(p.slNo).includes(term) ||
         (p.productType && p.productType.toLowerCase().includes(term));
-      return matchesCategory && matchesSearch;
+
+      const isOut = Boolean(p.isOutOfStock || (typeof p.qty === 'number' && p.qty <= 0));
+      const matchesStock =
+        stockFilter === 'ALL' ||
+        (stockFilter === 'OUT_OF_STOCK' && isOut) ||
+        (stockFilter === 'IN_STOCK' && !isOut);
+
+      return matchesCategory && matchesSearch && matchesStock;
     });
-  }, [tabProducts, selectedCategory, searchTerm]);
+  }, [tabProducts, selectedCategory, searchTerm, stockFilter]);
 
   // Category Quick Add Handlers
   const openAddCategoryAction = () => {
@@ -416,6 +428,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
     setProductUnit('Box');
     setProductQty(1);
     setProductPcs(0);
+    setProductIsOutOfStock(false);
     setProductRate('0');
     setProductMrp('0');
     setOpenModal(true);
@@ -449,8 +462,10 @@ export const ProductsPage: FC<ProductsPageProps> = ({
     setProductName(product.name);
     setProductCategory(product.category || 'General');
     setProductUnit(product.unit || 'Box');
-    setProductQty(product.qty !== undefined && product.qty !== null && product.qty > 0 ? product.qty : 1);
+    const qVal = typeof product.qty === 'number' ? product.qty : 1;
+    setProductQty(qVal);
     setProductPcs(product.pcs !== undefined && product.pcs !== null && product.pcs >= 0 ? product.pcs : 0);
+    setProductIsOutOfStock(Boolean(product.isOutOfStock || qVal <= 0));
     setProductRate(String(product.rate || 0));
     setProductMrp(String(product.mrp || 0));
     setOpenModal(true);
@@ -478,13 +493,17 @@ export const ProductsPage: FC<ProductsPageProps> = ({
     try {
       setModalLoading(true);
 
+      const isOut = productIsOutOfStock || Number(productQty) <= 0;
+      const finalQty = isOut ? 0 : (Number(productQty) > 0 ? Number(productQty) : 1);
+
       const payload = {
         slNo: Number(productSlNo) || getNextSlNoForType(productType),
         name: productName.trim(),
         category: productCategory || 'General',
         unit: productUnit || 'Box',
-        qty: Number(productQty) > 0 ? Number(productQty) : 1,
+        qty: finalQty,
         pcs: Math.max(0, Number(productPcs) || 0),
+        isOutOfStock: isOut,
         rate: Number(productRate) || 0,
         mrp: Number(productMrp) || 0,
         productType: productType,
@@ -979,6 +998,26 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                 ))}
               </select>
 
+              {/* Stock Filter */}
+              <select
+                value={stockFilter}
+                onChange={(e) => setStockFilter(e.target.value as any)}
+                className="erp-input"
+                style={{
+                  height: '28px',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  color: stockFilter === 'OUT_OF_STOCK' ? '#DC2626' : (stockFilter === 'IN_STOCK' ? '#16A34A' : '#1E40AF'),
+                  backgroundColor: stockFilter === 'OUT_OF_STOCK' ? '#FEF2F2' : (stockFilter === 'IN_STOCK' ? '#F0FDF4' : '#FFFFFF'),
+                  borderColor: stockFilter === 'OUT_OF_STOCK' ? '#FECACA' : (stockFilter === 'IN_STOCK' ? '#BBF7D0' : '#CBD5E1'),
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="ALL">📦 All Stock</option>
+                <option value="IN_STOCK">✅ In Stock</option>
+                <option value="OUT_OF_STOCK">⚠️ Out of Stock</option>
+              </select>
+
               {/* Quick Add Category Button on Toolbar */}
               <Button
                 onClick={handleOpenAddCategory}
@@ -1181,7 +1220,13 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                     <TableCell sx={{ width: '75px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Pcs
                     </TableCell>
-                    <TableCell align="center" sx={{ width: '120px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                    <TableCell sx={{ width: '95px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Total Pcs (Qty×Pcs)
+                    </TableCell>
+                    <TableCell sx={{ width: '105px', textAlign: 'center', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                      Status
+                    </TableCell>
+                    <TableCell align="center" sx={{ width: '110px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                       Actions
                     </TableCell>
                   </TableRow>
@@ -1189,27 +1234,31 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                      <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
                         <CircularProgress size={24} sx={{ color: '#1E40AF' }} />
                       </TableCell>
                     </TableRow>
                   ) : filteredProducts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
-                        {searchTerm ? 'No products match your search.' : `No ${activeTabType} products found for year ${selectedYear}. Click "+ Add Product" or "Bulk Upload" to add.`}
+                      <TableCell colSpan={10} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
+                        {searchTerm ? 'No products match your search.' : `No ${activeTabType} products found. Click "+ Add Product" or "Bulk Upload" to add.`}
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredProducts.map((p, idx) => {
                       const pId = p._id || p.id || '';
                       const isChecked = selectedIds.includes(pId);
-                      const displayQty = p.qty !== undefined && p.qty !== null && p.qty > 0 ? p.qty : 1;
+                      const isOut = Boolean(p.isOutOfStock || (typeof p.qty === 'number' && p.qty <= 0));
+                      const curQty = typeof p.qty === 'number' ? p.qty : (isOut ? 0 : 1);
+                      const curPcs = typeof p.pcs === 'number' ? p.pcs : 0;
+                      const totalPcs = isOut ? 0 : curQty * curPcs;
 
                       return (
                         <TableRow
                           key={pId || idx}
                           sx={{
                             '&:hover': { bgcolor: '#F1F7FD' },
+                            bgcolor: isOut ? '#FFF5F5' : 'transparent',
                             '& td': { borderBottom: '1px solid #E2E8F0', py: 0.4 },
                           }}
                         >
@@ -1227,7 +1276,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                             {p.slNo || idx + 1}
                           </TableCell>
 
-                          <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                          <TableCell sx={{ fontSize: '12.5px', fontWeight: 700, color: isOut ? '#991B1B' : '#0F172A' }}>
                             {p.name}
                           </TableCell>
 
@@ -1239,14 +1288,54 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                             {p.unit || 'Box'}
                           </TableCell>
 
-                          {/* Qty Column (defaults to 1) */}
-                          <TableCell sx={{ textAlign: 'center' }}>
-                            <Typography sx={{ fontSize: '12.5px', fontWeight: 800, color: '#16A34A' }}>
-                              {displayQty}
-                            </Typography>
+                          {/* Qty Column (Editable directly inline) */}
+                          <TableCell sx={{ textAlign: 'center', p: 0.5 }}>
+                            <input
+                              type="number"
+                              min="0"
+                              defaultValue={curQty}
+                              key={`qty-${pId}-${p.qty}-${p.isOutOfStock}`}
+                              onBlur={async (e) => {
+                                const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                if (val !== curQty) {
+                                  const outStatus = val === 0;
+                                  try {
+                                    await ProductsApi.update(pId, { qty: val, isOutOfStock: outStatus });
+                                    setProducts((prev) =>
+                                      prev.map((item) => ((item._id || item.id) === pId ? { ...item, qty: val, isOutOfStock: outStatus } : item))
+                                    );
+                                    setToast({
+                                      open: true,
+                                      message: `Updated "${p.name}" to ${val} Qty${outStatus ? ' (OUT OF STOCK)' : ''}`,
+                                      severity: outStatus ? 'warning' : 'success',
+                                    });
+                                  } catch (err) {
+                                    console.error('Failed to update qty:', err);
+                                  }
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  (e.target as HTMLElement).blur();
+                                }
+                              }}
+                              style={{
+                                width: '55px',
+                                textAlign: 'center',
+                                fontWeight: 800,
+                                fontSize: '12.5px',
+                                color: isOut ? '#DC2626' : '#16A34A',
+                                backgroundColor: isOut ? '#FEE2E2' : '#F0FDF4',
+                                border: `1px solid ${isOut ? '#FECACA' : '#BBF7D0'}`,
+                                borderRadius: '4px',
+                                padding: '2px 4px',
+                                outline: 'none',
+                              }}
+                              title="Click to edit quantity. 0 = Out of stock"
+                            />
                           </TableCell>
 
-                          {/* Pcs Column (Editable directly or via modal) */}
+                          {/* Pcs Column (Editable directly inline) */}
                           <TableCell sx={{ textAlign: 'center', p: 0.5 }}>
                             <input
                               type="number"
@@ -1277,7 +1366,7 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                                 }
                               }}
                               style={{
-                                width: '60px',
+                                width: '55px',
                                 textAlign: 'center',
                                 fontWeight: 800,
                                 fontSize: '12.5px',
@@ -1288,7 +1377,52 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                                 padding: '2px 4px',
                                 outline: 'none',
                               }}
-                              title="Click to edit pieces directly"
+                              title="Pieces per unit"
+                            />
+                          </TableCell>
+
+                          {/* Total Pcs Column (Qty × Pcs) */}
+                          <TableCell sx={{ textAlign: 'center' }}>
+                            <Typography sx={{ fontSize: '12.5px', fontWeight: 800, color: isOut ? '#94A3B8' : '#4338CA' }}>
+                              {totalPcs.toLocaleString('en-IN')} Pcs
+                            </Typography>
+                          </TableCell>
+
+                          {/* Stock Status Badge (Click to toggle In Stock / Out of Stock) */}
+                          <TableCell sx={{ textAlign: 'center' }}>
+                            <Chip
+                              size="small"
+                              label={isOut ? 'Out of Stock' : 'In Stock'}
+                              onClick={async () => {
+                                const nextOut = !isOut;
+                                const nextQty = nextOut ? 0 : (p.qty && p.qty > 0 ? p.qty : 1);
+                                try {
+                                  await ProductsApi.update(pId, { isOutOfStock: nextOut, qty: nextQty });
+                                  setProducts((prev) =>
+                                    prev.map((item) =>
+                                      ((item._id || item.id) === pId ? { ...item, isOutOfStock: nextOut, qty: nextQty } : item)
+                                    )
+                                  );
+                                  setToast({
+                                    open: true,
+                                    message: `Marked "${p.name}" as ${nextOut ? 'OUT OF STOCK' : 'IN STOCK'}`,
+                                    severity: nextOut ? 'warning' : 'success',
+                                  });
+                                } catch (err) {
+                                  console.error('Failed to toggle stock status:', err);
+                                }
+                              }}
+                              sx={{
+                                height: '22px',
+                                fontSize: '10.5px',
+                                fontWeight: 800,
+                                bgcolor: isOut ? '#FEE2E2' : '#DCFCE7',
+                                color: isOut ? '#DC2626' : '#15803D',
+                                border: `1px solid ${isOut ? '#FECACA' : '#86EFAC'}`,
+                                cursor: 'pointer',
+                                '&:hover': { opacity: 0.8 },
+                              }}
+                              title="Click to toggle In Stock / Out of Stock"
                             />
                           </TableCell>
 
@@ -1535,9 +1669,13 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                 </Typography>
                 <input
                   type="number"
-                  min="1"
+                  min="0"
                   value={productQty}
-                  onChange={(e) => setProductQty(Math.max(1, Number(e.target.value) || 1))}
+                  onChange={(e) => {
+                    const q = Math.max(0, Number(e.target.value) || 0);
+                    setProductQty(q);
+                    setProductIsOutOfStock(q === 0);
+                  }}
                   className="erp-input"
                   style={{ width: '100%', fontSize: '12px', padding: '6px 8px', fontWeight: 700 }}
                 />
@@ -1556,6 +1694,52 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                   style={{ width: '100%', fontSize: '12px', padding: '6px 8px', fontWeight: 700 }}
                 />
               </Box>
+            </Box>
+
+            {/* Total Pcs (Qty × Pcs) helper & Out of Stock Toggle */}
+            <Box
+              sx={{
+                p: 1.2,
+                bgcolor: productIsOutOfStock || productQty <= 0 ? '#FEF2F2' : '#F0FDF4',
+                border: `1px solid ${productIsOutOfStock || productQty <= 0 ? '#FECACA' : '#BBF7D0'}`,
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: productIsOutOfStock || productQty <= 0 ? '#991B1B' : '#15803D' }}>
+                  Total Pieces (Qty × Pcs):
+                </Typography>
+                <Typography sx={{ fontSize: '14px', fontWeight: 800, color: productIsOutOfStock || productQty <= 0 ? '#DC2626' : '#16A34A' }}>
+                  {productIsOutOfStock || productQty <= 0 ? '0 Pcs (Out of Stock)' : `${productQty * productPcs} Pcs (${productQty} × ${productPcs})`}
+                </Typography>
+              </Box>
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={productIsOutOfStock || productQty <= 0}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setProductIsOutOfStock(checked);
+                      if (checked) {
+                        setProductQty(0);
+                      } else if (productQty <= 0) {
+                        setProductQty(1);
+                      }
+                    }}
+                    sx={{ color: '#DC2626', '&.Mui-checked': { color: '#DC2626' } }}
+                  />
+                }
+                label={
+                  <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#DC2626' }}>
+                    Out of Stock
+                  </Typography>
+                }
+              />
             </Box>
           </Box>
         </DialogContent>

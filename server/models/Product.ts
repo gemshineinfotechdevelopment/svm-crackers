@@ -10,6 +10,7 @@ export interface IProduct extends Document {
   unit?: string;
   qty?: number;
   pcs?: number;
+  isOutOfStock?: boolean;
   productType?: 'Retail' | 'Wholesale' | 'Both' | string;
   year?: number | string;
   createdAt: Date;
@@ -27,6 +28,7 @@ const ProductSchema: Schema = new Schema(
     unit: { type: String, default: 'Box' },
     qty: { type: Number, default: 1, min: 0 },
     pcs: { type: Number, default: 0, min: 0 },
+    isOutOfStock: { type: Boolean, default: false },
     productType: {
       type: String,
       enum: ['Retail', 'Wholesale', 'Both'],

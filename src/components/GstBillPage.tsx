@@ -88,7 +88,9 @@ export interface ProductCatalogOption {
   unit?: string;
   hsn?: string;
   category?: string;
+  qty?: number;
   pcs?: number;
+  isOutOfStock?: boolean;
 }
 
 export const getTodayDateString = (targetYear?: number) => {
@@ -569,7 +571,9 @@ export const GstBillPage: FC = () => {
         unit: p.unit || 'Case',
         hsn: p.hsn || '3604',
         category: p.category || 'General',
+        qty: typeof p.qty === 'number' ? p.qty : (Number(p.qty) || 0),
         pcs: typeof p.pcs === 'number' ? p.pcs : (Number(p.pcs) || 0),
+        isOutOfStock: Boolean(p.isOutOfStock || (typeof p.qty === 'number' && p.qty <= 0)),
       }));
 
       // Ensure "Assorted Crackers" option is available in the dropdown
@@ -2113,7 +2117,25 @@ export const GstBillPage: FC = () => {
                 size="small"
                 sx={{ flex: 1, minWidth: '200px' }}
                 options={productOptions}
-                getOptionLabel={(opt) => `${opt.code ? `[#${opt.code}] ` : ''}${opt.name} - ₹${opt.rate || 0}`}
+                getOptionLabel={(opt) => {
+                  const isOut = Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0));
+                  return `${opt.code ? `[#${opt.code}] ` : ''}${opt.name} - ₹${opt.rate || 0}${isOut ? ' [OUT OF STOCK]' : ''}`;
+                }}
+                renderOption={(props, opt) => {
+                  const isOut = Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0));
+                  return (
+                    <li {...props} key={opt.id || opt.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: isOut ? '#991B1B' : 'inherit' }}>
+                        {opt.code ? `[#${opt.code}] ` : ''}{opt.name} - ₹{opt.rate || 0}
+                      </span>
+                      {isOut && (
+                        <span style={{ fontSize: '10px', color: '#DC2626', fontWeight: 800, backgroundColor: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '6px' }}>
+                          OUT OF STOCK
+                        </span>
+                      )}
+                    </li>
+                  );
+                }}
                 value={selectedCatalogProduct}
                 onChange={(_, opt) => {
                   setSelectedCatalogProduct(opt);

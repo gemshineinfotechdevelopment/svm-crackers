@@ -102,6 +102,7 @@ interface ProductCatalogOption {
   unit?: string;
   qty?: number;
   pcs?: number;
+  isOutOfStock?: boolean;
 }
 
 const findProductByCode = (code: string | undefined | null, options: ProductCatalogOption[]): ProductCatalogOption | null => {
@@ -566,7 +567,9 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         retailRate: rateVal,
         productType: p.productType,
         unit: p.unit || '1 Box',
-        qty: p.qty || 1,
+        qty: typeof p.qty === 'number' ? p.qty : (Number(p.qty) || 0),
+        pcs: typeof p.pcs === 'number' ? p.pcs : (Number(p.pcs) || 0),
+        isOutOfStock: Boolean(p.isOutOfStock || (typeof p.qty === 'number' && p.qty <= 0)),
       };
     });
 
@@ -1904,7 +1907,25 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               size="small"
               sx={{ flex: 1, minWidth: '220px' }}
               options={productOptions}
-              getOptionLabel={(opt) => `${opt.slNo ? `[#${opt.slNo}] ` : opt.sku ? `[${opt.sku}] ` : ''}${opt.name} - ₹${getRateForType(opt, rateType, Boolean(selectedPriceMap))}`}
+              getOptionLabel={(opt) => {
+                const isOut = Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0));
+                return `${opt.slNo ? `[#${opt.slNo}] ` : opt.sku ? `[${opt.sku}] ` : ''}${opt.name} - ₹${getRateForType(opt, rateType, Boolean(selectedPriceMap))}${isOut ? ' [OUT OF STOCK]' : ''}`;
+              }}
+              renderOption={(props, opt) => {
+                const isOut = Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0));
+                return (
+                  <li {...props} key={opt.id || opt.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: isOut ? '#991B1B' : 'inherit' }}>
+                      {opt.slNo ? `[#${opt.slNo}] ` : opt.sku ? `[${opt.sku}] ` : ''}{opt.name} - ₹{getRateForType(opt, rateType, Boolean(selectedPriceMap))}
+                    </span>
+                    {isOut && (
+                      <span style={{ fontSize: '10px', color: '#DC2626', fontWeight: 800, backgroundColor: '#FEE2E2', padding: '1px 6px', borderRadius: '3px', marginLeft: '6px' }}>
+                        OUT OF STOCK
+                      </span>
+                    )}
+                  </li>
+                );
+              }}
               filterOptions={(options, state) => {
                 const input = state.inputValue.toLowerCase().trim();
                 if (!input) return options;

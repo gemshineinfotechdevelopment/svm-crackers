@@ -33,12 +33,16 @@ const adjustStock = async (products: any[], multiplier: number): Promise<void> =
           const currentQty = typeof product.qty === 'number' ? product.qty : 1;
           const newQty = multiplier < 0 ? Math.max(0, currentQty - soldQty) : currentQty + soldQty;
           product.qty = newQty;
+          product.isOutOfStock = newQty <= 0;
         }
 
         if (soldPcs > 0) {
           const currentPcs = typeof product.pcs === 'number' ? product.pcs : 0;
           const newPcs = multiplier < 0 ? Math.max(0, currentPcs - soldPcs) : currentPcs + soldPcs;
           product.pcs = newPcs;
+          if (newPcs <= 0 && (!product.qty || product.qty <= 0)) {
+            product.isOutOfStock = true;
+          }
         }
 
         await product.save();
