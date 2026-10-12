@@ -1246,11 +1246,50 @@ export const ProductsPage: FC<ProductsPageProps> = ({
                             </Typography>
                           </TableCell>
 
-                          {/* Pcs Column */}
-                          <TableCell sx={{ textAlign: 'center' }}>
-                            <Typography sx={{ fontSize: '12.5px', fontWeight: 800, color: '#2563EB' }}>
-                              {p.pcs ?? 0}
-                            </Typography>
+                          {/* Pcs Column (Editable directly or via modal) */}
+                          <TableCell sx={{ textAlign: 'center', p: 0.5 }}>
+                            <input
+                              type="number"
+                              min="0"
+                              defaultValue={p.pcs ?? 0}
+                              key={`pcs-${pId}-${p.pcs}`}
+                              onBlur={async (e) => {
+                                const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                if (val !== (p.pcs ?? 0)) {
+                                  try {
+                                    await ProductsApi.update(pId, { pcs: val });
+                                    setProducts((prev) =>
+                                      prev.map((item) => ((item._id || item.id) === pId ? { ...item, pcs: val } : item))
+                                    );
+                                    setToast({
+                                      open: true,
+                                      message: `Updated "${p.name}" to ${val} Pcs`,
+                                      severity: 'success',
+                                    });
+                                  } catch (err) {
+                                    console.error('Failed to update pcs:', err);
+                                  }
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  (e.target as HTMLElement).blur();
+                                }
+                              }}
+                              style={{
+                                width: '60px',
+                                textAlign: 'center',
+                                fontWeight: 800,
+                                fontSize: '12.5px',
+                                color: '#1D4ED8',
+                                backgroundColor: '#EFF6FF',
+                                border: '1px solid #BFDBFE',
+                                borderRadius: '4px',
+                                padding: '2px 4px',
+                                outline: 'none',
+                              }}
+                              title="Click to edit pieces directly"
+                            />
                           </TableCell>
 
                           <TableCell align="center">
