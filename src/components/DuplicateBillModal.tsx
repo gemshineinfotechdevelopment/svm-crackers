@@ -154,28 +154,35 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
   // Autofill fields from matching customer
   const autofillFromCustomer = (cust: any) => {
     const fields = getCustomerFields(cust);
-    if (fields.name) setManualName(fields.name);
-    setManualPhone(fields.phone);
-    setManualAddress(fields.address);
-    setManualGst(fields.gst);
+    setManualName(fields.name || cust.name || '');
+    setManualPhone(fields.phone || '');
+    setManualAddress(fields.address || '');
+    setManualGst(fields.gst || '');
     setSelectedExistingCustomer(cust);
+    setErrorMsg('');
   };
 
   // Add a single customer to target list
   const handleAddSingleCustomer = () => {
-    const name = manualName.trim();
+    const name = (manualName || selectedExistingCustomer?.name || '').trim();
     if (!name) {
       setErrorMsg('Please enter customer name');
       return;
     }
 
+    const phone = (manualPhone || selectedExistingCustomer?.mobile || selectedExistingCustomer?.phone || '').trim();
+    const address = (manualAddress || selectedExistingCustomer?.address || '').trim();
+    const gst = (manualGst || selectedExistingCustomer?.gst || selectedExistingCustomer?.aadhar || '').trim();
+
     const newItem: TargetCustomerItem = {
-      id: `target_${Date.now()}_${Math.random()}`,
+      id: selectedExistingCustomer?._id || selectedExistingCustomer?.id
+        ? `target_${selectedExistingCustomer._id || selectedExistingCustomer.id}_${Date.now()}`
+        : `target_${Date.now()}_${Math.random()}`,
       name,
-      phone: manualPhone.trim(),
-      mobile: manualPhone.trim(),
-      address: manualAddress.trim(),
-      gst: manualGst.trim(),
+      phone,
+      mobile: phone,
+      address,
+      gst,
     };
 
     setTargetCustomers((prev) => [...prev, newItem]);
@@ -189,16 +196,18 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
 
   // Autocomplete change handler
   const handleSelectAutocomplete = (_: any, opt: any | null) => {
+    setErrorMsg('');
     if (!opt) {
       setSelectedExistingCustomer(null);
+      setManualName('');
       return;
     }
     if (typeof opt === 'string') {
+      setManualName(opt);
       const match = findMatchingCustomer(opt);
       if (match) {
         autofillFromCustomer(match);
       } else {
-        setManualName(opt);
         setSelectedExistingCustomer(null);
       }
     } else {
@@ -208,12 +217,22 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
 
   // Name input typing handler with instant match detection
   const handleNameInputChange = (_: any, val: string, reason: string) => {
+    // Crucial: MUI calls onInputChange with reason='reset' on blur/click away.
+    // We must ignore 'reset' so typed or selected text is never wiped out!
+    if (reason === 'reset') return;
+
     setManualName(val);
+    setErrorMsg('');
+
     if (reason === 'input') {
       const match = findMatchingCustomer(val);
       if (match) {
-        autofillFromCustomer(match);
-      } else if (selectedExistingCustomer && val !== selectedExistingCustomer.name) {
+        const fields = getCustomerFields(match);
+        if (fields.phone) setManualPhone(fields.phone);
+        if (fields.address) setManualAddress(fields.address);
+        if (fields.gst) setManualGst(fields.gst);
+        setSelectedExistingCustomer(match);
+      } else if (selectedExistingCustomer && val !== (selectedExistingCustomer.name || '')) {
         setSelectedExistingCustomer(null);
       }
     }
@@ -221,8 +240,9 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
 
   // Name blur handler to auto-populate if exact match found
   const handleNameInputBlur = () => {
-    if (!selectedExistingCustomer && manualName.trim()) {
-      const match = findMatchingCustomer(manualName);
+    const current = (manualName || selectedExistingCustomer?.name || '').trim();
+    if (!selectedExistingCustomer && current) {
+      const match = findMatchingCustomer(current);
       if (match) {
         autofillFromCustomer(match);
       }
@@ -293,6 +313,14 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
 
   // Remove a customer from target list
   const handleRemoveTarget = (id: string) => {
+    if (id === 'current_typing') {
+      setManualName('');
+      setManualPhone('');
+      setManualAddress('');
+      setManualGst('');
+      setSelectedExistingCustomer(null);
+      return;
+    }
     setTargetCustomers((prev) => prev.filter((t) => t.id !== id));
   };
 
@@ -305,14 +333,15 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
     }
 
     const listToProject = [...targetCustomers];
-    if (targetCustomers.length === 0 && manualName.trim()) {
+    const currentName = (manualName || selectedExistingCustomer?.name || '').trim();
+    if (currentName && !listToProject.some((t) => t.name.toLowerCase() === currentName.toLowerCase())) {
       listToProject.push({
         id: 'current_typing',
-        name: manualName.trim(),
-        phone: manualPhone.trim(),
-        mobile: manualPhone.trim(),
-        address: manualAddress.trim(),
-        gst: manualGst.trim(),
+        name: currentName,
+        phone: (manualPhone || selectedExistingCustomer?.mobile || selectedExistingCustomer?.phone || '').trim(),
+        mobile: (manualPhone || selectedExistingCustomer?.mobile || selectedExistingCustomer?.phone || '').trim(),
+        address: (manualAddress || selectedExistingCustomer?.address || '').trim(),
+        gst: (manualGst || selectedExistingCustomer?.gst || selectedExistingCustomer?.aadhar || '').trim(),
       });
     }
 
@@ -327,21 +356,24 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
         projectedBillNo: billNoStr,
       };
     });
-  }, [targetCustomers, startingBillNo, mode, manualName, manualPhone, manualAddress, manualGst]);
+  }, [targetCustomers, startingBillNo, mode, manualName, selectedExistingCustomer, manualPhone, manualAddress, manualGst]);
 
   // Execute bulk bill generation
   const handleExecuteDuplicate = async () => {
     const finalTargets: TargetCustomerItem[] = [...targetCustomers];
 
-    // Auto-include currently typed customer if not already added to queue
-    if (manualName.trim()) {
+    const currentName = (manualName || selectedExistingCustomer?.name || '').trim();
+    // Auto-include currently typed/selected customer if not already added to queue
+    if (currentName && !finalTargets.some((t) => t.name.toLowerCase() === currentName.toLowerCase())) {
       finalTargets.push({
-        id: `target_${Date.now()}_${Math.random()}`,
-        name: manualName.trim(),
-        phone: manualPhone.trim(),
-        mobile: manualPhone.trim(),
-        address: manualAddress.trim(),
-        gst: manualGst.trim(),
+        id: selectedExistingCustomer?._id || selectedExistingCustomer?.id
+          ? `target_${selectedExistingCustomer._id || selectedExistingCustomer.id}_${Date.now()}`
+          : `target_${Date.now()}_${Math.random()}`,
+        name: currentName,
+        phone: (manualPhone || selectedExistingCustomer?.mobile || selectedExistingCustomer?.phone || '').trim(),
+        mobile: (manualPhone || selectedExistingCustomer?.mobile || selectedExistingCustomer?.phone || '').trim(),
+        address: (manualAddress || selectedExistingCustomer?.address || '').trim(),
+        gst: (manualGst || selectedExistingCustomer?.gst || selectedExistingCustomer?.aadhar || '').trim(),
       });
     }
 
@@ -581,10 +613,18 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                     freeSolo
                     openOnFocus
                     autoHighlight
+                    clearOnBlur={false}
+                    selectOnFocus={false}
                     options={existingCustomers}
-                    getOptionLabel={(opt: any) => (typeof opt === 'string' ? opt : opt.name || '')}
+                    getOptionLabel={(opt: any) => (typeof opt === 'string' ? opt : opt?.name || '')}
+                    isOptionEqualToValue={(opt: any, val: any) => {
+                      if (!opt || !val) return false;
+                      const optName = (typeof opt === 'string' ? opt : opt.name || '').toLowerCase();
+                      const valName = (typeof val === 'string' ? val : val.name || '').toLowerCase();
+                      return optName === valName;
+                    }}
                     filterOptions={(options, state) => {
-                      const input = state.inputValue.toLowerCase().trim();
+                      const input = (state.inputValue || '').toLowerCase().trim();
                       if (!input) return options;
                       const digitsOnly = input.replace(/\D/g, '');
                       return options.filter((opt) => {
@@ -651,15 +691,30 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                         </li>
                       );
                     }}
-                    value={selectedExistingCustomer}
+                    value={manualName}
                     inputValue={manualName}
                     onInputChange={handleNameInputChange}
                     onChange={handleSelectAutocomplete}
                     renderInput={(params) => (
                       <TextField
                         {...params}
-                        placeholder="Search customer (Name, Phone, City)... *"
+                        placeholder="Search or type customer name... *"
                         label="Customer Name"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setManualName(val);
+                          setErrorMsg('');
+                          const match = findMatchingCustomer(val);
+                          if (match) {
+                            const fields = getCustomerFields(match);
+                            if (fields.phone) setManualPhone(fields.phone);
+                            if (fields.address) setManualAddress(fields.address);
+                            if (fields.gst) setManualGst(fields.gst);
+                            setSelectedExistingCustomer(match);
+                          } else {
+                            setSelectedExistingCustomer(null);
+                          }
+                        }}
                         onBlur={handleNameInputBlur}
                         onKeyDown={handleKeyDownInput}
                         slotProps={{
@@ -753,14 +808,22 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                   <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
-                    2. Target Customers Queue ({targetCustomers.length} bills to be generated):
+                    2. Target Customers Queue ({projectedList.length} bill{projectedList.length === 1 ? '' : 's'} to be generated):
                   </Typography>
 
-                  {targetCustomers.length > 0 && (
+                  {(targetCustomers.length > 0 || manualName.trim() || selectedExistingCustomer) && (
                     <Button
                       size="small"
                       color="error"
-                      onClick={() => setTargetCustomers([])}
+                      onClick={() => {
+                        setTargetCustomers([]);
+                        setManualName('');
+                        setManualPhone('');
+                        setManualAddress('');
+                        setManualGst('');
+                        setSelectedExistingCustomer(null);
+                        setErrorMsg('');
+                      }}
                       sx={{ fontSize: '11px', textTransform: 'none', py: 0 }}
                     >
                       Clear Queue
@@ -793,47 +856,67 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                           </TableCell>
                         </TableRow>
                       ) : (
-                        projectedList.map((row, idx) => (
-                          <TableRow key={row.id} hover sx={{ '&:nth-of-type(even)': { bgcolor: '#F8FAFC' } }}>
-                            <TableCell sx={{ fontSize: '11.5px', py: 0.6 }}>{idx + 1}</TableCell>
-                            <TableCell sx={{ fontSize: '11.5px', py: 0.6 }}>
-                              <Chip
-                                label={`#${row.projectedBillNo}`}
-                                size="small"
-                                sx={{
-                                  height: '20px',
-                                  fontSize: '10.5px',
-                                  fontWeight: 800,
-                                  bgcolor: '#ECFDF5',
-                                  color: '#047857',
-                                  border: '1px solid #A7F3D0',
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '12px', fontWeight: 600, py: 0.6, color: '#0F172A' }}>
-                              {row.name}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '11.5px', py: 0.6, color: '#475569' }}>
-                              {row.phone || row.mobile || '-'}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '11.5px', py: 0.6, color: '#475569' }}>
-                              {row.address || '-'}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '11.5px', py: 0.6, color: '#475569' }}>
-                              {row.gst || row.aadhar || '-'}
-                            </TableCell>
-                            <TableCell sx={{ py: 0.4, textAlign: 'center' }}>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleRemoveTarget(row.id)}
-                                sx={{ p: 0.3 }}
-                              >
-                                <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        ))
+                        projectedList.map((row, idx) => {
+                          const isCurrentDraft = row.id === 'current_typing';
+                          return (
+                            <TableRow key={row.id} hover sx={{ '&:nth-of-type(even)': { bgcolor: '#F8FAFC' } }}>
+                              <TableCell sx={{ fontSize: '11.5px', py: 0.6 }}>{idx + 1}</TableCell>
+                              <TableCell sx={{ fontSize: '11.5px', py: 0.6 }}>
+                                <Chip
+                                  label={`#${row.projectedBillNo}`}
+                                  size="small"
+                                  sx={{
+                                    height: '20px',
+                                    fontSize: '10.5px',
+                                    fontWeight: 800,
+                                    bgcolor: '#ECFDF5',
+                                    color: '#047857',
+                                    border: '1px solid #A7F3D0',
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '12px', fontWeight: 600, py: 0.6, color: '#0F172A' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                                  <span>{row.name}</span>
+                                  {isCurrentDraft && (
+                                    <Chip
+                                      label="Current Entry"
+                                      size="small"
+                                      sx={{
+                                        height: '18px',
+                                        fontSize: '10px',
+                                        fontWeight: 700,
+                                        bgcolor: '#EFF6FF',
+                                        color: '#1E40AF',
+                                        border: '1px solid #BFDBFE',
+                                      }}
+                                    />
+                                  )}
+                                </Box>
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '11.5px', py: 0.6, color: '#475569' }}>
+                                {row.phone || row.mobile || '-'}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '11.5px', py: 0.6, color: '#475569' }}>
+                                {row.address || '-'}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '11.5px', py: 0.6, color: '#475569' }}>
+                                {row.gst || row.aadhar || '-'}
+                              </TableCell>
+                              <TableCell sx={{ py: 0.4, textAlign: 'center' }}>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleRemoveTarget(row.id)}
+                                  sx={{ p: 0.3 }}
+                                  title={isCurrentDraft ? 'Clear current entry' : 'Remove customer'}
+                                >
+                                  <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
@@ -847,8 +930,8 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
         {!successResult && (
           <DialogActions sx={{ px: 2, py: 1.2, bgcolor: '#F1F5F9', borderTop: '1px solid #E2E8F0', justifyContent: 'space-between' }}>
             <Typography sx={{ fontSize: '11.5px', color: '#64748B', fontWeight: 600 }}>
-              {targetCustomers.length > 0 || manualName.trim()
-                ? `Ready to generate ${targetCustomers.length + (targetCustomers.length === 0 && manualName.trim() ? 1 : (manualName.trim() ? 1 : 0))} duplicate bill(s).`
+              {projectedList.length > 0
+                ? `Ready to generate ${projectedList.length} duplicate bill(s).`
                 : 'Enter or select a customer to enable generation.'}
             </Typography>
 
@@ -867,7 +950,7 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
                 variant="contained"
                 size="small"
                 onClick={handleExecuteDuplicate}
-                disabled={submitting || (targetCustomers.length === 0 && !manualName.trim())}
+                disabled={submitting || projectedList.length === 0}
                 startIcon={submitting ? <CircularProgress size={14} color="inherit" /> : <ContentCopyRoundedIcon sx={{ fontSize: 15 }} />}
                 sx={{
                   bgcolor: '#1E40AF',
@@ -880,7 +963,7 @@ export const DuplicateBillModal: FC<DuplicateBillModalProps> = ({
               >
                 {submitting
                   ? 'Generating Bills...'
-                  : `Generate ${Math.max(1, targetCustomers.length + (manualName.trim() && targetCustomers.length === 0 ? 1 : (manualName.trim() ? 1 : 0)))} Bill(s)`}
+                  : `Generate ${Math.max(1, projectedList.length)} Bill(s)`}
               </Button>
             </Box>
           </DialogActions>
