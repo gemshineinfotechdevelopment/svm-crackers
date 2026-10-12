@@ -14,6 +14,7 @@ import {
   Tooltip,
   CircularProgress,
   Chip,
+  Alert,
 } from '@mui/material';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
@@ -25,7 +26,13 @@ import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
 import * as XLSX from 'xlsx';
 
 import { ParticularsApi, ProductsApi } from '../services/api';
-import { getActiveBillingYear, setActiveBillingYear, YEAR_CHANGE_EVENT } from '../utils/yearContext';
+import {
+  getActiveBillingYear,
+  setSelectedBillYear,
+  YEAR_CHANGE_EVENT,
+  BILL_YEAR_CHANGE_EVENT,
+} from '../utils/yearContext';
+import { triggerYearRestrictionDialog } from './YearRestrictionDialog';
 
 export interface ProductSaleStat {
   rank: number;
@@ -66,8 +73,7 @@ export const extractBillYear = (bill: any): number => {
 };
 
 export const StockPage: FC = () => {
-  const currentYear = getActiveBillingYear() || new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState<string | number>(currentYear);
+  const [selectedYear, setSelectedYear] = useState<number>(() => getActiveBillingYear() || new Date().getFullYear());
   const [sortBy, setSortBy] = useState<'quantity' | 'name'>('quantity');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -89,13 +95,6 @@ export const StockPage: FC = () => {
     yrs.add(activeYr);
     return Array.from(yrs).sort((a, b) => b - a);
   }, [rawBills]);
-
-  const yearOptions = useMemo(() => {
-    if (availableYears.length > 1) {
-      return ['ALL', ...availableYears];
-    }
-    return availableYears;
-  }, [availableYears]);
 
   // Fetch sales particulars and products from API
   const loadData = async () => {
@@ -134,21 +133,43 @@ export const StockPage: FC = () => {
     loadData();
 
     const handleYearChange = (e: any) => {
-      if (e.detail?.year) {
-        setSelectedYear(e.detail.year);
+      const yr = e.detail?.year;
+      if (yr) {
+        setSelectedYear(Number(yr));
+      } else {
+        setSelectedYear(getActiveBillingYear());
       }
     };
+
+    const handleSettingsUpdate = () => {
+      setSelectedYear(getActiveBillingYear());
+    };
+
     window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+    window.addEventListener(BILL_YEAR_CHANGE_EVENT, handleYearChange);
+    window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
+    window.addEventListener('storage', handleSettingsUpdate);
+
     return () => {
       window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
+      window.removeEventListener(BILL_YEAR_CHANGE_EVENT, handleYearChange);
+      window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('storage', handleSettingsUpdate);
     };
   }, []);
 
-  const handleYearChangeFromDropdown = (val: string | number) => {
-    setSelectedYear(val);
-    if (val !== 'ALL') {
-      setActiveBillingYear(Number(val));
+  const handleSelectYearCard = (targetYear: number) => {
+    const sysYear = new Date().getFullYear();
+    if (targetYear > sysYear) {
+      triggerYearRestrictionDialog({
+        selectedYear: String(targetYear),
+        currentSystemYear: String(sysYear),
+        isFutureYear: true,
+      });
+      return;
     }
+    setSelectedBillYear(String(targetYear));
+    setSelectedYear(targetYear);
   };
 
   // Compute aggregated product sales statistics per year (ONLY for Estimate bills)
@@ -184,7 +205,7 @@ export const StockPage: FC = () => {
       if (isQuotationBill(bill)) return;
 
       const billYear = extractBillYear(bill);
-      if (selectedYear !== 'ALL' && billYear !== Number(selectedYear)) {
+      if (billYear !== Number(selectedYear)) {
         return;
       }
 
@@ -273,16 +294,25 @@ export const StockPage: FC = () => {
 
   // Top seller per year overview cards (Only for Estimate bills in real database)
   const yearlyTopSellers = useMemo(() => {
-    const yearsWithBills = availableYears.filter((yr) => {
-      return rawBills.some((b: any) => !isQuotationBill(b) && extractBillYear(b) === yr);
-    });
+    const sysYear = getActiveBillingYear() || new Date().getFullYear();
+    const allYearsSet = new Set<number>();
 
-    const targetYears = yearsWithBills.length > 0 ? yearsWithBills : [getActiveBillingYear() || new Date().getFullYear()];
+    // Standard system years from current year down to 2023 (or at least 3 years back)
+    const minStandardYear = Math.min(2023, sysYear - 3);
+    for (let y = sysYear; y >= minStandardYear; y--) {
+      allYearsSet.add(y);
+    }
+
+    // Include any years found in actual bills
+    availableYears.forEach((yr) => allYearsSet.add(yr));
+
+    const targetYears = Array.from(allYearsSet).sort((a, b) => b - a);
 
     return targetYears.map((yr) => {
-      let topName = 'No sales recorded';
+      let topName = 'No records';
       let topQty = 0;
       let topRev = 0;
+      let hasRecords = false;
 
       const yearMap = new Map<string, { qty: number; rev: number }>();
       rawBills.forEach((b: any) => {
@@ -310,6 +340,7 @@ export const StockPage: FC = () => {
             topName = key;
             topQty = val.qty;
             topRev = val.rev;
+            hasRecords = true;
           }
         });
       }
@@ -319,8 +350,9 @@ export const StockPage: FC = () => {
         topName,
         topQty,
         topRev,
+        hasRecords,
       };
-    });
+    }).filter((item) => item.hasRecords);
   }, [rawBills, availableYears]);
 
   // Export to Excel
@@ -330,7 +362,7 @@ export const StockPage: FC = () => {
       'Product Name': item.productName,
       Category: item.category,
       'Units Sold (Qty)': item.totalQuantity,
-      Year: selectedYear === 'ALL' ? 'All Years' : selectedYear,
+      Year: selectedYear,
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -429,7 +461,7 @@ export const StockPage: FC = () => {
             gap: 1.5,
           }}
         >
-          {/* Left Title + Year Select */}
+          {/* Left Title */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
               <TrendingUpRoundedIcon sx={{ fontSize: 20, color: '#1E40AF' }} />
@@ -440,35 +472,6 @@ export const StockPage: FC = () => {
               <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#1E40AF' }}>
                 Inventory &amp; Sold Products
               </Typography>
-            </Box>
-
-            {/* Year Selector Dropdown */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, ml: { sm: 1 } }}>
-              <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
-                Billing Year:
-              </Typography>
-              <select
-                value={selectedYear}
-                onChange={(e) => handleYearChangeFromDropdown(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
-                style={{
-                  height: '28px',
-                  backgroundColor: '#FFFFFF',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  color: '#1E40AF',
-                  borderRadius: '3px',
-                  border: '1px solid #94A3B8',
-                  padding: '2px 8px',
-                  outline: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {yearOptions.map((y) => (
-                  <option key={y} value={y}>
-                    {y === 'ALL' ? 'All Years (Combined)' : `Year ${y}`}
-                  </option>
-                ))}
-              </select>
             </Box>
           </Box>
 
@@ -527,156 +530,178 @@ export const StockPage: FC = () => {
           </Box>
         </Box>
 
+        {selectedYear !== new Date().getFullYear() && (
+          <Box sx={{ px: 1.5, pt: 1, pb: 0 }}>
+            <Alert
+              severity="info"
+              sx={{
+                py: 0.3,
+                px: 1.5,
+                fontSize: '11.5px',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: '1px solid #BFDBFE',
+                bgcolor: '#EFF6FF',
+                color: '#1E40AF',
+              }}
+            >
+              ℹ️ Displaying historical stock inventory balance &amp; sales analytics for <strong>Year {selectedYear}</strong> (synchronized with Settings Annual Billing Restriction).
+            </Alert>
+          </Box>
+        )}
+
         {/* Content Container */}
         <Box sx={{ p: { xs: 1.5, sm: 2 }, bgcolor: '#F4F7FB', display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* 1. Year Highlights Row (Top Selling product for real years) */}
-          <Box
-            sx={{
-              bgcolor: '#FFFFFF',
-              border: '1px solid #CBD5E1',
-              borderRadius: '8px',
-              p: 2,
-              boxShadow: '0 1px 4px rgba(15, 23, 42, 0.05)',
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box
-                  sx={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: '6px',
-                    bgcolor: '#FEF3C7',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '16px',
-                  }}
-                >
-                  🏆
-                </Box>
-                <Box>
-                  <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-                    Top Sold Products by Year
-                  </Typography>
-                  <Typography sx={{ fontSize: '11px', color: '#64748B', fontWeight: 500 }}>
-                    Click any year card below to filter sales analytics
-                  </Typography>
-                </Box>
-              </Box>
-              <Chip
-                label="Estimate Bills Only"
-                size="small"
-                sx={{
-                  bgcolor: '#ECFDF5',
-                  color: '#047857',
-                  border: '1px solid #A7F3D0',
-                  fontWeight: 700,
-                  fontSize: '10.5px',
-                  height: '22px',
-                }}
-              />
-            </Box>
-
+          {yearlyTopSellers.length > 0 && (
             <Box
               sx={{
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: `repeat(${Math.min(yearlyTopSellers.length, 3)}, 1fr)`,
-                },
-                gap: 1.5,
+                bgcolor: '#FFFFFF',
+                border: '1px solid #CBD5E1',
+                borderRadius: '8px',
+                p: 2,
+                boxShadow: '0 1px 4px rgba(15, 23, 42, 0.05)',
               }}
             >
-              {yearlyTopSellers.map((item) => {
-                const isSelected = selectedYear === item.year;
-                return (
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Box
-                    key={item.year}
-                    onClick={() => handleYearChangeFromDropdown(item.year)}
                     sx={{
-                      bgcolor: isSelected ? '#EFF6FF' : '#F8FAFC',
-                      border: isSelected ? '2px solid #1E40AF' : '1px solid #E2E8F0',
-                      borderRadius: '8px',
-                      p: 1.8,
-                      cursor: 'pointer',
-                      boxShadow: isSelected ? '0 4px 12px rgba(30, 64, 175, 0.12)' : '0 1px 3px rgba(0,0,0,0.03)',
-                      transition: 'all 0.2s ease',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      '&:hover': {
-                        borderColor: '#2563EB',
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 6px 16px rgba(37, 99, 235, 0.12)',
-                      },
+                      width: 30,
+                      height: 30,
+                      borderRadius: '6px',
+                      bgcolor: '#FEF3C7',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px',
                     }}
                   >
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                        <Chip
-                          size="small"
-                          label={`Year ${item.year}`}
-                          sx={{
-                            height: '22px',
-                            fontSize: '11px',
-                            fontWeight: 800,
-                            bgcolor: isSelected ? '#1E40AF' : '#E2E8F0',
-                            color: isSelected ? '#FFFFFF' : '#334155',
-                          }}
-                        />
-                        {isSelected && (
+                    🏆
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                      Top Sold Products by Year
+                    </Typography>
+                    <Typography sx={{ fontSize: '11px', color: '#64748B', fontWeight: 500 }}>
+                      Click any year card below to filter sales analytics
+                    </Typography>
+                  </Box>
+                </Box>
+                <Chip
+                  label="Estimate Bills Only"
+                  size="small"
+                  sx={{
+                    bgcolor: '#ECFDF5',
+                    color: '#047857',
+                    border: '1px solid #A7F3D0',
+                    fontWeight: 700,
+                    fontSize: '10.5px',
+                    height: '22px',
+                  }}
+                />
+              </Box>
+
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: `repeat(${Math.min(yearlyTopSellers.length, 3)}, 1fr)`,
+                  },
+                  gap: 1.5,
+                }}
+              >
+                {yearlyTopSellers.map((item) => {
+                  const isSelected = selectedYear === item.year;
+                  return (
+                    <Box
+                      key={item.year}
+                      onClick={() => handleSelectYearCard(item.year)}
+                      sx={{
+                        bgcolor: isSelected ? '#EFF6FF' : '#F8FAFC',
+                        border: isSelected ? '2px solid #1E40AF' : '1px solid #E2E8F0',
+                        borderRadius: '8px',
+                        p: 1.8,
+                        cursor: 'pointer',
+                        boxShadow: isSelected ? '0 4px 12px rgba(30, 64, 175, 0.12)' : '0 1px 3px rgba(0,0,0,0.03)',
+                        transition: 'all 0.2s ease',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        '&:hover': {
+                          borderColor: '#2563EB',
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 6px 16px rgba(37, 99, 235, 0.12)',
+                        },
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
                           <Chip
                             size="small"
-                            label="Active Filter ✓"
+                            label={`Year ${item.year}`}
                             sx={{
-                              height: '20px',
-                              fontSize: '10px',
-                              fontWeight: 700,
-                              bgcolor: '#DBEAFE',
-                              color: '#1E40AF',
+                              height: '22px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              bgcolor: isSelected ? '#1E40AF' : '#E2E8F0',
+                              color: isSelected ? '#FFFFFF' : '#334155',
                             }}
                           />
-                        )}
+                          {isSelected && (
+                            <Chip
+                              size="small"
+                              label="Active Filter ✓"
+                              sx={{
+                                height: '20px',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                bgcolor: '#DBEAFE',
+                                color: '#1E40AF',
+                              }}
+                            />
+                          )}
+                        </Box>
+                        <EmojiEventsRoundedIcon sx={{ fontSize: 20, color: '#F59E0B' }} />
                       </Box>
-                      <EmojiEventsRoundedIcon sx={{ fontSize: 20, color: '#F59E0B' }} />
-                    </Box>
 
-                    <Typography
-                      sx={{
-                        fontSize: '14px',
-                        fontWeight: 800,
-                        color: '#0F172A',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        mb: 1.2,
-                      }}
-                      title={item.topName}
-                    >
-                      {item.topName}
-                    </Typography>
+                      <Typography
+                        sx={{
+                          fontSize: '14px',
+                          fontWeight: 800,
+                          color: '#0F172A',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          mb: 1.2,
+                        }}
+                        title={item.topName}
+                      >
+                        {item.topName}
+                      </Typography>
 
-                    <Box
-                      sx={{
-                        bgcolor: '#ECFDF5',
-                        border: '1px solid #A7F3D0',
-                        borderRadius: '6px',
-                        p: '8px 12px',
-                        textAlign: 'center',
-                      }}
-                    >
-                      <Typography sx={{ fontSize: '10.5px', color: '#047857', fontWeight: 600, textTransform: 'uppercase' }}>
-                        Units Sold
-                      </Typography>
-                      <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#065F46' }}>
-                        🔥 {item.topQty.toLocaleString('en-IN')} units
-                      </Typography>
+                      <Box
+                        sx={{
+                          bgcolor: '#ECFDF5',
+                          border: '1px solid #A7F3D0',
+                          borderRadius: '6px',
+                          p: '8px 12px',
+                          textAlign: 'center',
+                        }}
+                      >
+                        <Typography sx={{ fontSize: '10.5px', color: '#047857', fontWeight: 600, textTransform: 'uppercase' }}>
+                          Units Sold
+                        </Typography>
+                        <Typography sx={{ fontSize: '15px', fontWeight: 800, color: '#065F46' }}>
+                          🔥 {item.topQty.toLocaleString('en-IN')} units
+                        </Typography>
+                      </Box>
                     </Box>
-                  </Box>
-                );
-              })}
+                  );
+                })}
+              </Box>
             </Box>
-          </Box>
+          )}
 
           {/* 2. Key Performance Metric Cards */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 1.5 }}>
@@ -955,7 +980,7 @@ export const StockPage: FC = () => {
           {/* Bottom Info Footer */}
           <Box sx={{ textAlign: 'center', py: 0.5 }}>
             <Typography sx={{ fontSize: '11.5px', color: '#64748B' }}>
-              ℹ️ Displaying stock inventory balance &amp; sales analytics for billing year: <b>{selectedYear === 'ALL' ? 'All Years' : selectedYear}</b>. Aggregated from customer sales &amp; product inventory.
+              ℹ️ Displaying stock inventory balance &amp; sales analytics for billing year: <b>{selectedYear}</b> (synchronized with Settings annual billing restriction). Aggregated from customer sales &amp; product inventory.
             </Typography>
           </Box>
         </Box>
