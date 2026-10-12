@@ -327,7 +327,6 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill }) =>
   const rawTotalNum = parseFloat(String(bill.total || 0).replace(/,/g, '')) || 0;
   const grandTotalNum = rawTotalNum > 0 ? rawTotalNum : Math.round(netCalculated);
 
-  const amountInWords = numberToWordsClean(grandTotalNum);
   const formattedDate = formatBillDate(bill.date);
   const invoiceTitle = bill.invoiceTitle || bill.title || (bill.isEstimate ? 'Estimate' : 'Estimate');
 
@@ -825,35 +824,9 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill }) =>
                     <>
                       {/* Row 1: Sub Total */}
                       <tr style={{ height: '24px', borderTop: '1px solid #000000' }}>
-                        {/* Col 1 (S.No.): Amount in Words Rotated Vertically */}
+                        {/* Cols 1, 2, 3, 4: Empty space spanning S.No., Code, Product, Qty */}
                         <td
-                          rowSpan={4}
-                          style={{
-                            borderRight: '1px solid #000000',
-                            verticalAlign: 'bottom',
-                            textAlign: 'center',
-                            padding: '4px 1px',
-                            height: '96px',
-                          }}
-                        >
-                          <div
-                            style={{
-                              writingMode: 'vertical-lr',
-                              transform: 'rotate(180deg)',
-                              fontSize: '10.5px',
-                              fontWeight: 500,
-                              whiteSpace: 'nowrap',
-                              margin: '0 auto',
-                              letterSpacing: '0.02em',
-                            }}
-                          >
-                            {amountInWords}
-                          </div>
-                        </td>
-
-                        {/* Cols 2, 3, 4: Empty space spanning Code, Product, Qty */}
-                        <td
-                          colSpan={3}
+                          colSpan={4}
                           rowSpan={4}
                           style={{
                             borderRight: '1px solid #000000',

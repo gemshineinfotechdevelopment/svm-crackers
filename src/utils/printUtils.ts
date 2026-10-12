@@ -145,7 +145,6 @@ export const generateBillHtml = (bill: BillPrintData): string => {
   const rawTotalNum = parseFloat(String(bill.total || 0).replace(/,/g, '')) || 0;
   const grandTotalNum = rawTotalNum > 0 ? rawTotalNum : Math.round(netCalculated);
 
-  const amountInWords = numberToWordsClean(grandTotalNum);
   const formattedDate = formatBillDate(bill.date);
   const invoiceTitle = bill.invoiceTitle || bill.title || (bill.isEstimate ? 'Estimate' : 'Estimate');
 
@@ -209,12 +208,7 @@ export const generateBillHtml = (bill: BillPrintData): string => {
       const summaryHtml = isLastPage
         ? `
           <tr style="height: 24px; border-top: 1px solid #000000;">
-            <td rowspan="4" style="border-right: 1px solid #000000; vertical-align: bottom; text-align: center; padding: 4px 1px; height: 96px;">
-              <div style="writing-mode: vertical-lr; transform: rotate(180deg); font-size: 10.5px; font-weight: 500; white-space: nowrap; margin: 0 auto; letter-spacing: 0.02em;">
-                ${amountInWords}
-              </div>
-            </td>
-            <td colspan="3" rowspan="4" style="border-right: 1px solid #000000;">&nbsp;</td>
+            <td colspan="4" rowspan="4" style="border-right: 1px solid #000000;">&nbsp;</td>
             <td style="border-right: 1px solid #000000; border-bottom: 1px solid #000000; text-align: center; font-weight: 600; padding: 2px 4px; fontSize: 11px;">
               Sub Total
             </td>
