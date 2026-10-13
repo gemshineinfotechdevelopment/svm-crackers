@@ -1,5 +1,5 @@
 /**
- * Centralized API Service for Apsara Crackers
+ * Centralized API Service for SVM Crackers
  * Automatically resolves and normalizes backend base URL from Vite environment variables.
  */
 
@@ -20,13 +20,13 @@ const getApiBaseUrl = (): string => {
     return sanitized.endsWith('/api') ? sanitized : `${sanitized}/api`;
   }
 
-  // If in browser on production domain (e.g. apsara-crackers.gemshine.tech)
+  // If in browser on production domain (e.g. svm-crackers.gemshine.tech)
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
     return '/api';
   }
 
-  // Default to local backend server on Port 5015
-  return 'http://localhost:5015/api';
+  // Default to local backend server on Port 5017
+  return 'http://localhost:5017/api';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
@@ -46,7 +46,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   // Retrieve auth token if stored
   const token = typeof window !== 'undefined'
-    ? localStorage.getItem('apsara_auth_token')
+    ? localStorage.getItem('svm_auth_token') || localStorage.getItem('apsara_auth_token')
     : null;
 
   const headers: Record<string, string> = {

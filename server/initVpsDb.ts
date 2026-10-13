@@ -26,7 +26,7 @@ const hashPassword = (password: string): string => {
 
 export const initVpsDatabase = async (): Promise<void> => {
   console.log('=============================================');
-  console.log('🚀 Initializing Apsara Crackers Database on VPS');
+  console.log('🚀 Initializing SVM Crackers Database on VPS');
   console.log('=============================================');
 
   try {
@@ -100,7 +100,7 @@ export const initVpsDatabase = async (): Promise<void> => {
         companyName: 'SVM Crackers',
         address: 'Sivakasi, Tamil Nadu - 626123',
         phone: '9876543210',
-        email: 'info@apsaracrackers.com',
+        email: 'info@svmcrackers.com',
         gstin: '33AAAAA0000A1Z5',
         theme: 'dark',
       });

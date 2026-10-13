@@ -25,7 +25,7 @@ import { seedDefaultAdmin } from './controllers/authController';
 import { backfillMissingYears } from './utils/yearUtils';
 
 const app: Application = express();
-const PORT = process.env.PORT || 5015;
+const PORT = process.env.PORT || 5017;
 
 // Connect Database, Seed default admin & Backfill historical years safely
 connectDB().then(async () => {
@@ -47,12 +47,12 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://localhost:5174',
   'http://127.0.0.1:5174',
-  'http://localhost:5015',
-  'http://127.0.0.1:5015',
+  'http://localhost:5017',
+  'http://127.0.0.1:5017',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  'https://apsara-crackers.gemshine.tech',
-  'http://apsara-crackers.gemshine.tech',
+  'https://svm-crackers.gemshine.tech',
+  'http://svm-crackers.gemshine.tech',
 ];
 
 const corsOptions: cors.CorsOptions = {
@@ -96,7 +96,7 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.get('/api/health', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'OK',
-    message: 'Manjula Crackers API Server is running smoothly',
+    message: 'SVM Crackers API Server is running smoothly',
     port: PORT,
     timestamp: new Date().toISOString(),
   });
@@ -105,7 +105,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.get('/', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'OK',
-    service: 'Manjula Crackers Backend API',
+    service: 'SVM Crackers Backend API',
     health: '/api/health',
   });
 });
@@ -129,7 +129,7 @@ app.use(errorHandler);
 // Start Server
 app.listen(PORT, () => {
   console.log(`=============================================`);
-  console.log(` 🚀 Manjula Crackers Server running on port ${PORT}`);
+  console.log(` 🚀 SVM Crackers Server running on port ${PORT}`);
   console.log(` 🔗 Health check: http://localhost:${PORT}/api/health`);
   console.log(` 🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`=============================================`);

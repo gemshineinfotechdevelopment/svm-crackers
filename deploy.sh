@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Apsara Crackers VPS Deployment / Update Script
-# Subdomain: apsara-crackers.gemshine.tech
-# Backend Port: 5015
+# SVM Crackers VPS Deployment / Update Script
+# Subdomain: svm-crackers.gemshine.tech
+# Backend Port: 5017
 # Usage on VPS: bash deploy.sh
 # ==============================================================================
 
@@ -20,10 +20,11 @@ npm --prefix server install
 echo "🔨 [4/5] Building frontend & backend (TypeScript)..."
 npm run build:all
 
-echo "🔄 [5/5] Reloading PM2 backend service (Port 5015: apsara-crackers-api)..."
+echo "🔄 [5/5] Reloading PM2 backend service (Port 5017: svm-crackers-api)..."
 pm2 reload ecosystem.config.cjs || pm2 start ecosystem.config.cjs
 
 echo "=========================================================="
-echo "✅ Apsara Crackers deployed successfully on Port 5015!"
-echo "🌐 URL: https://apsara-crackers.gemshine.tech"
+echo "✅ SVM Crackers deployed successfully on Port 5017!"
+echo "🌐 URL: https://svm-crackers.gemshine.tech"
 echo "=========================================================="
+
