@@ -33,7 +33,6 @@ import AltRouteRoundedIcon from '@mui/icons-material/AltRouteRounded';
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
-import defaultSvmLogo from '../assets/logo.png';
 import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { HealthApi, API_BASE_URL } from '../services/api';
 import {
@@ -174,17 +173,21 @@ export const Navbar: FC<NavbarProps> = ({
       >
         {/* Left: Window Icon + Title */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box
-            component="img"
-            src={companySettings.logoUrl || defaultSvmLogo}
-            alt="Logo"
-            sx={{
-              width: 18,
-              height: 18,
-              objectFit: 'contain',
-              borderRadius: '2px',
-            }}
-          />
+          {companySettings.logoUrl ? (
+            <Box
+              component="img"
+              src={companySettings.logoUrl}
+              alt="Logo"
+              sx={{
+                width: 18,
+                height: 18,
+                objectFit: 'contain',
+                borderRadius: '2px',
+              }}
+            />
+          ) : (
+            <StorefrontRoundedIcon sx={{ fontSize: 18, color: '#1E3A8A' }} />
+          )}
           <Typography
             sx={{
               fontSize: { xs: '12px', sm: '13px' },

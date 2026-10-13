@@ -11,7 +11,6 @@ import {
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
-import defaultProjectLogo from '../assets/logo.png';
 import { AuthApi, SettingsApi } from '../services/api';
 import { getStoredSettings, DEFAULT_COMPANY_SETTINGS, type CompanySettings } from './SettingsPage';
 
@@ -154,19 +153,21 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
         <Box sx={{ p: 2.5 }}>
           {/* Logo */}
-          <Box
-            component="img"
-            src={settings.logoUrl || defaultProjectLogo}
-            alt="S.V.M Fireworks Agencies Logo"
-            sx={{
-              maxHeight: 50,
-              maxWidth: 160,
-              objectFit: 'contain',
-              display: 'block',
-              mx: 'auto',
-              mb: 1.5,
-            }}
-          />
+          {settings.logoUrl && (
+            <Box
+              component="img"
+              src={settings.logoUrl}
+              alt="S.V.M Fireworks Agencies Logo"
+              sx={{
+                maxHeight: 50,
+                maxWidth: 160,
+                objectFit: 'contain',
+                display: 'block',
+                mx: 'auto',
+                mb: 1.5,
+              }}
+            />
+          )}
 
           <Typography
             sx={{
