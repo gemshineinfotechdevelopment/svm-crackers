@@ -24,7 +24,7 @@ import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import { CustomersApi, ParticularsApi } from '../services/api';
-import { printCustomerListDirectly } from '../utils/printUtils';
+import { printCustomerListDirectly, parseDateToTimestamp } from '../utils/printUtils';
 import { DateRangePrintModal } from './DateRangePrintModal';
 import { BillPrintModal } from './BillPrintModal';
 import type { BillPrintData } from './BillPrintTemplate';
@@ -93,6 +93,8 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
   const [recentBills, setRecentBills] = useState<any[]>([]);
   const [loadingRecentBills, setLoadingRecentBills] = useState<boolean>(true);
   const [billSearchTerm, setBillSearchTerm] = useState<string>('');
+  const [billSortBy, setBillSortBy] = useState<'billNo' | 'date' | 'customerName' | 'total'>('billNo');
+  const [billSortOrder, setBillSortOrder] = useState<'asc' | 'desc'>('desc');
   const [printModalOpen, setPrintModalOpen] = useState<boolean>(false);
   const [selectedBillForPrint, setSelectedBillForPrint] = useState<BillPrintData | null>(null);
 
@@ -506,16 +508,44 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
 
   // Filtered recent bills
   const filteredRecentBills = useMemo(() => {
-    if (!billSearchTerm.trim()) return recentBills;
-    const term = billSearchTerm.toLowerCase().trim();
-    return recentBills.filter(
-      (b) =>
-        (b.billNo && b.billNo.toLowerCase().includes(term)) ||
-        (b.customerName && b.customerName.toLowerCase().includes(term)) ||
-        (b.companyName && b.companyName.toLowerCase().includes(term)) ||
-        (b.date && b.date.toLowerCase().includes(term))
-    );
-  }, [recentBills, billSearchTerm]);
+    let list = recentBills;
+    if (billSearchTerm.trim()) {
+      const term = billSearchTerm.toLowerCase().trim();
+      list = list.filter(
+        (b) =>
+          (b.billNo && String(b.billNo).toLowerCase().includes(term)) ||
+          (b.customerName && b.customerName.toLowerCase().includes(term)) ||
+          (b.companyName && b.companyName.toLowerCase().includes(term)) ||
+          (b.date && b.date.toLowerCase().includes(term))
+      );
+    }
+    return [...list].sort((a, b) => {
+      if (billSortBy === 'billNo') {
+        const numA = parseInt(String(a.billNo || '').replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt(String(b.billNo || '').replace(/\D/g, ''), 10) || 0;
+        if (numA !== numB) return billSortOrder === 'asc' ? numA - numB : numB - numA;
+        return billSortOrder === 'asc'
+          ? String(a.billNo || '').localeCompare(String(b.billNo || ''))
+          : String(b.billNo || '').localeCompare(String(a.billNo || ''));
+      }
+      if (billSortBy === 'date') {
+        const timeA = parseDateToTimestamp(a.date);
+        const timeB = parseDateToTimestamp(b.date);
+        return billSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+      }
+      if (billSortBy === 'customerName') {
+        const nameA = String(a.customerName || '').toLowerCase();
+        const nameB = String(b.customerName || '').toLowerCase();
+        return billSortOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+      }
+      if (billSortBy === 'total') {
+        const amtA = parseFloat(String(a.total || a.amount || '0').replace(/,/g, '')) || 0;
+        const amtB = parseFloat(String(b.total || b.amount || '0').replace(/,/g, '')) || 0;
+        return billSortOrder === 'asc' ? amtA - amtB : amtB - amtA;
+      }
+      return 0;
+    });
+  }, [recentBills, billSearchTerm, billSortBy, billSortOrder]);
 
   return (
     <Box sx={{ width: '100%', p: { xs: 1, sm: 1.5 }, bgcolor: '#D9E4F2', minHeight: 'calc(100vh - 70px)' }}>
@@ -961,8 +991,44 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                   )}
                 </Box>
 
-                {/* Right: Total & Refresh */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                {/* Right: Sort Dropdown + Total & Refresh */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                  {/* Sort Select */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#334155' }}>
+                      Sort:
+                    </Typography>
+                    <select
+                      value={`${billSortBy}-${billSortOrder}`}
+                      onChange={(e) => {
+                        const [field, order] = e.target.value.split('-') as ['billNo' | 'date' | 'customerName' | 'total', 'asc' | 'desc'];
+                        setBillSortBy(field);
+                        setBillSortOrder(order);
+                      }}
+                      style={{
+                        height: '26px',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        color: '#0F172A',
+                        backgroundColor: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '3px',
+                        padding: '0 6px',
+                        outline: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="billNo-desc">Bill No: High → Low</option>
+                      <option value="billNo-asc">Bill No: Low → High</option>
+                      <option value="date-desc">Date: Newest First</option>
+                      <option value="date-asc">Date: Oldest First</option>
+                      <option value="total-desc">Total: High → Low</option>
+                      <option value="total-asc">Total: Low → High</option>
+                      <option value="customerName-asc">Customer: A → Z</option>
+                      <option value="customerName-desc">Customer: Z → A</option>
+                    </select>
+                  </Box>
+
                   <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
                     Total Invoiced: <strong style={{ color: '#741748' }}>₹{totalBillsAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                   </Typography>
@@ -1002,20 +1068,96 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                   <Table size="small" stickyHeader>
                     <TableHead>
                       <TableRow sx={{ bgcolor: '#DCE7F5' }}>
-                        <TableCell sx={{ width: '90px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
-                          Bill No
+                        <TableCell
+                          onClick={() => {
+                            if (billSortBy === 'billNo') {
+                              setBillSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+                            } else {
+                              setBillSortBy('billNo');
+                              setBillSortOrder('desc');
+                            }
+                          }}
+                          sx={{
+                            width: '100px',
+                            fontWeight: 700,
+                            bgcolor: '#DCE7F5',
+                            color: billSortBy === 'billNo' ? '#1E40AF' : '#0F172A',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            '&:hover': { bgcolor: '#CFE0F2' },
+                          }}
+                        >
+                          Bill No {billSortBy === 'billNo' ? (billSortOrder === 'asc' ? '▲' : '▼') : '↕'}
                         </TableCell>
-                        <TableCell sx={{ width: '100px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
-                          Date
+                        <TableCell
+                          onClick={() => {
+                            if (billSortBy === 'date') {
+                              setBillSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+                            } else {
+                              setBillSortBy('date');
+                              setBillSortOrder('desc');
+                            }
+                          }}
+                          sx={{
+                            width: '110px',
+                            fontWeight: 700,
+                            bgcolor: '#DCE7F5',
+                            color: billSortBy === 'date' ? '#1E40AF' : '#0F172A',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            '&:hover': { bgcolor: '#CFE0F2' },
+                          }}
+                        >
+                          Date {billSortBy === 'date' ? (billSortOrder === 'asc' ? '▲' : '▼') : '↕'}
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
-                          Customer Name
+                        <TableCell
+                          onClick={() => {
+                            if (billSortBy === 'customerName') {
+                              setBillSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+                            } else {
+                              setBillSortBy('customerName');
+                              setBillSortOrder('asc');
+                            }
+                          }}
+                          sx={{
+                            fontWeight: 700,
+                            bgcolor: '#DCE7F5',
+                            color: billSortBy === 'customerName' ? '#1E40AF' : '#0F172A',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            '&:hover': { bgcolor: '#CFE0F2' },
+                          }}
+                        >
+                          Customer Name {billSortBy === 'customerName' ? (billSortOrder === 'asc' ? '▲' : '▼') : '↕'}
                         </TableCell>
                         <TableCell align="center" sx={{ width: '80px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                           Items
                         </TableCell>
-                        <TableCell align="right" sx={{ width: '130px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
-                          Total ( ₹ )
+                        <TableCell
+                          align="right"
+                          onClick={() => {
+                            if (billSortBy === 'total') {
+                              setBillSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+                            } else {
+                              setBillSortBy('total');
+                              setBillSortOrder('desc');
+                            }
+                          }}
+                          sx={{
+                            width: '130px',
+                            fontWeight: 700,
+                            bgcolor: '#DCE7F5',
+                            color: billSortBy === 'total' ? '#1E40AF' : '#0F172A',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            '&:hover': { bgcolor: '#CFE0F2' },
+                          }}
+                        >
+                          Total ( ₹ ) {billSortBy === 'total' ? (billSortOrder === 'asc' ? '▲' : '▼') : '↕'}
                         </TableCell>
                         <TableCell align="center" sx={{ width: '140px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                           Actions
