@@ -51,7 +51,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
             licNo: data.licNo || DEFAULT_COMPANY_SETTINGS.licNo,
           };
           setSettings(remoteSettings);
-          localStorage.setItem('apsara_app_settings', JSON.stringify(remoteSettings));
+          localStorage.setItem('svm_app_settings', JSON.stringify(remoteSettings));
         }
       })
       .catch((err) => {
@@ -61,9 +61,9 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
     const handleUpdate = () => {
       setSettings(getStoredSettings());
     };
-    window.addEventListener('apsara_settings_updated', handleUpdate);
+    window.addEventListener('svm_settings_updated', handleUpdate);
     return () => {
-      window.removeEventListener('apsara_settings_updated', handleUpdate);
+      window.removeEventListener('svm_settings_updated', handleUpdate);
     };
   }, []);
 
@@ -84,19 +84,19 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
       });
 
       if (res && res.token) {
-        localStorage.setItem('apsara_auth_token', res.token);
-        localStorage.setItem('apsara_auth_user', JSON.stringify(res.user || { username: username.trim(), role: 'admin' }));
+        localStorage.setItem('svm_auth_token', res.token);
+        localStorage.setItem('svm_auth_user', JSON.stringify(res.user || { username: username.trim(), role: 'admin' }));
         onLoginSuccess(res.user || { username: username.trim(), role: 'admin' });
       }
     } catch (err: any) {
       console.error('Login failed:', err);
       if (
         (username.trim().toLowerCase() === 'admin' && (password === 'admin123' || password === 'admin')) ||
-        (password === 'admin123' || password === 'apsara123')
+        (password === 'admin123' || password === 'svm123')
       ) {
         const fallbackUser = { username: username.trim().toLowerCase(), role: 'admin' };
-        localStorage.setItem('apsara_auth_token', 'local-admin-token');
-        localStorage.setItem('apsara_auth_user', JSON.stringify(fallbackUser));
+        localStorage.setItem('svm_auth_token', 'local-admin-token');
+        localStorage.setItem('svm_auth_user', JSON.stringify(fallbackUser));
         onLoginSuccess(fallbackUser);
       } else {
         setErrorMsg(err.message || 'Invalid username or password.');

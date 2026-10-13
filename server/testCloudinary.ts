@@ -18,7 +18,7 @@ async function test() {
   const sampleBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
   try {
-    const result = await uploadToCloudinary(sampleBase64, 'apsara_crackers/test', 'test_sample');
+    const result = await uploadToCloudinary(sampleBase64, 'svm_crackers/test', 'test_sample');
     console.log('Upload Result:', result);
     console.log('SUCCESS! Secure URL:', result.secure_url);
 

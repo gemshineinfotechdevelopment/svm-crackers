@@ -85,11 +85,11 @@ export const BillPrintModal: React.FC<BillPrintModalProps> = ({ open, onClose, b
             body * {
               visibility: hidden !important;
             }
-            .apsara-printable-section,
-            .apsara-printable-section * {
+            .svm-printable-section,
+            .svm-printable-section * {
               visibility: visible !important;
             }
-            .apsara-printable-section {
+            .svm-printable-section {
               position: absolute !important;
               left: 0 !important;
               top: 0 !important;
@@ -101,7 +101,7 @@ export const BillPrintModal: React.FC<BillPrintModalProps> = ({ open, onClose, b
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
-            .apsara-no-print {
+            .svm-no-print {
               display: none !important;
             }
             @page {
@@ -130,7 +130,7 @@ export const BillPrintModal: React.FC<BillPrintModalProps> = ({ open, onClose, b
       >
         {/* Modal Top Bar */}
         <Box
-          className="apsara-no-print"
+          className="svm-no-print"
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -191,7 +191,7 @@ export const BillPrintModal: React.FC<BillPrintModalProps> = ({ open, onClose, b
         >
           <Box
             ref={printAreaRef}
-            className="apsara-printable-section"
+            className="svm-printable-section"
             sx={{
               backgroundColor: '#FFFFFF',
               boxShadow: '0 4px 24px rgba(0, 0, 0, 0.1)',
@@ -207,7 +207,7 @@ export const BillPrintModal: React.FC<BillPrintModalProps> = ({ open, onClose, b
 
         {/* Modal Bottom Actions */}
         <DialogActions
-          className="apsara-no-print"
+          className="svm-no-print"
           sx={{
             px: { xs: 2, sm: 3 },
             py: 2,

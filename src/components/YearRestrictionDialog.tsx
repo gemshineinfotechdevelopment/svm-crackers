@@ -31,7 +31,7 @@ export const triggerYearRestrictionDialog = (options: YearRestrictionDialogDetai
   const isFuture = options.isFutureYear ?? (Number(selYear) > Number(currentSysYear));
 
   window.dispatchEvent(
-    new CustomEvent<YearRestrictionDialogDetail>('apsara_show_year_restriction', {
+    new CustomEvent<YearRestrictionDialogDetail>('svm_show_year_restriction', {
       detail: {
         selectedYear: selYear,
         currentSystemYear: currentSysYear,
@@ -68,9 +68,9 @@ export const YearRestrictionDialog: React.FC = () => {
       }
     };
 
-    window.addEventListener('apsara_show_year_restriction', handleShowDialog);
+    window.addEventListener('svm_show_year_restriction', handleShowDialog);
     return () => {
-      window.removeEventListener('apsara_show_year_restriction', handleShowDialog);
+      window.removeEventListener('svm_show_year_restriction', handleShowDialog);
     };
   }, []);
 

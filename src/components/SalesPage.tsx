@@ -131,15 +131,15 @@ export const SalesPage: FC<SalesPageProps> = ({ onNewEstimate, onNewQuotation, o
       fetchBills();
     };
 
-    window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
+    window.addEventListener('svm_settings_updated', handleSettingsUpdate);
     window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
-    window.addEventListener('apsara_bill_year_changed', handleYearChange);
-    window.addEventListener('apsara_bill_saved', handleBillSaved);
+    window.addEventListener('svm_bill_year_changed', handleYearChange);
+    window.addEventListener('svm_bill_saved', handleBillSaved);
     return () => {
-      window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('svm_settings_updated', handleSettingsUpdate);
       window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
-      window.removeEventListener('apsara_bill_year_changed', handleYearChange);
-      window.removeEventListener('apsara_bill_saved', handleBillSaved);
+      window.removeEventListener('svm_bill_year_changed', handleYearChange);
+      window.removeEventListener('svm_bill_saved', handleBillSaved);
     };
   }, []);
 

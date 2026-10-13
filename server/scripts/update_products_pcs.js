@@ -55,7 +55,6 @@ async function updateDbProducts(dbName) {
 
 async function main() {
   await updateDbProducts('svm_crackers');
-  await updateDbProducts('apsara_crackers_db');
   console.log('\nAll products updated with pcs successfully!');
   process.exit(0);
 }

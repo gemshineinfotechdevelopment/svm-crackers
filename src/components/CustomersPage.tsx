@@ -134,12 +134,12 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
     };
 
     window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
-    window.addEventListener('apsara_bill_year_changed', handleYearChange);
-    window.addEventListener('apsara_customers_updated', handleCustomersRefresh);
+    window.addEventListener('svm_bill_year_changed', handleYearChange);
+    window.addEventListener('svm_customers_updated', handleCustomersRefresh);
     return () => {
       window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
-      window.removeEventListener('apsara_bill_year_changed', handleYearChange);
-      window.removeEventListener('apsara_customers_updated', handleCustomersRefresh);
+      window.removeEventListener('svm_bill_year_changed', handleYearChange);
+      window.removeEventListener('svm_customers_updated', handleCustomersRefresh);
     };
   }, []);
 
@@ -207,7 +207,8 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
       const deletedCust = customers.find((c) => (c._id || c.id) === id);
       await CustomersApi.delete(id);
       setCustomers((prev) => prev.filter((c) => (c._id || c.id) !== id));
-      if (deletedCust && (localStorage.getItem('apsara_active_customer') === deletedCust.name || localStorage.getItem('varun_active_customer') === deletedCust.name)) {
+      if (deletedCust && (localStorage.getItem('svm_active_customer') === deletedCust.name || localStorage.getItem('apsara_active_customer') === deletedCust.name || localStorage.getItem('varun_active_customer') === deletedCust.name)) {
+        localStorage.removeItem('svm_active_customer');
         localStorage.removeItem('apsara_active_customer');
         localStorage.removeItem('varun_active_customer');
       }
@@ -235,7 +236,7 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
     const due = customer.pendingDue || 0;
     const storeSettings = getStoredSettings();
     setPaymentForm({
-      companyName: companies.length > 0 ? companies[0].name : (storeSettings.companyName || 'Apsara Crackers'),
+      companyName: companies.length > 0 ? companies[0].name : (storeSettings.companyName || 'SVM Crackers'),
       creditAmount: due > 0 ? String(due) : '',
       date: new Date().toLocaleDateString('en-GB').replace(/\//g, '-'),
     });

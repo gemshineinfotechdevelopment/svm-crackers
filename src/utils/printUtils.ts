@@ -1595,13 +1595,13 @@ export const printProductsListDirectly = (products: any[], categoryTitle?: strin
  */
 const triggerBrowserPrint = (htmlContent: string) => {
   // Clean up any existing iframe to avoid stale listeners or stacked frames
-  const existingIframe = document.getElementById('apsara-print-iframe');
+  const existingIframe = document.getElementById('svm-print-iframe');
   if (existingIframe) {
     existingIframe.remove();
   }
 
   const iframe = document.createElement('iframe');
-  iframe.id = 'apsara-print-iframe';
+  iframe.id = 'svm-print-iframe';
   iframe.style.position = 'fixed';
   iframe.style.right = '0';
   iframe.style.bottom = '0';

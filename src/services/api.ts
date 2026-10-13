@@ -46,7 +46,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   // Retrieve auth token if stored
   const token = typeof window !== 'undefined'
-    ? localStorage.getItem('svm_auth_token') || localStorage.getItem('apsara_auth_token')
+    ? localStorage.getItem('svm_auth_token')
     : null;
 
   const headers: Record<string, string> = {

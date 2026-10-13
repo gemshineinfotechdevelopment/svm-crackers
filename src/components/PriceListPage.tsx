@@ -146,7 +146,7 @@ export const PriceListPage: FC = () => {
   // Uploaded Documents List (Persisted in localStorage)
   const [uploadedDocs, setUploadedDocs] = useState<UploadedPriceDoc[]>(() => {
     try {
-      const saved = localStorage.getItem('apsara_uploaded_price_docs') || localStorage.getItem('varun_uploaded_price_docs') || localStorage.getItem('dheeksha_uploaded_price_docs');
+      const saved = localStorage.getItem('svm_uploaded_price_docs') || localStorage.getItem('apsara_uploaded_price_docs') || localStorage.getItem('varun_uploaded_price_docs') || localStorage.getItem('dheeksha_uploaded_price_docs');
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -169,7 +169,8 @@ export const PriceListPage: FC = () => {
   const saveDocsList = (docs: UploadedPriceDoc[]) => {
     setUploadedDocs(docs);
     try {
-      localStorage.setItem('apsara_uploaded_price_docs', JSON.stringify(docs));
+      localStorage.setItem('svm_uploaded_price_docs', JSON.stringify(docs));
+      localStorage.removeItem('apsara_uploaded_price_docs');
       localStorage.removeItem('varun_uploaded_price_docs');
       localStorage.removeItem('dheeksha_uploaded_price_docs');
     } catch (err) {
@@ -219,10 +220,10 @@ export const PriceListPage: FC = () => {
       }
     };
     window.addEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
-    window.addEventListener('apsara_bill_year_changed', handleGlobalYear);
+    window.addEventListener('svm_bill_year_changed', handleGlobalYear);
     return () => {
       window.removeEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
-      window.removeEventListener('apsara_bill_year_changed', handleGlobalYear);
+      window.removeEventListener('svm_bill_year_changed', handleGlobalYear);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

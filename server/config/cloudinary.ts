@@ -51,7 +51,7 @@ export const isCloudinaryConfigured = (): boolean => {
  */
 export const uploadToCloudinary = async (
   fileBase64: string,
-  folder = 'apsara_crackers/bills',
+  folder = 'svm_crackers/bills',
   filename?: string
 ): Promise<{ secure_url: string; public_id: string }> => {
   initCloudinary();

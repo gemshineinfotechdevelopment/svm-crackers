@@ -238,9 +238,9 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill }) =>
     const handleSettingsUpdate = () => {
       setStoreSettings(getStoredSettings());
     };
-    window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
+    window.addEventListener('svm_settings_updated', handleSettingsUpdate);
     return () => {
-      window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('svm_settings_updated', handleSettingsUpdate);
     };
   }, []);
 

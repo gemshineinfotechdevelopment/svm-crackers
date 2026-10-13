@@ -2,10 +2,10 @@
  * Single Unified Year Management Utilities for Financial/Calendar Year Billing & Products
  */
 
-export const SELECTED_YEAR_STORAGE_KEY = 'apsara_selected_year';
-export const SELECTED_BILL_YEAR_STORAGE_KEY = 'apsara_selected_bill_year';
-export const YEAR_CHANGE_EVENT = 'apsara_year_changed';
-export const BILL_YEAR_CHANGE_EVENT = 'apsara_bill_year_changed';
+export const SELECTED_YEAR_STORAGE_KEY = 'svm_selected_year';
+export const SELECTED_BILL_YEAR_STORAGE_KEY = 'svm_selected_bill_year';
+export const YEAR_CHANGE_EVENT = 'svm_year_changed';
+export const BILL_YEAR_CHANGE_EVENT = 'svm_bill_year_changed';
 
 export interface BillYearOption {
   year: string;

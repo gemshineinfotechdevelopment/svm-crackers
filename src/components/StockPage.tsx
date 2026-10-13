@@ -152,13 +152,13 @@ export const StockPage: FC = () => {
 
     window.addEventListener(YEAR_CHANGE_EVENT, handleYearChange);
     window.addEventListener(BILL_YEAR_CHANGE_EVENT, handleYearChange);
-    window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
+    window.addEventListener('svm_settings_updated', handleSettingsUpdate);
     window.addEventListener('storage', handleSettingsUpdate);
 
     return () => {
       window.removeEventListener(YEAR_CHANGE_EVENT, handleYearChange);
       window.removeEventListener(BILL_YEAR_CHANGE_EVENT, handleYearChange);
-      window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('svm_settings_updated', handleSettingsUpdate);
       window.removeEventListener('storage', handleSettingsUpdate);
     };
   }, []);

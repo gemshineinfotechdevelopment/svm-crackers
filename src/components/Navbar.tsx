@@ -33,7 +33,7 @@ import AltRouteRoundedIcon from '@mui/icons-material/AltRouteRounded';
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
-import defaultApsaraLogo from '../assets/logo.png';
+import defaultSvmLogo from '../assets/logo.png';
 import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { HealthApi, API_BASE_URL } from '../services/api';
 import {
@@ -96,9 +96,9 @@ export const Navbar: FC<NavbarProps> = ({
     const handleSettingsUpdate = () => {
       setCompanySettings(getStoredSettings());
     };
-    window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
+    window.addEventListener('svm_settings_updated', handleSettingsUpdate);
     return () => {
-      window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('svm_settings_updated', handleSettingsUpdate);
     };
   }, []);
 
@@ -176,7 +176,7 @@ export const Navbar: FC<NavbarProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box
             component="img"
-            src={companySettings.logoUrl || defaultApsaraLogo}
+            src={companySettings.logoUrl || defaultSvmLogo}
             alt="Logo"
             sx={{
               width: 18,

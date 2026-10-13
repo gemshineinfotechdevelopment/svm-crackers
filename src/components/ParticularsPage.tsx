@@ -1168,7 +1168,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         );
       }
 
-      window.dispatchEvent(new Event('apsara_bill_saved'));
+      window.dispatchEvent(new Event('svm_bill_saved'));
       setSnackbarOpen(true);
 
       // Refresh next bill number for fresh quotations

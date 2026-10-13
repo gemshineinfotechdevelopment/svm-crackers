@@ -197,7 +197,7 @@ export const formatDisplayDate = (dateVal: string | Date | undefined, style: 'dm
 
 export const getStoredSettings = (): CompanySettings => {
   try {
-    const saved = localStorage.getItem('apsara_app_settings') || localStorage.getItem('varun_app_settings') || localStorage.getItem('dheeksha_app_settings');
+    const saved = localStorage.getItem('svm_app_settings') || localStorage.getItem('apsara_app_settings') || localStorage.getItem('varun_app_settings') || localStorage.getItem('dheeksha_app_settings');
     const currentYear = new Date().getFullYear();
     if (saved) {
       const parsed = JSON.parse(saved);
@@ -348,8 +348,8 @@ export const SettingsPage: React.FC = () => {
             systemYear: sysYear,
           };
           setSettings(remoteSettings);
-          localStorage.setItem('apsara_app_settings', JSON.stringify(remoteSettings));
-          window.dispatchEvent(new Event('apsara_settings_updated'));
+          localStorage.setItem('svm_app_settings', JSON.stringify(remoteSettings));
+          window.dispatchEvent(new Event('svm_settings_updated'));
         }
       } catch (err) {
         console.warn('Could not fetch settings from backend, using local storage:', err);
@@ -467,8 +467,8 @@ export const SettingsPage: React.FC = () => {
         billingStatus: 'Active',
       };
 
-      localStorage.setItem('apsara_app_settings', JSON.stringify(savePayload));
-      window.dispatchEvent(new Event('apsara_settings_updated'));
+      localStorage.setItem('svm_app_settings', JSON.stringify(savePayload));
+      window.dispatchEvent(new Event('svm_settings_updated'));
 
       const saveRes = await SettingsApi.update(savePayload);
       const data = (saveRes && typeof saveRes === 'object' && 'data' in saveRes && saveRes.data) ? saveRes.data : saveRes;
@@ -502,8 +502,8 @@ export const SettingsPage: React.FC = () => {
           systemYear: syncedSysYear,
         };
         setSettings(syncedSettings);
-        localStorage.setItem('apsara_app_settings', JSON.stringify(syncedSettings));
-        window.dispatchEvent(new Event('apsara_settings_updated'));
+        localStorage.setItem('svm_app_settings', JSON.stringify(syncedSettings));
+        window.dispatchEvent(new Event('svm_settings_updated'));
       }
 
       setToast({
@@ -535,8 +535,8 @@ export const SettingsPage: React.FC = () => {
         systemYear: serverSystemYear,
       };
       setSettings(resetSettings);
-      localStorage.setItem('apsara_app_settings', JSON.stringify(resetSettings));
-      window.dispatchEvent(new Event('apsara_settings_updated'));
+      localStorage.setItem('svm_app_settings', JSON.stringify(resetSettings));
+      window.dispatchEvent(new Event('svm_settings_updated'));
       try {
         await SettingsApi.update(resetSettings);
       } catch (e) {

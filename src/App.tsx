@@ -18,18 +18,18 @@ import { SettingsApi } from './services/api';
 import { YearRestrictionDialog } from './components/YearRestrictionDialog';
 import { type ProductSubPage } from './types/productSubPages';
 
-const ACTIVE_TAB_KEY = 'apsara_active_tab';
-const CUSTOMER_SUBVIEW_KEY = 'apsara_customer_subview';
+const ACTIVE_TAB_KEY = 'svm_active_tab';
+const CUSTOMER_SUBVIEW_KEY = 'svm_customer_subview';
 const PRODUCT_SUBPAGE_KEY = 'svm_product_subpage';
 
 const VALID_TABS = ['All Customers', 'Sales', 'Estimate', 'Product', 'Quotation', 'Categories', 'Stock', 'GST Bill', 'Despatch', 'Settings'] as const;
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return Boolean(localStorage.getItem('apsara_auth_token'));
+    return Boolean(localStorage.getItem('svm_auth_token') || localStorage.getItem('apsara_auth_token'));
   });
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
-    const saved = localStorage.getItem(ACTIVE_TAB_KEY);
+    const saved = localStorage.getItem(ACTIVE_TAB_KEY) || localStorage.getItem('apsara_active_tab');
     if (saved === 'Billing') return 'Estimate';
     if (saved && VALID_TABS.includes(saved as NavTab)) {
       return saved as NavTab;
@@ -49,7 +49,7 @@ function App() {
     return 'product-Retail sales';
   });
   const [customerSubView, setCustomerSubView] = useState<'list' | 'add'>(() => {
-    const saved = localStorage.getItem(CUSTOMER_SUBVIEW_KEY);
+    const saved = localStorage.getItem(CUSTOMER_SUBVIEW_KEY) || localStorage.getItem('apsara_customer_subview');
     return saved === 'list' ? 'list' : 'list';
   });
   const [selectedCustomerName, setSelectedCustomerName] = useState<string>('');
@@ -64,10 +64,12 @@ function App() {
 
   useEffect(() => {
     // Clear legacy sticky customer & stale cache if present
-    ['varun_active_customer', 'dheeksha_active_customer', 'varun_gst_bills_history', 
-     'dheeksha_gst_bills_history', 'varun_draft_bill', 'dheeksha_draft_bill',
-     'varun_app_settings', 'dheeksha_app_settings', 'varun_auth_token', 'dheeksha_auth_token',
-     'varun_auth_user', 'dheeksha_auth_user'].forEach(key => localStorage.removeItem(key));
+    ['varun_active_customer', 'dheeksha_active_customer', 'apsara_active_customer',
+     'varun_gst_bills_history', 'dheeksha_gst_bills_history', 
+     'varun_draft_bill', 'dheeksha_draft_bill', 'apsara_draft_bill',
+     'varun_app_settings', 'dheeksha_app_settings', 'apsara_app_settings',
+     'varun_auth_token', 'dheeksha_auth_token', 'apsara_auth_token',
+     'varun_auth_user', 'dheeksha_auth_user', 'apsara_auth_user'].forEach(key => localStorage.removeItem(key));
 
     const updateTitle = () => {
       const settings = getStoredSettings();
@@ -99,8 +101,8 @@ function App() {
             gstin: data.gstin || DEFAULT_COMPANY_SETTINGS.gstin,
             licNo: data.licNo || DEFAULT_COMPANY_SETTINGS.licNo,
           };
-          localStorage.setItem('apsara_app_settings', JSON.stringify(remoteSettings));
-          window.dispatchEvent(new Event('apsara_settings_updated'));
+          localStorage.setItem('svm_app_settings', JSON.stringify(remoteSettings));
+          window.dispatchEvent(new Event('svm_settings_updated'));
           updateTitle();
         }
       })
@@ -108,9 +110,9 @@ function App() {
         console.warn('Could not connect to settings API on startup:', err);
       });
 
-    window.addEventListener('apsara_settings_updated', updateTitle);
+    window.addEventListener('svm_settings_updated', updateTitle);
     return () => {
-      window.removeEventListener('apsara_settings_updated', updateTitle);
+      window.removeEventListener('svm_settings_updated', updateTitle);
     };
   }, []);
 
@@ -119,7 +121,8 @@ function App() {
   };
 
   const handleLogout = () => {
-    ['apsara_auth_token', 'apsara_auth_user', 'apsara_active_customer', 'apsara_draft_bill',
+    ['svm_auth_token', 'svm_auth_user', 'svm_active_customer', 'svm_draft_bill',
+     'apsara_auth_token', 'apsara_auth_user', 'apsara_active_customer', 'apsara_draft_bill',
      'varun_auth_token', 'dheeksha_auth_token', 'varun_auth_user', 'dheeksha_auth_user',
      'varun_active_customer', 'dheeksha_active_customer',
      ACTIVE_TAB_KEY, CUSTOMER_SUBVIEW_KEY].forEach(key => localStorage.removeItem(key));

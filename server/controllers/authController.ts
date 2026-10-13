@@ -48,7 +48,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     // If no admin exists in DB at all, auto seed and re-fetch
     if (!admin) {
       const totalAdmins = await Admin.countDocuments();
-      if (totalAdmins === 0 && (cleanUsername === 'admin' || cleanUsername === 'apsara')) {
+      if (totalAdmins === 0 && (cleanUsername === 'admin' || cleanUsername === 'svm')) {
         admin = await Admin.create({
           username: cleanUsername,
           password: hashedPassword,

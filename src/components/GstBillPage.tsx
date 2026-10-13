@@ -139,9 +139,9 @@ export const GstBillPage: FC = () => {
     const handleSettingsUpdate = () => {
       setStoreSettings(getStoredSettings());
     };
-    window.addEventListener('apsara_settings_updated', handleSettingsUpdate);
+    window.addEventListener('svm_settings_updated', handleSettingsUpdate);
     return () => {
-      window.removeEventListener('apsara_settings_updated', handleSettingsUpdate);
+      window.removeEventListener('svm_settings_updated', handleSettingsUpdate);
     };
   }, []);
 
@@ -678,10 +678,10 @@ export const GstBillPage: FC = () => {
     };
 
     window.addEventListener(YEAR_CHANGE_EVENT, handleGlobalYearChange);
-    window.addEventListener('apsara_bill_year_changed', handleGlobalYearChange);
+    window.addEventListener('svm_bill_year_changed', handleGlobalYearChange);
     return () => {
       window.removeEventListener(YEAR_CHANGE_EVENT, handleGlobalYearChange);
-      window.removeEventListener('apsara_bill_year_changed', handleGlobalYearChange);
+      window.removeEventListener('svm_bill_year_changed', handleGlobalYearChange);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
