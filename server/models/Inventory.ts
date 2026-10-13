@@ -20,7 +20,7 @@ export interface IInventory extends Document {
 
 const InventorySchema: Schema = new Schema(
   {
-    sku: { type: String, trim: true, sparse: true },
+    sku: { type: String, trim: true },
     productName: { type: String, required: true, trim: true },
     shopStock: { type: Number, default: 0 },
     godownStock: { type: Number, default: 0 },
@@ -42,7 +42,7 @@ const InventorySchema: Schema = new Schema(
 );
 
 InventorySchema.index({ productName: 1 });
-InventorySchema.index({ sku: 1 });
+InventorySchema.index({ sku: 1 }, { sparse: true });
 InventorySchema.index({ year: 1 });
 
 export const Inventory = mongoose.model<IInventory>('Inventory', InventorySchema, 'inventories');

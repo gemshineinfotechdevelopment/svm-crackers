@@ -20,7 +20,7 @@ export interface IProduct extends Document {
 const ProductSchema: Schema = new Schema(
   {
     slNo: { type: Number, required: true },
-    sku: { type: String, trim: true, sparse: true },
+    sku: { type: String, trim: true },
     name: { type: String, required: true, trim: true },
     category: { type: String, trim: true, default: 'General' },
     rate: { type: Number, default: 0 },
@@ -42,5 +42,6 @@ const ProductSchema: Schema = new Schema(
 
 ProductSchema.index({ productType: 1, name: 1 });
 ProductSchema.index({ year: 1, slNo: 1 });
+ProductSchema.index({ sku: 1 }, { sparse: true });
 
 export const Product = mongoose.model<IProduct>('Product', ProductSchema);
