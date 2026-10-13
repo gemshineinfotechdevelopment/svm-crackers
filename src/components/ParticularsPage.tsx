@@ -19,6 +19,7 @@ import {
   DialogActions,
   Snackbar,
   Alert,
+  Chip,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
@@ -102,6 +103,7 @@ interface ProductCatalogOption {
   unit?: string;
   qty?: number;
   pcs?: number;
+  isOutOfStock?: boolean;
 }
 
 const findProductByCode = (code: string | undefined | null, options: ProductCatalogOption[]): ProductCatalogOption | null => {
@@ -566,7 +568,9 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         retailRate: rateVal,
         productType: p.productType,
         unit: p.unit || '1 Box',
-        qty: p.qty || 1,
+        qty: typeof p.qty === 'number' ? p.qty : (Number(p.qty) || 0),
+        pcs: typeof p.pcs === 'number' ? p.pcs : (Number(p.pcs) || 0),
+        isOutOfStock: Boolean(p.isOutOfStock || (typeof p.qty === 'number' && p.qty <= 0)),
       };
     });
 
@@ -936,7 +940,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setProductRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  // Helper to validate product quantities for Estimate billing mode
+  // Helper to validate product quantities and out-of-stock status for billing
   const validateEstimateQuantities = (rows: ProductRowItem[]): QtyWarningItem[] => {
     const problematic: QtyWarningItem[] = [];
     const validRows = rows.filter((r) => r.particular && r.particular.trim() !== '');
@@ -944,7 +948,24 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     validRows.forEach((r, idx) => {
       const q = parseFloat(r.quantity);
 
-      if (!r.quantity || isNaN(q) || q <= 0) {
+      // Check if product is Out of Stock
+      const matchedProd =
+        productOptions.find((p) => p.name.trim().toLowerCase() === r.particular.trim().toLowerCase()) ||
+        findProductByCode(r.code, productOptions);
+
+      if (matchedProd && (matchedProd.isOutOfStock || (typeof matchedProd.qty === 'number' && matchedProd.qty <= 0))) {
+        problematic.push({
+          slNo: idx + 1,
+          name: r.particular,
+          requestedQty: r.quantity || '0',
+          availableStock: 0,
+          unit: r.pktUnit,
+          issue: 'OUT_OF_STOCK',
+        });
+        return;
+      }
+
+      if (mode === 'ESTIMATE' && (!r.quantity || isNaN(q) || q <= 0)) {
         problematic.push({
           slNo: idx + 1,
           name: r.particular,
@@ -959,10 +980,13 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   };
 
   const showQuantityWarningDialog = (items: QtyWarningItem[]) => {
+    const hasOutOfStock = items.some((i) => i.issue === 'OUT_OF_STOCK');
     setQtyWarningDialog({
       open: true,
-      title: '⚠️ Product Quantity Missing',
-      message: 'In Estimate billing, each product must have a valid quantity (minimum 1). Please enter quantity for the following product(s):',
+      title: hasOutOfStock ? '⚠️ Cannot Bill - Product Out of Stock' : '⚠️ Product Quantity Missing',
+      message: hasOutOfStock
+        ? 'The following product(s) are OUT OF STOCK and cannot be billed. Please update stock in Product Master or remove them from the bill:'
+        : 'In Estimate billing, each product must have a valid quantity (minimum 1). Please enter quantity for the following product(s):',
       items,
     });
   };
@@ -970,6 +994,22 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   // Add selected product from top product bar
   const handleAddProductFromBar = (prod: ProductCatalogOption | null, qtyVal: string = quickQty) => {
     if (!prod) return;
+
+    // Block adding Out of Stock product
+    const isOut = Boolean(prod.isOutOfStock || (typeof prod.qty === 'number' && prod.qty <= 0));
+    if (isOut) {
+      showQuantityWarningDialog([
+        {
+          name: prod.name,
+          requestedQty: qtyVal || '1',
+          availableStock: 0,
+          unit: prod.unit || quickUnit || '1 Box',
+          issue: 'OUT_OF_STOCK',
+        },
+      ]);
+      return;
+    }
+
     const q = parseFloat(qtyVal);
 
     if (mode === 'ESTIMATE') {
@@ -1904,7 +1944,37 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               size="small"
               sx={{ flex: 1, minWidth: '220px' }}
               options={productOptions}
-              getOptionLabel={(opt) => `${opt.slNo ? `[#${opt.slNo}] ` : opt.sku ? `[${opt.sku}] ` : ''}${opt.name} - ₹${getRateForType(opt, rateType, Boolean(selectedPriceMap))}`}
+              getOptionDisabled={(opt) => Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0))}
+              getOptionLabel={(opt) => {
+                const isOut = Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0));
+                return `${opt.slNo ? `[#${opt.slNo}] ` : opt.sku ? `[${opt.sku}] ` : ''}${opt.name} - ₹${getRateForType(opt, rateType, Boolean(selectedPriceMap))}${isOut ? ' [OUT OF STOCK - CANNOT BILL]' : ''}`;
+              }}
+              renderOption={(props, opt) => {
+                const isOut = Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0));
+                return (
+                  <li
+                    {...props}
+                    key={opt.id || opt.name}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      opacity: isOut ? 0.6 : 1,
+                      backgroundColor: isOut ? '#FEF2F2' : undefined,
+                      cursor: isOut ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <span style={{ color: isOut ? '#DC2626' : 'inherit', textDecoration: isOut ? 'line-through' : 'none' }}>
+                      {opt.slNo ? `[#${opt.slNo}] ` : opt.sku ? `[${opt.sku}] ` : ''}{opt.name} - ₹{getRateForType(opt, rateType, Boolean(selectedPriceMap))}
+                    </span>
+                    {isOut && (
+                      <span style={{ fontSize: '10px', color: '#B91C1C', fontWeight: 800, backgroundColor: '#FEE2E2', border: '1px solid #FCA5A5', padding: '1px 6px', borderRadius: '3px', marginLeft: '6px' }}>
+                        OUT OF STOCK (CANNOT BILL)
+                      </span>
+                    )}
+                  </li>
+                );
+              }}
               filterOptions={(options, state) => {
                 const input = state.inputValue.toLowerCase().trim();
                 if (!input) return options;
@@ -1990,7 +2060,16 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                   handleAddProductFromBar(prod, quickQty);
                 }
               }}
-              disabled={!selectedCatalogProduct && !findProductByCode(quickCode, productOptions)}
+              disabled={
+                (!selectedCatalogProduct && !findProductByCode(quickCode, productOptions)) ||
+                Boolean(
+                  (selectedCatalogProduct && (selectedCatalogProduct.isOutOfStock || (typeof selectedCatalogProduct.qty === 'number' && selectedCatalogProduct.qty <= 0))) ||
+                  (() => {
+                    const m = findProductByCode(quickCode, productOptions);
+                    return m && (m.isOutOfStock || (typeof m.qty === 'number' && m.qty <= 0));
+                  })()
+                )
+              }
               size="small"
               sx={{
                 height: '26px',
@@ -2001,10 +2080,20 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                 px: 1.5,
                 textTransform: 'none',
                 '&:hover': { bgcolor: '#1E3A8A' },
-                '&:disabled': { bgcolor: '#E2E8F0', color: '#94A3B8' },
+                '&:disabled': {
+                  bgcolor: (selectedCatalogProduct?.isOutOfStock || findProductByCode(quickCode, productOptions)?.isOutOfStock) ? '#FEE2E2' : '#E2E8F0',
+                  color: (selectedCatalogProduct?.isOutOfStock || findProductByCode(quickCode, productOptions)?.isOutOfStock) ? '#DC2626' : '#94A3B8',
+                  border: (selectedCatalogProduct?.isOutOfStock || findProductByCode(quickCode, productOptions)?.isOutOfStock) ? '1px solid #FCA5A5' : undefined,
+                },
               }}
             >
-              Add Product ↵
+              {Boolean(
+                (selectedCatalogProduct && (selectedCatalogProduct.isOutOfStock || (typeof selectedCatalogProduct.qty === 'number' && selectedCatalogProduct.qty <= 0))) ||
+                (() => {
+                  const m = findProductByCode(quickCode, productOptions);
+                  return m && (m.isOutOfStock || (typeof m.qty === 'number' && m.qty <= 0));
+                })()
+              ) ? 'Out of Stock' : 'Add Product ↵'}
             </Button>
           </Box>
         </Box>
@@ -2537,24 +2626,39 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                       ₹ {getRateForType(prod, rateType, Boolean(selectedPriceMap))}
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center' }}>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        onClick={() => {
-                          setSelectedCatalogProduct(prod);
-                          if (prod.slNo) setQuickCode(String(prod.slNo));
-                          else if (prod.sku) setQuickCode(String(prod.sku));
-                          if (prod.unit) setQuickUnit(prod.unit);
-                          setProductCatalogModalOpen(false);
-                          setTimeout(() => {
-                            qtyInputRef.current?.focus();
-                            qtyInputRef.current?.select();
-                          }, 100);
-                        }}
-                        sx={{ fontSize: '11px', py: 0.2, px: 1, bgcolor: '#1E40AF' }}
-                      >
-                        Select
-                      </Button>
+                      {prod.isOutOfStock || (typeof prod.qty === 'number' && prod.qty <= 0) ? (
+                        <Chip
+                          size="small"
+                          label="Out of Stock"
+                          sx={{
+                            fontSize: '10.5px',
+                            fontWeight: 800,
+                            bgcolor: '#FEE2E2',
+                            color: '#DC2626',
+                            border: '1px solid #FCA5A5',
+                            height: '22px',
+                          }}
+                        />
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => {
+                            setSelectedCatalogProduct(prod);
+                            if (prod.slNo) setQuickCode(String(prod.slNo));
+                            else if (prod.sku) setQuickCode(String(prod.sku));
+                            if (prod.unit) setQuickUnit(prod.unit);
+                            setProductCatalogModalOpen(false);
+                            setTimeout(() => {
+                              qtyInputRef.current?.focus();
+                              qtyInputRef.current?.select();
+                            }, 100);
+                          }}
+                          sx={{ fontSize: '11px', py: 0.2, px: 1, bgcolor: '#1E40AF' }}
+                        >
+                          Select
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -2812,7 +2916,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                           border: '1px solid #FECACA',
                         }}
                       >
-                        Quantity Missing / 0
+                        {item.issue === 'OUT_OF_STOCK' ? 'Out of Stock (Cannot Bill)' : 'Quantity Missing / 0'}
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -2823,7 +2927,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
           <Box sx={{ mt: 2, p: 1.2, bgcolor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '6px' }}>
             <Typography sx={{ fontSize: '11.5px', color: '#92400E', fontWeight: 500 }}>
-              💡 <strong>Note:</strong> In Estimate billing, product quantity cannot be 0 or empty. Please enter a valid quantity (minimum 1) for each product to save the bill.
+              💡 <strong>Note:</strong> Out of Stock products cannot be billed. Please update stock in Product Master or remove them from the bill to proceed.
             </Typography>
           </Box>
         </DialogContent>

@@ -17,6 +17,7 @@ export interface RetailProductItem {
   unit: string;
   qty?: number;
   pcs?: number;
+  isOutOfStock?: boolean;
   productType: string;
   hsn?: string;
   year?: number;
@@ -82,8 +83,9 @@ export function getNormalizedRetailProducts(rawProducts: any[]): RetailProductIt
       rate,
       mrp,
       unit,
-      qty: typeof p.qty === 'number' && p.qty > 0 ? p.qty : 1,
+      qty: typeof p.qty === 'number' && p.qty >= 0 ? p.qty : (p.isOutOfStock ? 0 : 1),
       pcs: typeof p.pcs === 'number' && p.pcs >= 0 ? p.pcs : (Number(p.pcs) || 0),
+      isOutOfStock: Boolean(p.isOutOfStock || (typeof p.qty === 'number' && p.qty <= 0)),
       productType: p.productType || 'Retail',
       hsn,
       year: p.year ? Number(p.year) : undefined,

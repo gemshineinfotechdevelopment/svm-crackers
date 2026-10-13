@@ -38,7 +38,10 @@ export interface ProductSaleStat {
   rank: number;
   productName: string;
   category: string;
+  qty: number;
+  pcs: number;
   stockPcs: number;
+  isOutOfStock: boolean;
   totalQuantity: number;      // Units sold
   totalRevenue: number;
   billsCount: number;
@@ -75,7 +78,8 @@ export const extractBillYear = (bill: any): number => {
 
 export const StockPage: FC = () => {
   const [selectedYear, setSelectedYear] = useState<number>(() => getActiveBillingYear() || new Date().getFullYear());
-  const [sortBy, setSortBy] = useState<'quantity' | 'stock' | 'name'>('quantity');
+  const [sortBy, setSortBy] = useState<'quantity' | 'stock' | 'outofstock' | 'name'>('quantity');
+  const [stockStatusFilter, setStockStatusFilter] = useState<'ALL' | 'IN_STOCK' | 'OUT_OF_STOCK'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [loading, setLoading] = useState<boolean>(true);
@@ -175,17 +179,28 @@ export const StockPage: FC = () => {
 
   // Compute aggregated product sales statistics per year (ONLY for Estimate bills)
   const productStats = useMemo<ProductSaleStat[]>(() => {
-    const productCatalogMap = new Map<string, { productName: string; category: string; pcs: number }>();
+    const productCatalogMap = new Map<
+      string,
+      { productName: string; category: string; qty: number; pcs: number; stockPcs: number; isOutOfStock: boolean }
+    >();
 
     rawProducts.forEach((p: any) => {
       const rawName = String(p.name || '').trim();
       if (!rawName) return;
       const key = rawName.toLowerCase();
       if (!productCatalogMap.has(key)) {
+        const pQty = typeof p.qty === 'number' ? p.qty : (Number(p.qty) || 0);
+        const pPcs = typeof p.pcs === 'number' ? p.pcs : (Number(p.pcs) || 0);
+        const isOutOfStock = Boolean(p.isOutOfStock || pQty <= 0);
+        // Interconnected: Stock Pieces = Qty * Pcs
+        const stockPcs = isOutOfStock ? 0 : pQty * pPcs;
         productCatalogMap.set(key, {
           productName: rawName,
           category: p.category || 'General',
-          pcs: typeof p.pcs === 'number' ? p.pcs : (Number(p.pcs) || 0),
+          qty: pQty,
+          pcs: pPcs,
+          stockPcs,
+          isOutOfStock,
         });
       }
     });
@@ -195,7 +210,10 @@ export const StockPage: FC = () => {
       {
         productName: string;
         category: string;
+        qty: number;
+        pcs: number;
         stockPcs: number;
+        isOutOfStock: boolean;
         totalQuantity: number;
         totalRevenue: number;
         billsCount: number;
@@ -208,7 +226,10 @@ export const StockPage: FC = () => {
       statsMap.set(key, {
         productName: item.productName,
         category: item.category,
-        stockPcs: item.pcs,
+        qty: item.qty,
+        pcs: item.pcs,
+        stockPcs: item.stockPcs,
+        isOutOfStock: item.isOutOfStock,
         totalQuantity: 0,
         totalRevenue: 0,
         billsCount: 0,
@@ -240,7 +261,10 @@ export const StockPage: FC = () => {
           const existing = statsMap.get(key) || {
             productName: catalogItem?.productName || name,
             category: catalogItem?.category || p.category || 'General',
-            stockPcs: catalogItem?.pcs || 0,
+            qty: catalogItem?.qty || 0,
+            pcs: catalogItem?.pcs || 0,
+            stockPcs: catalogItem?.stockPcs || 0,
+            isOutOfStock: catalogItem?.isOutOfStock || false,
             totalQuantity: 0,
             totalRevenue: 0,
             billsCount: 0,
@@ -261,7 +285,10 @@ export const StockPage: FC = () => {
         rank: 1,
         productName: item.productName,
         category: item.category,
+        qty: item.qty,
+        pcs: item.pcs,
         stockPcs: item.stockPcs,
+        isOutOfStock: item.isOutOfStock,
         totalQuantity: item.totalQuantity,
         totalRevenue: item.totalRevenue,
         billsCount: item.billsCount,
@@ -273,6 +300,12 @@ export const StockPage: FC = () => {
     list.sort((a, b) => {
       if (sortBy === 'name') return a.productName.localeCompare(b.productName);
       if (sortBy === 'stock') return b.stockPcs - a.stockPcs;
+      if (sortBy === 'outofstock') {
+        const aOut = a.isOutOfStock || a.stockPcs === 0 ? 1 : 0;
+        const bOut = b.isOutOfStock || b.stockPcs === 0 ? 1 : 0;
+        if (bOut !== aOut) return bOut - aOut;
+        return a.productName.localeCompare(b.productName);
+      }
       return b.totalQuantity - a.totalQuantity;
     });
 
@@ -283,7 +316,7 @@ export const StockPage: FC = () => {
     }));
   }, [rawBills, rawProducts, selectedYear, sortBy]);
 
-  // Filtered stats by search term and category
+  // Filtered stats by search term, category, and out of stock status
   const filteredStats = useMemo(() => {
     return productStats.filter((item) => {
       const matchesSearch =
@@ -291,9 +324,13 @@ export const StockPage: FC = () => {
         item.category.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory =
         selectedCategory === 'ALL' || item.category.toLowerCase() === selectedCategory.toLowerCase();
-      return matchesSearch && matchesCategory;
+      const matchesStockStatus =
+        stockStatusFilter === 'ALL' ||
+        (stockStatusFilter === 'OUT_OF_STOCK' && (item.isOutOfStock || item.stockPcs === 0)) ||
+        (stockStatusFilter === 'IN_STOCK' && !item.isOutOfStock && item.stockPcs > 0);
+      return matchesSearch && matchesCategory && matchesStockStatus;
     });
-  }, [productStats, searchTerm, selectedCategory]);
+  }, [productStats, searchTerm, selectedCategory, stockStatusFilter]);
 
   // Summary Metrics
   const summaryMetrics = useMemo(() => {
@@ -301,6 +338,8 @@ export const StockPage: FC = () => {
     const totalStockPcs = productStats.reduce((sum, item) => sum + item.stockPcs, 0);
     const totalRev = productStats.reduce((sum, item) => sum + item.totalRevenue, 0);
     const totalBills = productStats.reduce((sum, item) => sum + item.billsCount, 0);
+    const outOfStockCount = productStats.filter((item) => item.isOutOfStock || item.stockPcs === 0).length;
+    const inStockCount = productStats.length - outOfStockCount;
     const topProduct = productStats[0] || null;
 
     return {
@@ -308,6 +347,8 @@ export const StockPage: FC = () => {
       totalStockPcs,
       totalRev,
       totalBills,
+      outOfStockCount,
+      inStockCount,
       topProduct,
       totalProductsCount: productStats.length,
     };
@@ -728,7 +769,7 @@ export const StockPage: FC = () => {
           )}
 
           {/* 2. Key Performance Metric Cards */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
             {/* 🏆 Top Product */}
             <Box
               sx={{
@@ -787,7 +828,7 @@ export const StockPage: FC = () => {
               </Box>
             </Box>
 
-            {/* 🏢 Total Stock Pcs */}
+            {/* 🏢 Total Stock Pcs (Qty × Pcs) */}
             <Box
               sx={{
                 bgcolor: '#FFFFFF',
@@ -811,13 +852,50 @@ export const StockPage: FC = () => {
                   {summaryMetrics.totalStockPcs.toLocaleString('en-IN')} Pcs
                 </Typography>
                 <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
-                  Current Inventory
+                  Qty × Pcs Interconnected
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* ⚠️ Out of Stock Products */}
+            <Box
+              onClick={() => setStockStatusFilter((prev) => (prev === 'OUT_OF_STOCK' ? 'ALL' : 'OUT_OF_STOCK'))}
+              sx={{
+                bgcolor: summaryMetrics.outOfStockCount > 0 ? '#FEF2F2' : '#FFFFFF',
+                border: summaryMetrics.outOfStockCount > 0 ? '1px solid #FCA5A5' : '1px solid #E2E8F0',
+                borderRadius: '8px',
+                p: 1.8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                '&:hover': {
+                  borderColor: '#DC2626',
+                  transform: 'translateY(-1px)',
+                },
+              }}
+              title="Click to toggle Out of Stock filter"
+            >
+              <Box sx={{ p: 1.2, bgcolor: summaryMetrics.outOfStockCount > 0 ? '#FEE2E2' : '#F1F5F9', borderRadius: '8px', display: 'flex', fontSize: '24px' }}>
+                ⚠️
+              </Box>
+              <Box>
+                <Typography sx={{ fontSize: '11px', fontWeight: 700, color: summaryMetrics.outOfStockCount > 0 ? '#B91C1C' : '#64748B', textTransform: 'uppercase' }}>
+                  Out of Stock
+                </Typography>
+                <Typography sx={{ fontSize: '18px', fontWeight: 800, color: summaryMetrics.outOfStockCount > 0 ? '#DC2626' : '#0F172A' }}>
+                  {summaryMetrics.outOfStockCount} Products
+                </Typography>
+                <Typography sx={{ fontSize: '11px', color: summaryMetrics.outOfStockCount > 0 ? '#991B1B' : '#64748B', fontWeight: 600 }}>
+                  {stockStatusFilter === 'OUT_OF_STOCK' ? 'Showing filtered' : `${summaryMetrics.inStockCount} In Stock`}
                 </Typography>
               </Box>
             </Box>
           </Box>
 
-          {/* 3. Table Header Controls (Search, Category Filter, Sort Filter) */}
+          {/* 3. Table Header Controls (Search, Category Filter, Stock Status Filter, Sort Filter) */}
           <Box
             sx={{
               bgcolor: '#FFFFFF',
@@ -831,8 +909,8 @@ export const StockPage: FC = () => {
               gap: 1.5,
             }}
           >
-            {/* Search Box */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {/* Search Box & Filters */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
               <Box
                 sx={{
                   display: 'flex',
@@ -842,7 +920,7 @@ export const StockPage: FC = () => {
                   borderRadius: '3px',
                   px: 1,
                   height: '30px',
-                  width: { xs: '180px', sm: '240px' },
+                  width: { xs: '160px', sm: '210px' },
                 }}
               >
                 <SearchRoundedIcon sx={{ fontSize: 16, color: '#64748B', mr: 0.5 }} />
@@ -885,6 +963,28 @@ export const StockPage: FC = () => {
                   </option>
                 ))}
               </select>
+
+              {/* Stock Status Dropdown Filter */}
+              <select
+                value={stockStatusFilter}
+                onChange={(e) => setStockStatusFilter(e.target.value as any)}
+                style={{
+                  height: '30px',
+                  backgroundColor: stockStatusFilter === 'OUT_OF_STOCK' ? '#FEF2F2' : '#FFFFFF',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: stockStatusFilter === 'OUT_OF_STOCK' ? '#DC2626' : stockStatusFilter === 'IN_STOCK' ? '#16A34A' : '#334155',
+                  borderRadius: '3px',
+                  border: stockStatusFilter === 'OUT_OF_STOCK' ? '1px solid #FCA5A5' : '1px solid #CBD5E1',
+                  padding: '2px 8px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="ALL">📦 All Stock Status</option>
+                <option value="IN_STOCK">✅ In Stock Only</option>
+                <option value="OUT_OF_STOCK">⚠️ Out of Stock Only</option>
+              </select>
             </Box>
 
             {/* Sort Options & Count */}
@@ -910,6 +1010,7 @@ export const StockPage: FC = () => {
               >
                 <option value="quantity">🔥 Most Sold Units (Qty)</option>
                 <option value="stock">🏢 Most Stock Pcs</option>
+                <option value="outofstock">⚠️ Out of Stock First</option>
                 <option value="name">🔤 Product Name (A-Z)</option>
               </select>
 
@@ -937,7 +1038,7 @@ export const StockPage: FC = () => {
                   <TableCell align="center" sx={{ width: '55px' }}>Rank</TableCell>
                   <TableCell>Product Name</TableCell>
                   <TableCell sx={{ width: '150px' }}>Category</TableCell>
-                  <TableCell align="center" sx={{ width: '140px' }}>Stock Pcs (இருப்பு)</TableCell>
+                  <TableCell align="center" sx={{ width: '160px' }}>Stock Pcs</TableCell>
                   <TableCell align="right" sx={{ width: '160px' }}>Units Sold (Qty)</TableCell>
                 </TableRow>
               </TableHead>
@@ -953,6 +1054,7 @@ export const StockPage: FC = () => {
                     const isTop1 = item.rank === 1;
                     const isTop2 = item.rank === 2;
                     const isTop3 = item.rank === 3;
+                    const isItemOutOfStock = item.isOutOfStock || item.stockPcs === 0;
 
                     return (
                       <TableRow
@@ -985,7 +1087,7 @@ export const StockPage: FC = () => {
 
                         {/* Product Name */}
                         <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flexWrap: 'wrap' }}>
                             <Typography sx={{ fontSize: '13px', fontWeight: 800, color: isTop1 ? '#B45309' : '#0F172A' }}>
                               {item.productName}
                             </Typography>
@@ -994,6 +1096,13 @@ export const StockPage: FC = () => {
                                 size="small"
                                 label="🏆 Top Seller"
                                 sx={{ height: '18px', fontSize: '9.5px', fontWeight: 800, bgcolor: '#FEF08A', color: '#854D0E' }}
+                              />
+                            )}
+                            {isItemOutOfStock && (
+                              <Chip
+                                size="small"
+                                label="⚠️ Out of Stock"
+                                sx={{ height: '18px', fontSize: '9.5px', fontWeight: 800, bgcolor: '#FEE2E2', color: '#B91C1C', border: '1px solid #FCA5A5' }}
                               />
                             )}
                           </Box>
@@ -1015,20 +1124,45 @@ export const StockPage: FC = () => {
                           />
                         </TableCell>
 
-                        {/* Stock Pcs */}
+                        {/* Stock Pcs (Interconnected Qty × Pcs) */}
                         <TableCell align="center">
-                          <Chip
-                            size="small"
-                            label={`${item.stockPcs.toLocaleString('en-IN')} Pcs`}
-                            sx={{
-                              height: '22px',
-                              fontSize: '11px',
-                              fontWeight: 800,
-                              bgcolor: '#EFF6FF',
-                              color: '#1D4ED8',
-                              border: '1px solid #BFDBFE',
-                            }}
-                          />
+                          {isItemOutOfStock ? (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.2 }}>
+                              <Chip
+                                size="small"
+                                label="Out of Stock"
+                                sx={{
+                                  height: '22px',
+                                  fontSize: '10.5px',
+                                  fontWeight: 800,
+                                  bgcolor: '#FEE2E2',
+                                  color: '#B91C1C',
+                                  border: '1px solid #FCA5A5',
+                                }}
+                              />
+                              <Typography sx={{ fontSize: '10px', color: '#94A3B8' }}>
+                                {item.qty} Qty × {item.pcs} Pcs
+                              </Typography>
+                            </Box>
+                          ) : (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.2 }}>
+                              <Chip
+                                size="small"
+                                label={`${item.stockPcs.toLocaleString('en-IN')} Pcs`}
+                                sx={{
+                                  height: '22px',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                  bgcolor: '#EFF6FF',
+                                  color: '#1D4ED8',
+                                  border: '1px solid #BFDBFE',
+                                }}
+                              />
+                              <Typography sx={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
+                                {item.qty} Qty × {item.pcs} Pcs
+                              </Typography>
+                            </Box>
+                          )}
                         </TableCell>
 
                         {/* Units Sold */}

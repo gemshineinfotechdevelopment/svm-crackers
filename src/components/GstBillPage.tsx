@@ -19,6 +19,7 @@ import {
   DialogActions,
   Snackbar,
   Alert,
+  Chip,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -88,7 +89,9 @@ export interface ProductCatalogOption {
   unit?: string;
   hsn?: string;
   category?: string;
+  qty?: number;
   pcs?: number;
+  isOutOfStock?: boolean;
 }
 
 export const getTodayDateString = (targetYear?: number) => {
@@ -569,7 +572,9 @@ export const GstBillPage: FC = () => {
         unit: p.unit || 'Case',
         hsn: p.hsn || '3604',
         category: p.category || 'General',
+        qty: typeof p.qty === 'number' ? p.qty : (Number(p.qty) || 0),
         pcs: typeof p.pcs === 'number' ? p.pcs : (Number(p.pcs) || 0),
+        isOutOfStock: Boolean(p.isOutOfStock || (typeof p.qty === 'number' && p.qty <= 0)),
       }));
 
       // Ensure "Assorted Crackers" option is available in the dropdown
@@ -906,6 +911,14 @@ export const GstBillPage: FC = () => {
 
   // Add product from top quick bar
   const handleAddProductFromBar = (prod: ProductCatalogOption) => {
+    // Block adding Out of Stock product
+    const isOut = Boolean(prod.isOutOfStock || (typeof prod.qty === 'number' && prod.qty <= 0));
+    if (isOut) {
+      setSnackbarMessage(`⚠️ Cannot Bill: "${prod.name}" is OUT OF STOCK! Please update stock in Product Master before billing.`);
+      setSnackbarOpen(true);
+      return;
+    }
+
     const qNum = parseFloat(quickQty) || 1;
     const rNum = parseFloat(quickRate) > 0 ? parseFloat(quickRate) : (prod.rate || 0);
     const amt = (qNum * rNum).toFixed(2);
@@ -965,8 +978,20 @@ export const GstBillPage: FC = () => {
   const handleTriggerAddProduct = (specificProd?: ProductCatalogOption) => {
     const prod = specificProd || selectedCatalogProduct || findProductByCode(quickCode);
     if (prod) {
+      const isOut = Boolean(prod.isOutOfStock || (typeof prod.qty === 'number' && prod.qty <= 0));
+      if (isOut) {
+        setSnackbarMessage(`⚠️ Cannot Bill: "${prod.name}" is OUT OF STOCK! Please update stock in Product Master before billing.`);
+        setSnackbarOpen(true);
+        return;
+      }
       handleAddProductFromBar(prod);
     } else if (quickCode.trim() || parseFloat(quickRate) > 0) {
+      const matched = findProductByCode(quickCode.trim());
+      if (matched && (matched.isOutOfStock || (typeof matched.qty === 'number' && matched.qty <= 0))) {
+        setSnackbarMessage(`⚠️ Cannot Bill: "${matched.name}" is OUT OF STOCK! Please update stock in Product Master before billing.`);
+        setSnackbarOpen(true);
+        return;
+      }
       const qNum = parseFloat(quickQty) || 1;
       const rNum = parseFloat(quickRate) || 0;
       const amt = (qNum * rNum).toFixed(2);
@@ -1210,6 +1235,22 @@ export const GstBillPage: FC = () => {
     const validProducts = productRows.filter((r) => r.particular.trim() !== '');
     if (validProducts.length === 0) {
       setSnackbarMessage('Please add at least one product with name');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    // Block saving if any product is Out of Stock
+    const outOfStockItems = validProducts.filter((r) => {
+      const match =
+        productOptions.find((p) => p.name.toLowerCase().trim() === r.particular.toLowerCase().trim()) ||
+        (r.code ? findProductByCode(r.code) : null);
+      return match && (match.isOutOfStock || (typeof match.qty === 'number' && match.qty <= 0));
+    });
+
+    if (outOfStockItems.length > 0) {
+      setSnackbarMessage(
+        `⚠️ Cannot Bill: Product(s) [${outOfStockItems.map((i) => i.particular).join(', ')}] are OUT OF STOCK! Please remove them or update stock.`
+      );
       setSnackbarOpen(true);
       return;
     }
@@ -2113,7 +2154,37 @@ export const GstBillPage: FC = () => {
                 size="small"
                 sx={{ flex: 1, minWidth: '200px' }}
                 options={productOptions}
-                getOptionLabel={(opt) => `${opt.code ? `[#${opt.code}] ` : ''}${opt.name} - ₹${opt.rate || 0}`}
+                getOptionDisabled={(opt) => Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0))}
+                getOptionLabel={(opt) => {
+                  const isOut = Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0));
+                  return `${opt.code ? `[#${opt.code}] ` : ''}${opt.name} - ₹${opt.rate || 0}${isOut ? ' [OUT OF STOCK - CANNOT BILL]' : ''}`;
+                }}
+                renderOption={(props, opt) => {
+                  const isOut = Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0));
+                  return (
+                    <li
+                      {...props}
+                      key={opt.id || opt.name}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        opacity: isOut ? 0.6 : 1,
+                        backgroundColor: isOut ? '#FEF2F2' : undefined,
+                        cursor: isOut ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <span style={{ color: isOut ? '#DC2626' : 'inherit', textDecoration: isOut ? 'line-through' : 'none' }}>
+                        {opt.code ? `[#${opt.code}] ` : ''}{opt.name} - ₹{opt.rate || 0}
+                      </span>
+                      {isOut && (
+                        <span style={{ fontSize: '10px', color: '#B91C1C', fontWeight: 800, backgroundColor: '#FEE2E2', border: '1px solid #FCA5A5', padding: '1px 6px', borderRadius: '3px', marginLeft: '6px' }}>
+                          OUT OF STOCK (CANNOT BILL)
+                        </span>
+                      )}
+                    </li>
+                  );
+                }}
                 value={selectedCatalogProduct}
                 onChange={(_, opt) => {
                   setSelectedCatalogProduct(opt);
@@ -2254,6 +2325,13 @@ export const GstBillPage: FC = () => {
 
               <Button
                 onClick={() => handleTriggerAddProduct()}
+                disabled={Boolean(
+                  (selectedCatalogProduct && (selectedCatalogProduct.isOutOfStock || (typeof selectedCatalogProduct.qty === 'number' && selectedCatalogProduct.qty <= 0))) ||
+                  (() => {
+                    const matched = findProductByCode(quickCode);
+                    return matched && (matched.isOutOfStock || (typeof matched.qty === 'number' && matched.qty <= 0));
+                  })()
+                )}
                 startIcon={<AddRoundedIcon sx={{ fontSize: 14 }} />}
                 size="small"
                 sx={{
@@ -2265,9 +2343,22 @@ export const GstBillPage: FC = () => {
                   fontWeight: 700,
                   ml: 'auto',
                   '&:hover': { bgcolor: '#DCE7F5' },
+                  '&:disabled': {
+                    bgcolor: '#FEE2E2',
+                    color: '#DC2626',
+                    borderColor: '#FCA5A5',
+                  },
                 }}
               >
-                Add Product
+                {Boolean(
+                  (selectedCatalogProduct && (selectedCatalogProduct.isOutOfStock || (typeof selectedCatalogProduct.qty === 'number' && selectedCatalogProduct.qty <= 0))) ||
+                  (() => {
+                    const matched = findProductByCode(quickCode);
+                    return matched && (matched.isOutOfStock || (typeof matched.qty === 'number' && matched.qty <= 0));
+                  })()
+                )
+                  ? 'Out of Stock'
+                  : 'Add Product'}
               </Button>
             </Box>
 
@@ -3103,27 +3194,42 @@ export const GstBillPage: FC = () => {
                       ₹ {prod.rate || 0}
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center' }}>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        onClick={() => {
-                          setSelectedCatalogProduct(prod);
-                          setQuickCode(prod.code || (prod.slNo !== undefined ? String(prod.slNo) : ''));
-                          setQuickUnit(prod.unit || 'Case');
-                          setQuickRate(String(prod.rate || 0));
-                          setQuickHsn(prod.hsn || '3604');
-                          const qVal = parseFloat(quickQty) || 1;
-                          setQuickPcs(prod.pcs ? String(Number(prod.pcs) * qVal) : '0');
-                          setProductCatalogModalOpen(false);
-                          setTimeout(() => {
-                            quickHsnInputRef.current?.focus();
-                            quickHsnInputRef.current?.select();
-                          }, 50);
-                        }}
-                        sx={{ fontSize: '11px', py: 0.2, px: 1, bgcolor: '#1E40AF' }}
-                      >
-                        Select
-                      </Button>
+                      {prod.isOutOfStock || (typeof prod.qty === 'number' && prod.qty <= 0) ? (
+                        <Chip
+                          size="small"
+                          label="Out of Stock"
+                          sx={{
+                            fontSize: '10.5px',
+                            fontWeight: 800,
+                            bgcolor: '#FEE2E2',
+                            color: '#DC2626',
+                            border: '1px solid #FCA5A5',
+                            height: '22px',
+                          }}
+                        />
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => {
+                            setSelectedCatalogProduct(prod);
+                            setQuickCode(prod.code || (prod.slNo !== undefined ? String(prod.slNo) : ''));
+                            setQuickUnit(prod.unit || 'Case');
+                            setQuickRate(String(prod.rate || 0));
+                            setQuickHsn(prod.hsn || '3604');
+                            const qVal = parseFloat(quickQty) || 1;
+                            setQuickPcs(prod.pcs ? String(Number(prod.pcs) * qVal) : '0');
+                            setProductCatalogModalOpen(false);
+                            setTimeout(() => {
+                              quickHsnInputRef.current?.focus();
+                              quickHsnInputRef.current?.select();
+                            }, 50);
+                          }}
+                          sx={{ fontSize: '11px', py: 0.2, px: 1, bgcolor: '#1E40AF' }}
+                        >
+                          Select
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
