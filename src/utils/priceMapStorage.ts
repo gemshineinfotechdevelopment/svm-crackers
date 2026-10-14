@@ -2,30 +2,7 @@ import { PriceMapsApi, type PriceMapRecord, type PriceMapRateItem } from '../ser
 
 export const DEFAULT_PRICE_MAP_NAMES = ['SVM', 'MSK', 'Manjula', 'Gift', 'MPS'];
 
-export const REFERENCE_RETAIL_PRODUCTS: PriceMapRateItem[] = [
-  { code: 1, productName: '4" Gold ganesh', quantity: 1, rate: 86 },
-  { code: 2, productName: '4" Dlx Laxmi', quantity: 1, rate: 64 },
-  { code: 3, productName: '4" Mega Dlx 20 Ply', quantity: 1, rate: 130 },
-  { code: 4, productName: '5" Lady Dlx', quantity: 1, rate: 100 },
-  { code: 5, productName: '5 Mega dlx', quantity: 1, rate: 120 },
-  { code: 6, productName: '6" Dlx', quantity: 1, rate: 140 },
-  { code: 7, productName: 'Kuruvi Crckers', quantity: 1, rate: 20 },
-  { code: 8, productName: '2 Sound', quantity: 1, rate: 100 },
-  { code: 9, productName: 'Gr Chakkar Big 10p', quantity: 1, rate: 80 },
-  { code: 10, productName: 'Gr Chakkar Spl', quantity: 1, rate: 150 },
-  { code: 11, productName: 'Gr Chakkar Dlx', quantity: 1, rate: 300 },
-  { code: 12, productName: 'Gr Chakkar Spinner', quantity: 1, rate: 250 },
-  { code: 13, productName: 'Tora Tora', quantity: 1, rate: 320 },
-  { code: 14, productName: 'Hot wheel', quantity: 1, rate: 500 },
-  { code: 15, productName: 'Wire chakkar', quantity: 1, rate: 400 },
-  { code: 16, productName: 'Whistling chakkar', quantity: 1, rate: 400 },
-  { code: 17, productName: 'Titto [6in1]', quantity: 1, rate: 260 },
-  { code: 18, productName: 'Lottus wheel', quantity: 1, rate: 350 },
-  { code: 19, productName: 'Flower pot small', quantity: 1, rate: 160 },
-  { code: 20, productName: 'Flowert pot big', quantity: 1, rate: 190 },
-  { code: 21, productName: 'Flower pot spl', quantity: 1, rate: 240 },
-  { code: 22, productName: 'Color koti', quantity: 1, rate: 490 },
-];
+export const REFERENCE_RETAIL_PRODUCTS: PriceMapRateItem[] = [];
 
 export const PRICEMAP_CHANGE_EVENT = 'svm_pricemaps_updated';
 
@@ -42,11 +19,11 @@ export const getLocalPriceMaps = (year?: number | string): PriceMapRecord[] => {
     console.warn('Failed to parse price maps from localStorage', e);
   }
 
-  // Fallback defaults
+  // Fallback defaults with strictly empty rates (rates must come strictly from database)
   return DEFAULT_PRICE_MAP_NAMES.map((name) => ({
     name,
     year: year || new Date().getFullYear(),
-    rates: REFERENCE_RETAIL_PRODUCTS.map((r) => ({ ...r })),
+    rates: [],
   }));
 };
 

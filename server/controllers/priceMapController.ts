@@ -5,32 +5,6 @@ import { Product } from '../models/Product';
 // Default price map names as per Reference Image 1
 export const DEFAULT_PRICE_MAP_NAMES = ['SVM', 'MSK', 'Manjula', 'Gift', 'MPS'];
 
-// Reference products as per Reference Image 2
-export const REFERENCE_RETAIL_PRODUCTS = [
-  { code: 1, name: '4" Gold ganesh', quantity: 1, rate: 86 },
-  { code: 2, name: '4" Dlx Laxmi', quantity: 1, rate: 64 },
-  { code: 3, name: '4" Mega Dlx 20 Ply', quantity: 1, rate: 130 },
-  { code: 4, name: '5" Lady Dlx', quantity: 1, rate: 100 },
-  { code: 5, name: '5 Mega dlx', quantity: 1, rate: 120 },
-  { code: 6, name: '6" Dlx', quantity: 1, rate: 140 },
-  { code: 7, name: 'Kuruvi Crckers', quantity: 1, rate: 20 },
-  { code: 8, name: '2 Sound', quantity: 1, rate: 100 },
-  { code: 9, name: 'Gr Chakkar Big 10p', quantity: 1, rate: 80 },
-  { code: 10, name: 'Gr Chakkar Spl', quantity: 1, rate: 150 },
-  { code: 11, name: 'Gr Chakkar Dlx', quantity: 1, rate: 300 },
-  { code: 12, name: 'Gr Chakkar Spinner', quantity: 1, rate: 250 },
-  { code: 13, name: 'Tora Tora', quantity: 1, rate: 320 },
-  { code: 14, name: 'Hot wheel', quantity: 1, rate: 500 },
-  { code: 15, name: 'Wire chakkar', quantity: 1, rate: 400 },
-  { code: 16, name: 'Whistling chakkar', quantity: 1, rate: 400 },
-  { code: 17, name: 'Titto [6in1]', quantity: 1, rate: 260 },
-  { code: 18, name: 'Lottus wheel', quantity: 1, rate: 350 },
-  { code: 19, name: 'Flower pot small', quantity: 1, rate: 160 },
-  { code: 20, name: 'Flowert pot big', quantity: 1, rate: 190 },
-  { code: 21, name: 'Flower pot spl', quantity: 1, rate: 240 },
-  { code: 22, name: 'Color koti', quantity: 1, rate: 490 },
-];
-
 export const getPriceMaps = async (req: Request, res: Response): Promise<void> => {
   try {
     const year = req.query.year || new Date().getFullYear();
@@ -41,29 +15,7 @@ export const getPriceMaps = async (req: Request, res: Response): Promise<void> =
 
     let priceMaps = await PriceMap.find(query).sort({ createdAt: 1 });
 
-    // Ensure retail products are in Product collection on completely empty fresh DB
-    const retailCount = await Product.countDocuments({
-      $or: [{ productType: 'Retail' }, { productType: 'Both' }],
-    });
-    if (retailCount === 0) {
-      for (const p of REFERENCE_RETAIL_PRODUCTS) {
-        const exists = await Product.findOne({ name: p.name });
-        if (!exists) {
-          await Product.create({
-            slNo: p.code,
-            name: p.name,
-            rate: p.rate,
-            mrp: Math.round(p.rate * 1.25),
-            unit: 'Box',
-            productType: 'Retail',
-            category: 'General',
-            year: Number(year) || new Date().getFullYear(),
-          });
-        }
-      }
-    }
-
-    // Fetch active retail products
+    // Fetch active retail products directly from database ONLY (no static dummy data)
     const retailProducts = await Product.find({
       $or: [
         { productType: 'Retail' },
@@ -83,17 +35,17 @@ export const getPriceMaps = async (req: Request, res: Response): Promise<void> =
       retailMapByName.set(p.name.trim().toLowerCase(), p);
     });
 
-    // Auto-seed default price maps if none exist
+    // Auto-seed default price maps if none exist (rates strictly from database retail products, or empty)
     if (priceMaps.length === 0) {
-      console.log(`[PriceMap] No price maps found for year ${year}. Seeding default Price Maps...`);
+      console.log(`[PriceMap] No price maps found for year ${year}. Creating default Price Maps...`);
       const defaultDocs = DEFAULT_PRICE_MAP_NAMES.map((name) => ({
         name,
         year: Number(year) || new Date().getFullYear(),
-        rates: (retailProducts.length > 0 ? retailProducts : REFERENCE_RETAIL_PRODUCTS).map((p: any) => ({
-          productId: p._id ? String(p._id) : undefined,
-          code: p.slNo || p.code,
+        rates: retailProducts.map((p: any) => ({
+          productId: String(p._id),
+          code: p.slNo,
           productName: (p.name || '').trim(),
-          quantity: p.qty || p.quantity || 1,
+          quantity: p.qty || 1,
           rate: p.rate || 0,
         })),
       }));

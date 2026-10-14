@@ -32,7 +32,6 @@ import {
   fetchPriceMaps,
   syncPriceMaps,
   DEFAULT_PRICE_MAP_NAMES,
-  REFERENCE_RETAIL_PRODUCTS,
   PRICEMAP_CHANGE_EVENT,
 } from '../utils/priceMapStorage';
 import { type PriceMapRecord } from '../services/api';
@@ -89,7 +88,7 @@ export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({
         const initial = DEFAULT_PRICE_MAP_NAMES.map((name) => ({
           name,
           year,
-          rates: REFERENCE_RETAIL_PRODUCTS.map((r) => ({ ...r })),
+          rates: [],
         }));
         setPriceMaps(initial);
       }
@@ -146,7 +145,7 @@ export const PriceMapMasterPage: FC<PriceMapMasterPageProps> = ({
     const newEntry: PriceMapRecord = {
       name: trimmed,
       year: selectedYear,
-      rates: REFERENCE_RETAIL_PRODUCTS.map((r) => ({ ...r })),
+      rates: [],
     };
 
     const updated = [...priceMaps, newEntry];

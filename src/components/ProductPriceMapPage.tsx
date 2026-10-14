@@ -37,7 +37,6 @@ import {
   fetchPriceMaps,
   syncPriceMaps,
   DEFAULT_PRICE_MAP_NAMES,
-  REFERENCE_RETAIL_PRODUCTS,
   PRICEMAP_CHANGE_EVENT,
 } from '../utils/priceMapStorage';
 import { getNormalizedRetailProducts } from '../utils/productUtils';
@@ -513,7 +512,13 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
     const newRecord: PriceMapRecord = {
       name: trimmed,
       year: selectedYear,
-      rates: REFERENCE_RETAIL_PRODUCTS.map((r) => ({ ...r })),
+      rates: retailProducts.map((p) => ({
+        productId: p._id || p.id,
+        code: p.slNo,
+        productName: p.name,
+        quantity: p.qty || 1,
+        rate: p.rate || 0,
+      })),
     };
 
     const updated = [...priceMaps, newRecord];
