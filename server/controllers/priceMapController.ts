@@ -41,29 +41,11 @@ export const getPriceMaps = async (req: Request, res: Response): Promise<void> =
 
     let priceMaps = await PriceMap.find(query).sort({ createdAt: 1 });
 
-    // Auto-seed default price maps if none exist
-    if (priceMaps.length === 0) {
-      console.log(`[PriceMap] No price maps found for year ${year}. Seeding default Price Maps...`);
-      const defaultDocs = DEFAULT_PRICE_MAP_NAMES.map((name) => ({
-        name,
-        year: Number(year) || new Date().getFullYear(),
-        rates: REFERENCE_RETAIL_PRODUCTS.map((p) => ({
-          code: p.code,
-          productName: p.name,
-          quantity: p.quantity,
-          rate: p.rate,
-        })),
-      }));
-
-      await PriceMap.insertMany(defaultDocs);
-      priceMaps = await PriceMap.find(query).sort({ createdAt: 1 });
-    }
-
-    // Ensure retail products are in Product collection so website retail products list has them
+    // Ensure retail products are in Product collection on completely empty fresh DB
     const retailCount = await Product.countDocuments({
       $or: [{ productType: 'Retail' }, { productType: 'Both' }],
     });
-    if (retailCount < 10) {
+    if (retailCount === 0) {
       for (const p of REFERENCE_RETAIL_PRODUCTS) {
         const exists = await Product.findOne({ name: p.name });
         if (!exists) {
@@ -78,6 +60,119 @@ export const getPriceMaps = async (req: Request, res: Response): Promise<void> =
             year: Number(year) || new Date().getFullYear(),
           });
         }
+      }
+    }
+
+    // Fetch active retail products
+    const retailProducts = await Product.find({
+      $or: [
+        { productType: 'Retail' },
+        { productType: 'Both' },
+        { productType: { $exists: false } },
+        { productType: null },
+        { productType: '' },
+      ],
+    }).sort({ slNo: 1 });
+
+    const retailNames = new Set(retailProducts.map((p) => p.name.trim().toLowerCase()));
+    const retailIds = new Set(retailProducts.map((p) => String(p._id)));
+    const retailMapById = new Map<string, any>();
+    const retailMapByName = new Map<string, any>();
+    retailProducts.forEach((p) => {
+      retailMapById.set(String(p._id), p);
+      retailMapByName.set(p.name.trim().toLowerCase(), p);
+    });
+
+    // Auto-seed default price maps if none exist
+    if (priceMaps.length === 0) {
+      console.log(`[PriceMap] No price maps found for year ${year}. Seeding default Price Maps...`);
+      const defaultDocs = DEFAULT_PRICE_MAP_NAMES.map((name) => ({
+        name,
+        year: Number(year) || new Date().getFullYear(),
+        rates: (retailProducts.length > 0 ? retailProducts : REFERENCE_RETAIL_PRODUCTS).map((p: any) => ({
+          productId: p._id ? String(p._id) : undefined,
+          code: p.slNo || p.code,
+          productName: (p.name || '').trim(),
+          quantity: p.qty || p.quantity || 1,
+          rate: p.rate || 0,
+        })),
+      }));
+
+      await PriceMap.insertMany(defaultDocs);
+      priceMaps = await PriceMap.find(query).sort({ createdAt: 1 });
+    } else {
+      // Synchronize existing price maps with active retail products:
+      // 1. Remove deleted retail products
+      // 2. Add missing retail products (preserving custom rates)
+      // 3. Ensure productId and code are updated
+      let anyMapChanged = false;
+
+      for (const pm of priceMaps) {
+        let pmChanged = false;
+        const currentRates = pm.rates || [];
+
+        // Prune deleted products
+        const validRates = currentRates.filter((r) => {
+          const idValid = r.productId && retailIds.has(String(r.productId));
+          const nameValid = r.productName && retailNames.has(r.productName.trim().toLowerCase());
+          return idValid || nameValid;
+        });
+
+        if (validRates.length !== currentRates.length) {
+          pmChanged = true;
+        }
+
+        // Check each valid rate to ensure productId and code are up to date
+        const existingKeySet = new Set<string>();
+        for (const r of validRates) {
+          const matchedProd =
+            (r.productId && retailMapById.get(String(r.productId))) ||
+            (r.productName && retailMapByName.get(r.productName.trim().toLowerCase()));
+
+          if (matchedProd) {
+            if (!r.productId) {
+              r.productId = String(matchedProd._id);
+              pmChanged = true;
+            }
+            if (r.productName !== matchedProd.name.trim()) {
+              r.productName = matchedProd.name.trim();
+              pmChanged = true;
+            }
+            if (Number(r.code) !== Number(matchedProd.slNo)) {
+              r.code = matchedProd.slNo;
+              pmChanged = true;
+            }
+            existingKeySet.add(String(matchedProd._id));
+            existingKeySet.add(matchedProd.name.trim().toLowerCase());
+          }
+        }
+
+        // Add any active retail products missing from this price map
+        for (const p of retailProducts) {
+          const pId = String(p._id);
+          const pKey = p.name.trim().toLowerCase();
+          if (!existingKeySet.has(pId) && !existingKeySet.has(pKey)) {
+            validRates.push({
+              productId: pId,
+              code: p.slNo,
+              productName: p.name.trim(),
+              quantity: p.qty || 1,
+              rate: p.rate || 0,
+            });
+            pmChanged = true;
+          }
+        }
+
+        if (pmChanged) {
+          validRates.sort((a, b) => Number(a.code) - Number(b.code));
+          pm.rates = validRates;
+          await pm.save();
+          anyMapChanged = true;
+        }
+      }
+
+      if (anyMapChanged) {
+        priceMaps = await PriceMap.find(query).sort({ createdAt: 1 });
       }
     }
 
@@ -112,9 +207,31 @@ export const createPriceMap = async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    let initialRates = Array.isArray(rates) && rates.length > 0 ? rates : [];
+    if (initialRates.length === 0) {
+      // Auto-populate with current Retail products
+      const currentRetail = await Product.find({
+        $or: [
+          { productType: 'Retail' },
+          { productType: 'Both' },
+          { productType: { $exists: false } },
+          { productType: null },
+          { productType: '' },
+        ],
+      }).sort({ slNo: 1 });
+
+      initialRates = currentRetail.map((p) => ({
+        productId: String(p._id),
+        code: p.slNo,
+        productName: p.name.trim(),
+        quantity: p.qty || 1,
+        rate: p.rate || 0,
+      }));
+    }
+
     const newMap = await PriceMap.create({
       name: trimmedName,
-      rates: Array.isArray(rates) ? rates : [],
+      rates: initialRates,
       year: mapYear,
     });
 

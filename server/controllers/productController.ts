@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { Product } from '../models/Product';
 import PriceList from '../models/PriceList';
+import PriceMap from '../models/PriceMap';
 
 export const getProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -120,6 +121,47 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
       console.warn('[Sync Warning] Could not sync new product to price list:', e);
     }
 
+    // Sync to ALL PriceMaps if Retail or Both
+    try {
+      const isRetail = !product.productType || product.productType === 'Retail' || product.productType === 'Both';
+      if (isRetail) {
+        const cleanName = (product.name || '').trim();
+        const prodIdStr = String(product._id);
+        const targetYear = rest.year || new Date().getFullYear();
+
+        const priceMaps = await PriceMap.find({
+          $or: [{ year: targetYear }, { year: Number(targetYear) }, { year: String(targetYear) }],
+        });
+
+        // Also include all maps if year query returned empty
+        const mapsToUpdate = priceMaps.length > 0 ? priceMaps : await PriceMap.find({});
+
+        for (const pm of mapsToUpdate) {
+          const rates = pm.rates || [];
+          const exists = rates.some(
+            (r) =>
+              (r.productId && String(r.productId) === prodIdStr) ||
+              (r.productName && r.productName.trim().toLowerCase() === cleanName.toLowerCase())
+          );
+
+          if (!exists) {
+            rates.push({
+              productId: prodIdStr,
+              code: product.slNo,
+              productName: cleanName,
+              quantity: product.qty || 1,
+              rate: product.rate || 0,
+            });
+            rates.sort((a, b) => Number(a.code) - Number(b.code));
+            pm.rates = rates;
+            await pm.save();
+          }
+        }
+      }
+    } catch (pmErr) {
+      console.warn('[Sync to PriceMap Warning]:', pmErr);
+    }
+
     res.status(201).json({ success: true, data: product });
   } catch (error) {
     next(error);
@@ -135,6 +177,7 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
     }
 
     const oldName = oldProduct.name;
+    const oldSlNo = oldProduct.slNo;
     const { shopStock, godownStock, stock, ...updatePayload } = req.body;
 
     if (updatePayload.slNo && Number(updatePayload.slNo) > 0) {
@@ -180,6 +223,49 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
       console.warn('[Product Update Sync Warning]:', syncErr);
     }
 
+    // Sync update to ALL PriceMaps (preserving each price map's custom rates)
+    try {
+      const isRetail = !product.productType || product.productType === 'Retail' || product.productType === 'Both';
+      if (isRetail) {
+        const prodIdStr = String(product._id);
+        const cleanName = product.name.trim();
+        const oldClean = oldName.trim().toLowerCase();
+
+        const allMaps = await PriceMap.find({});
+        for (const pm of allMaps) {
+          let pmChanged = false;
+          const rates = pm.rates || [];
+
+          for (const r of rates) {
+            const isMatch =
+              (r.productId && String(r.productId) === prodIdStr) ||
+              (r.productName && r.productName.trim().toLowerCase() === oldClean) ||
+              (Number(r.code) === Number(oldSlNo));
+
+            if (isMatch) {
+              r.productId = prodIdStr;
+              r.productName = cleanName;
+              r.code = product.slNo;
+              r.quantity = product.qty || 1;
+              // Preserve custom rate for this price map, fallback if missing
+              if (r.rate === undefined || r.rate === null || r.rate === 0) {
+                r.rate = product.rate || 0;
+              }
+              pmChanged = true;
+            }
+          }
+
+          if (pmChanged) {
+            rates.sort((a, b) => Number(a.code) - Number(b.code));
+            pm.rates = rates;
+            await pm.save();
+          }
+        }
+      }
+    } catch (syncPmErr) {
+      console.warn('[Product Update PriceMap Sync Warning]:', syncPmErr);
+    }
+
     res.status(200).json({ success: true, data: product });
   } catch (error) {
     next(error);
@@ -194,14 +280,37 @@ export const deleteProduct = async (req: Request, res: Response, next: NextFunct
       return;
     }
 
+    const cleanName = (product.name || '').trim();
+    const prodIdStr = String(product._id);
+
     // Also remove from PriceList if present
     try {
-      if (product.name) {
-        const escapedName = product.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (cleanName) {
+        const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         await PriceList.deleteMany({ itemName: { $regex: new RegExp(`^${escapedName}$`, 'i') } });
       }
     } catch (err) {
       console.warn('[Delete Product Sync Warning]:', err);
+    }
+
+    // Delete product from ALL PriceMaps in database (both by productId and by productName)
+    try {
+      const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      await PriceMap.updateMany(
+        {},
+        {
+          $pull: {
+            rates: {
+              $or: [
+                ...(prodIdStr ? [{ productId: prodIdStr }] : []),
+                ...(cleanName ? [{ productName: { $regex: new RegExp(`^${escapedName}$`, 'i') } }] : []),
+              ],
+            },
+          },
+        }
+      );
+    } catch (pmErr) {
+      console.warn('[Delete Product PriceMap Sync Warning]:', pmErr);
     }
 
     res.status(200).json({ success: true, message: 'Product deleted successfully' });
@@ -218,8 +327,9 @@ export const bulkDeleteProducts = async (req: Request, res: Response, next: Next
       return;
     }
 
-    const prodsToDelete = await Product.find({ _id: { $in: ids } }).select('name');
-    const names = prodsToDelete.map((p) => p.name).filter(Boolean);
+    const prodsToDelete = await Product.find({ _id: { $in: ids } }).select('name _id');
+    const names = prodsToDelete.map((p) => (p.name || '').trim()).filter(Boolean);
+    const idStrs = prodsToDelete.map((p) => String(p._id));
 
     await Product.deleteMany({ _id: { $in: ids } });
 
@@ -230,6 +340,30 @@ export const bulkDeleteProducts = async (req: Request, res: Response, next: Next
       }
     } catch (err) {
       console.warn('[Bulk Delete Product Sync Warning]:', err);
+    }
+
+    // Sync bulk delete to ALL PriceMaps: completely remove deleted products from all price maps
+    try {
+      const nameRegexes = names.map((n) => ({
+        productName: { $regex: new RegExp(`^${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      }));
+
+      await PriceMap.updateMany(
+        {},
+        {
+          $pull: {
+            rates: {
+              $or: [
+                ...(idStrs.length > 0 ? [{ productId: { $in: idStrs } }] : []),
+                ...(names.length > 0 ? [{ productName: { $in: names } }] : []),
+                ...nameRegexes,
+              ],
+            },
+          },
+        }
+      );
+    } catch (pmErr) {
+      console.warn('[Bulk Delete PriceMap Sync Warning]:', pmErr);
     }
 
     res.status(200).json({ success: true, message: `${ids.length} products deleted successfully` });
@@ -305,6 +439,42 @@ export const bulkImportProducts = async (req: Request, res: Response, next: Next
     }
 
     const inserted = await Product.insertMany(formattedDocs, { ordered: false });
+
+    // Sync imported retail products to PriceMaps
+    try {
+      const retailInserted = inserted.filter(
+        (p: any) => !p.productType || p.productType === 'Retail' || p.productType === 'Both'
+      );
+      if (retailInserted.length > 0) {
+        const allMaps = await PriceMap.find({});
+        for (const pm of allMaps) {
+          const rates = pm.rates || [];
+          for (const p of retailInserted) {
+            const pId = String(p._id);
+            const pName = (p.name || '').trim();
+            const exists = rates.some(
+              (r) =>
+                (r.productId && String(r.productId) === pId) ||
+                (r.productName && r.productName.trim().toLowerCase() === pName.toLowerCase())
+            );
+            if (!exists) {
+              rates.push({
+                productId: pId,
+                code: p.slNo,
+                productName: pName,
+                quantity: p.qty || 1,
+                rate: p.rate || 0,
+              });
+            }
+          }
+          rates.sort((a, b) => Number(a.code) - Number(b.code));
+          pm.rates = rates;
+          await pm.save();
+        }
+      }
+    } catch (pmErr) {
+      console.warn('[Bulk Import PriceMap Sync Warning]:', pmErr);
+    }
 
     res.status(201).json({
       success: true,

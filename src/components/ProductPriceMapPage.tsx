@@ -107,7 +107,6 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
 
   // Edit Product Modal State in Step 2
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
   const [editingRow, setEditingRow] = useState<DisplayRetailRow | null>(null);
   const [editRateValue, setEditRateValue] = useState<string>('');
 
@@ -158,27 +157,37 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
 
     const currentMap = maps.find((m) => m.name.toLowerCase() === mapName.toLowerCase());
     const existingRatesMap = new Map<string, PriceMapRateItem>();
+    const existingRatesById = new Map<string, PriceMapRateItem>();
+    const existingRatesByCode = new Map<string, PriceMapRateItem>();
 
     if (currentMap && currentMap.rates) {
       currentMap.rates.forEach((r) => {
-        existingRatesMap.set(String(r.productName).trim().toLowerCase(), r);
+        if (r.productId) existingRatesById.set(String(r.productId), r);
+        if (r.productName) existingRatesMap.set(String(r.productName).trim().toLowerCase(), r);
+        if (r.code !== undefined && r.code !== null) existingRatesByCode.set(String(r.code).trim(), r);
       });
     }
 
     // Convert website retail products to display rows matching Product Master Retail Sales
     const retailList = getNormalizedRetailProducts(prods);
     const combinedRows: DisplayRetailRow[] = retailList.map((prod) => {
+      const pId = prod._id || prod.id;
       const pName = prod.name;
       const pKey = pName.toLowerCase();
-      const savedRateItem = existingRatesMap.get(pKey);
+      const pCode = String(prod.slNo);
+
+      const savedRateItem =
+        (pId && existingRatesById.get(String(pId))) ||
+        existingRatesMap.get(pKey) ||
+        existingRatesByCode.get(pCode);
 
       let rateVal = prod.rate;
-      if (savedRateItem && savedRateItem.rate !== undefined) {
-        rateVal = savedRateItem.rate;
+      if (savedRateItem && savedRateItem.rate !== undefined && savedRateItem.rate !== null && Number(savedRateItem.rate) > 0) {
+        rateVal = Number(savedRateItem.rate);
       }
 
       return {
-        productId: prod._id || prod.id,
+        productId: pId,
         code: prod.slNo,
         productName: pName,
         quantity: prod.qty || 1,
@@ -239,20 +248,24 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
     });
   };
 
-  // Inline rate editing in Step 2
-  const handleRateChange = (idx: number, newVal: string) => {
+  // Inline rate editing in Step 2 keyed by product code and name (not brittle array index)
+  const handleRateChange = (rowCode: number | string, rowName: string, newVal: string) => {
     const num = parseFloat(newVal);
-    const updated = [...tableRows];
-    updated[idx] = {
-      ...updated[idx],
-      rate: isNaN(num) ? 0 : num,
-    };
-    setTableRows(updated);
+    setTableRows((prev) =>
+      prev.map((r) => {
+        if (r.code === rowCode && r.productName === rowName) {
+          return {
+            ...r,
+            rate: isNaN(num) ? 0 : num,
+          };
+        }
+        return r;
+      })
+    );
   };
 
   // Open Edit Modal for a row
-  const handleOpenEditDialog = (row: DisplayRetailRow, idx: number) => {
-    setEditingRowIndex(idx);
+  const handleOpenEditDialog = (row: DisplayRetailRow) => {
     setEditingRow(row);
     setEditRateValue(String(row.rate));
     setEditModalOpen(true);
@@ -260,7 +273,7 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
 
   // Confirm Edit Rate Modal
   const handleConfirmEditRate = () => {
-    if (editingRowIndex === null || !editingRow) return;
+    if (!editingRow) return;
 
     const newRate = parseFloat(editRateValue);
     if (isNaN(newRate) || newRate < 0) {
@@ -268,17 +281,19 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
       return;
     }
 
-    const updated = [...tableRows];
-    updated[editingRowIndex] = {
-      ...updated[editingRowIndex],
-      rate: newRate,
-    };
-    setTableRows(updated);
+    setTableRows((prev) =>
+      prev.map((r) => {
+        if (r.code === editingRow.code && r.productName === editingRow.productName) {
+          return { ...r, rate: newRate };
+        }
+        return r;
+      })
+    );
     setEditModalOpen(false);
 
     setToast({
       open: true,
-      message: `Rate for "${editingRow.productName}" updated to ₹${newRate} for ${selectedPriceMap}. Remember to click Save!`,
+      message: `Rate for "${editingRow.productName}" updated to ₹${newRate} for ${selectedPriceMap}. Click "Save Rates" to persist!`,
       severity: 'success',
     });
   };
@@ -305,39 +320,10 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
     const rateNum = parseFloat(newProductRate) || 0;
     const qtyNum = Number(newProductQuantity) || 1;
 
-    const newRow: DisplayRetailRow = {
-      code: codeNum,
-      productName: trimmedName,
-      quantity: qtyNum,
-      rate: rateNum,
-    };
-
-    const updatedRows = [...tableRows, newRow].sort((a, b) => Number(a.code) - Number(b.code));
-    setTableRows(updatedRows);
-    setOpenAddProductDialog(false);
-
-    // Save to the current shop's price map
-    const ratesToSave: PriceMapRateItem[] = updatedRows.map((r) => ({
-      productId: r.productId,
-      code: r.code,
-      productName: r.productName,
-      quantity: r.quantity,
-      rate: r.rate,
-    }));
-
-    let updatedMaps = priceMaps.map((m) => {
-      if (m.name.toLowerCase() === selectedPriceMap.toLowerCase()) {
-        return { ...m, rates: ratesToSave };
-      }
-      return m;
-    });
-
-    setPriceMaps(updatedMaps);
-    await syncPriceMaps(updatedMaps, selectedYear);
-
-    // Persist to retail catalog in database
+    let newProdId = '';
+    // 1. Persist to Retail Sales catalog in database
     try {
-      await ProductsApi.create({
+      const createdRes = await ProductsApi.create({
         slNo: codeNum,
         name: trimmedName,
         rate: rateNum,
@@ -347,46 +333,110 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
         unit: 'Box',
         year: selectedYear,
       });
+      newProdId = (createdRes as any)?.data?._id || (createdRes as any)?._id || '';
     } catch (e) {
       console.warn('Could not persist product to main catalog:', e);
     }
 
+    const newRow: DisplayRetailRow = {
+      productId: newProdId,
+      code: codeNum,
+      productName: trimmedName,
+      quantity: qtyNum,
+      rate: rateNum,
+    };
+
+    const updatedRows = [...tableRows, newRow].sort((a, b) => Number(a.code) - Number(b.code));
+    setTableRows(updatedRows);
+    setRetailProducts((prev) => [...prev, { ...newRow, _id: newProdId, slNo: codeNum, name: trimmedName }]);
+    setOpenAddProductDialog(false);
+
+    // 2. Add to ALL price maps with initial rate
+    const newRateItem: PriceMapRateItem = {
+      productId: newProdId,
+      code: codeNum,
+      productName: trimmedName,
+      quantity: qtyNum,
+      rate: rateNum,
+    };
+
+    const updatedMaps = priceMaps.map((m) => {
+      const existing = (m.rates || []).filter(
+        (r) => r.productName.trim().toLowerCase() !== trimmedName.toLowerCase() && Number(r.code) !== codeNum
+      );
+      return {
+        ...m,
+        rates: [...existing, newRateItem].sort((a, b) => Number(a.code) - Number(b.code)),
+      };
+    });
+
+    setPriceMaps(updatedMaps);
+    await syncPriceMaps(updatedMaps, selectedYear);
+
     setToast({
       open: true,
-      message: `Product "${trimmedName}" added to ${selectedPriceMap}!`,
+      message: `Product "${trimmedName}" added to Retail Sales and all Price Maps!`,
       severity: 'success',
     });
   };
 
   // 2. User requirement: Delete product with custom dialog instead of localhost alert
-  const handleDeleteProductRow = (row: DisplayRetailRow, idx: number) => {
+  const handleDeleteProductRow = (row: DisplayRetailRow) => {
     setDeleteConfirmDialog({
       open: true,
-      title: 'Delete Product from Price Map',
-      message: `Are you sure you want to delete "${row.productName}" from ${selectedPriceMap}?`,
+      title: 'Delete Product',
+      message: `Are you sure you want to delete "${row.productName}" from Retail Sales and all Price Maps?`,
       onConfirm: async () => {
-        const updatedRows = tableRows.filter((_, i) => i !== idx);
-        setTableRows(updatedRows);
+        const cleanName = row.productName.trim().toLowerCase();
+
+        // 1. Remove from current view table rows
+        setTableRows((prev) =>
+          prev.filter((r) => r.code !== row.code && r.productName.trim().toLowerCase() !== cleanName)
+        );
         setDeleteConfirmDialog((prev) => ({ ...prev, open: false }));
 
-        const ratesToSave: PriceMapRateItem[] = updatedRows.map((r) => ({
-          productId: r.productId,
-          code: r.code,
-          productName: r.productName,
-          quantity: r.quantity,
-          rate: r.rate,
+        // 2. Remove from ALL price maps in local state & database
+        const updatedMaps = priceMaps.map((m) => ({
+          ...m,
+          rates: (m.rates || []).filter((r) => {
+            const idMatches = Boolean(row.productId && r.productId && String(r.productId) === String(row.productId));
+            const nameMatches = Boolean(cleanName && r.productName && r.productName.trim().toLowerCase() === cleanName);
+            const codeMatches = Boolean(Number(r.code) === Number(row.code));
+            return !idMatches && !nameMatches && !codeMatches;
+          }),
         }));
-
-        let updatedMaps = priceMaps.map((m) => {
-          if (m.name.toLowerCase() === selectedPriceMap.toLowerCase()) {
-            return { ...m, rates: ratesToSave };
-          }
-          return m;
-        });
 
         setPriceMaps(updatedMaps);
         await syncPriceMaps(updatedMaps, selectedYear);
-        setToast({ open: true, message: `"${row.productName}" deleted from ${selectedPriceMap}`, severity: 'success' });
+
+        // 3. Delete from backend Product Retail Sales collection
+        try {
+          if (row.productId) {
+            await ProductsApi.delete(row.productId);
+          } else {
+            const allProds = await ProductsApi.getAll(undefined, selectedYear, 'Retail');
+            const target = allProds.find(
+              (p: any) =>
+                p.name.trim().toLowerCase() === cleanName || Number(p.slNo) === Number(row.code)
+            );
+            if (target?._id || target?.id) {
+              await ProductsApi.delete(target._id || target.id);
+            }
+          }
+        } catch (e) {
+          console.warn('Error deleting product from database:', e);
+        }
+
+        // 4. Update retailProducts state
+        setRetailProducts((prev) =>
+          prev.filter((p) => p.name.trim().toLowerCase() !== cleanName && Number(p.slNo) !== Number(row.code))
+        );
+
+        setToast({
+          open: true,
+          message: `"${row.productName}" deleted from all Price Maps and Retail Sales`,
+          severity: 'success',
+        });
       },
     });
   };
@@ -1090,7 +1140,7 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
                                     type="number"
                                     value={row.rate === 0 ? '' : row.rate}
                                     placeholder="0"
-                                    onChange={(e) => handleRateChange(idx, e.target.value)}
+                                    onChange={(e) => handleRateChange(row.code, row.productName, e.target.value)}
                                     onClick={(e) => e.stopPropagation()}
                                     style={{
                                       width: '75px',
@@ -1116,7 +1166,7 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
                                       size="small"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleOpenEditDialog(row, idx);
+                                        handleOpenEditDialog(row);
                                       }}
                                       sx={{
                                         height: '24px',
@@ -1140,7 +1190,7 @@ export const ProductPriceMapPage: FC<ProductPriceMapPageProps> = ({
                                       size="small"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleDeleteProductRow(row, idx);
+                                        handleDeleteProductRow(row);
                                       }}
                                       sx={{
                                         color: '#DC2626',

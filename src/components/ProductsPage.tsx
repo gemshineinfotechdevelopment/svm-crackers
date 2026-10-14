@@ -47,6 +47,11 @@ import { PriceMapMasterPage } from './PriceMapMasterPage';
 import { ProductPriceMapPage } from './ProductPriceMapPage';
 import { type ProductSubPage } from '../types/productSubPages';
 import { getNormalizedRetailProducts } from '../utils/productUtils';
+import {
+  addProductToAllPriceMaps,
+  updateProductInAllPriceMaps,
+  removeProductFromAllPriceMaps,
+} from '../utils/priceMapStorage';
 
 export type ProductType = 'Retail' | 'Wholesale' | 'Both';
 
@@ -514,13 +519,41 @@ export const ProductsPage: FC<ProductsPageProps> = ({
       if (editingProduct) {
         const id = editingProduct._id || editingProduct.id || '';
         await ProductsApi.update(id, payload);
+        if (productType === 'Retail' || productType === 'Both') {
+          updateProductInAllPriceMaps(
+            {
+              id,
+              _id: id,
+              name: payload.name,
+              slNo: payload.slNo,
+              qty: payload.qty,
+              rate: payload.rate,
+            },
+            editingProduct.name,
+            selectedYear
+          );
+        }
         setToast({
           open: true,
           message: `Product "${payload.name}" updated successfully for ${productType}!`,
           severity: 'success',
         });
       } else {
-        await ProductsApi.create(payload);
+        const createdRes = await ProductsApi.create(payload);
+        if (productType === 'Retail' || productType === 'Both') {
+          const newId = (createdRes as any)?.data?._id || (createdRes as any)?._id;
+          addProductToAllPriceMaps(
+            {
+              id: newId,
+              _id: newId,
+              name: payload.name,
+              slNo: payload.slNo,
+              qty: payload.qty,
+              rate: payload.rate,
+            },
+            selectedYear
+          );
+        }
         setToast({
           open: true,
           message: `New product "${payload.name}" (S.No: ${payload.slNo}) added to ${productType}!`,
@@ -561,13 +594,17 @@ export const ProductsPage: FC<ProductsPageProps> = ({
   const executeBulkDelete = async () => {
     try {
       setBulkDeleting(true);
+      const prodsDeleted = products.filter((p) => selectedIds.includes(p._id || p.id || ''));
       await ProductsApi.bulkDelete(selectedIds);
+      prodsDeleted.forEach((p) => {
+        removeProductFromAllPriceMaps(p._id || p.id, p.name, selectedYear);
+      });
       setProducts((prev) => prev.filter((p) => !selectedIds.includes(p._id || p.id || '')));
       setSelectedIds([]);
       setBulkDeleteDialogOpen(false);
       setToast({
         open: true,
-        message: `${selectedIds.length} products deleted successfully`,
+        message: `${selectedIds.length} products deleted successfully from Retail Sales and all Price Maps`,
         severity: 'success',
       });
     } catch (err) {
@@ -598,11 +635,12 @@ export const ProductsPage: FC<ProductsPageProps> = ({
 
     try {
       await ProductsApi.delete(id);
+      removeProductFromAllPriceMaps(id, product.name, selectedYear);
       setProducts((prev) => prev.filter((p) => (p._id || p.id) !== id));
       setSelectedIds((prev) => prev.filter((i) => i !== id));
       setToast({
         open: true,
-        message: `Product "${product.name}" deleted.`,
+        message: `Product "${product.name}" deleted from Retail Sales and all Price Maps.`,
         severity: 'info',
       });
     } catch (err) {
