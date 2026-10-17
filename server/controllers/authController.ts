@@ -24,6 +24,17 @@ export const seedDefaultAdmin = async (): Promise<void> => {
       console.log(`       Password: ${defaultPassword}`);
       console.log('=============================================');
     }
+
+    // Ensure officetest admin user exists
+    const officeAdmin = await Admin.findOne({ username: 'officetest' });
+    if (!officeAdmin) {
+      await Admin.create({
+        username: 'officetest',
+        password: hashPassword('admin$123'),
+        role: 'admin',
+      });
+      console.log('[Auth] Admin user "officetest" seeded successfully (password: admin$123)');
+    }
   } catch (error) {
     console.error('[Auth Error] Failed to seed default admin:', error);
   }
@@ -91,6 +102,70 @@ export const getMe = async (_req: Request, res: Response, next: NextFunction): P
   try {
     const admin = await Admin.findOne().select('-password');
     res.status(200).json({ success: true, data: admin });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const changePassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { username, newPassword, confirmPassword, currentPassword } = req.body;
+
+    if (!newPassword || !String(newPassword).trim()) {
+      res.status(400).json({ success: false, error: 'New password is required' });
+      return;
+    }
+
+    const cleanNewPass = String(newPassword).trim();
+
+    if (confirmPassword !== undefined && cleanNewPass !== String(confirmPassword).trim()) {
+      res.status(400).json({ success: false, error: 'New password and confirm password do not match' });
+      return;
+    }
+
+    if (cleanNewPass.length < 4) {
+      res.status(400).json({ success: false, error: 'Password must be at least 4 characters long' });
+      return;
+    }
+
+    let admin = null;
+    if (username && String(username).trim()) {
+      const cleanUsername = String(username).trim().toLowerCase();
+      admin = await Admin.findOne({ username: cleanUsername });
+    }
+
+    if (!admin) {
+      // Fallback: update the first admin found
+      admin = await Admin.findOne();
+    }
+
+    if (!admin) {
+      res.status(404).json({ success: false, error: 'Admin user not found in database' });
+      return;
+    }
+
+    // Optional check: if currentPassword is provided, verify it
+    if (currentPassword && String(currentPassword).trim()) {
+      const cleanCurrent = String(currentPassword).trim();
+      const currentHashed = hashPassword(cleanCurrent);
+      const isMatch = admin.password === currentHashed || admin.password === cleanCurrent;
+      if (!isMatch) {
+        res.status(400).json({ success: false, error: 'Current password does not match' });
+        return;
+      }
+    }
+
+    admin.password = hashPassword(cleanNewPass);
+    await admin.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Password changed successfully for user "${admin.username}"`,
+      user: {
+        username: admin.username,
+        role: admin.role,
+      },
+    });
   } catch (error) {
     next(error);
   }

@@ -2,6 +2,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { initPwa } from './utils/pwaInstall'
+
+// Initialize PWA Service Worker & Install Listener
+initPwa();
 
 // Prevent mouse wheel from inadvertently changing values in number inputs
 if (typeof window !== 'undefined') {

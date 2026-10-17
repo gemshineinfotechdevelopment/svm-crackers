@@ -11,8 +11,12 @@ import {
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import GetAppRoundedIcon from '@mui/icons-material/GetAppRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import { AuthApi, SettingsApi } from '../services/api';
 import { getStoredSettings, DEFAULT_COMPANY_SETTINGS, type CompanySettings } from './SettingsPage';
+import { checkIsStandalone, canInstallPwa, promptPwaInstall, getDevicePlatform } from '../utils/pwaInstall';
+import { InstallAppModal } from './InstallAppModal';
 
 interface LoginPageProps {
   onLoginSuccess: (user: { username: string; role: string }) => void;
@@ -25,6 +29,36 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isInstalled, setIsInstalled] = useState<boolean>(() => checkIsStandalone());
+  const [installPromptReady, setInstallPromptReady] = useState<boolean>(() => canInstallPwa());
+  const [installModalOpen, setInstallModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const onPromptReady = () => setInstallPromptReady(true);
+    const onInstalled = () => {
+      setIsInstalled(true);
+      setInstallPromptReady(false);
+    };
+    window.addEventListener('pwa_prompt_ready', onPromptReady);
+    window.addEventListener('pwa_installed', onInstalled);
+    window.addEventListener('pwa_prompt_used', () => setInstallPromptReady(canInstallPwa()));
+
+    return () => {
+      window.removeEventListener('pwa_prompt_ready', onPromptReady);
+      window.removeEventListener('pwa_installed', onInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (canInstallPwa()) {
+      const outcome = await promptPwaInstall();
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+        return;
+      }
+    }
+    setInstallModalOpen(true);
+  };
 
   useEffect(() => {
     SettingsApi.get()
@@ -142,13 +176,29 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
             py: 0.8,
             display: 'flex',
             alignItems: 'center',
-            gap: 1,
+            justifyContent: 'space-between',
           }}
         >
-          <LockOutlinedIcon sx={{ fontSize: 18, color: '#1E3A8A' }} />
-          <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', letterSpacing: 0.2 }}>
-            {settings.companyName || 'S.V.M Fireworks Agencies'} - System Login
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <LockOutlinedIcon sx={{ fontSize: 18, color: '#1E3A8A' }} />
+            <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', letterSpacing: 0.2 }}>
+              {settings.companyName || 'S.V.M Fireworks Agencies'} - System Login
+            </Typography>
+          </Box>
+          {!isInstalled && (
+            <IconButton
+              size="small"
+              onClick={handleInstallClick}
+              title="Install Desktop / Mobile App"
+              sx={{
+                color: '#1E3A8A',
+                p: 0.4,
+                '&:hover': { backgroundColor: 'rgba(30, 58, 138, 0.08)' },
+              }}
+            >
+              <GetAppRoundedIcon sx={{ fontSize: 17 }} />
+            </IconButton>
+          )}
         </Box>
 
         <Box sx={{ p: 2.5 }}>
@@ -272,6 +322,67 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
             {loading ? <CircularProgress size={16} sx={{ color: '#FFFFFF' }} /> : 'Log In'}
           </Button>
 
+          {/* App Installation Section for Desktops, Laptops, Tablets & Mobiles */}
+          <Box sx={{ mt: 1.5 }}>
+            {!isInstalled ? (
+              <Box>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  onClick={handleInstallClick}
+                  startIcon={<GetAppRoundedIcon sx={{ fontSize: 18, color: '#1E3A8A' }} />}
+                  sx={{
+                    height: '36px',
+                    borderRadius: '3px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    borderColor: '#93C5FD',
+                    color: '#1E3A8A',
+                    backgroundColor: '#F0F7FF',
+                    boxShadow: '0 1px 2px rgba(30, 58, 138, 0.05)',
+                    '&:hover': {
+                      borderColor: '#1D4ED8',
+                      backgroundColor: '#E0F0FE',
+                    },
+                  }}
+                >
+                  {installPromptReady
+                    ? (getDevicePlatform() === 'windows' || getDevicePlatform() === 'mac'
+                        ? '⚡ Install Desktop App'
+                        : '⚡ Install Mobile App')
+                    : (getDevicePlatform() === 'windows' || getDevicePlatform() === 'mac'
+                        ? 'Install Desktop App'
+                        : 'Install Mobile App')}
+                </Button>
+                <Typography sx={{ fontSize: '10px', color: '#64748B', textAlign: 'center', mt: 0.5 }}>
+                  {getDevicePlatform() === 'windows' || getDevicePlatform() === 'mac'
+                    ? '💻 Adds SVM Crackers icon to your desktop screen'
+                    : '📱 Adds SVM Crackers icon to your home screen'}
+                </Typography>
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 0.6,
+                  py: 0.6,
+                  px: 1,
+                  backgroundColor: '#F0FDF4',
+                  border: '1px solid #BBF7D0',
+                  borderRadius: '3px',
+                }}
+              >
+                <CheckCircleRoundedIcon sx={{ fontSize: 15, color: '#16A34A' }} />
+                <Typography sx={{ fontSize: '11px', fontWeight: 700, color: '#16A34A' }}>
+                  SVM Crackers App Installed on this Device
+                </Typography>
+              </Box>
+            )}
+          </Box>
+
           <Box sx={{ mt: 2, pt: 1, borderTop: '1px solid #E2E8F0', textAlign: 'center' }}>
             <Typography sx={{ fontSize: '10.5px', color: '#64748B' }}>
               {settings.companyName || 'S.V.M Fireworks Agencies'} • Sivakasi
@@ -279,6 +390,13 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
           </Box>
         </Box>
       </Paper>
+
+      {/* PWA Device Installation Instructions Modal */}
+      <InstallAppModal
+        open={installModalOpen}
+        onClose={() => setInstallModalOpen(false)}
+        onInstalled={() => setIsInstalled(true)}
+      />
     </Box>
   );
 };

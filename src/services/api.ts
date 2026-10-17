@@ -270,6 +270,11 @@ export const AuthApi = {
       body: JSON.stringify(credentials),
     }),
   getMe: () => request<any>('/auth/me'),
+  changePassword: (data: { username?: string; currentPassword?: string; newPassword: string; confirmPassword?: string }) =>
+    request<{ success: boolean; message: string; user?: any }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 // Settings API

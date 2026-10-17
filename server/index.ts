@@ -123,6 +123,14 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/pricemaps', priceMapRoutes);
 app.use('/api/despatches', despatchRoutes);
 
+// 404 Handler for Unmatched API routes
+app.use('/api', (req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    error: `API route not found: ${req.method} ${req.originalUrl}`,
+  });
+});
+
 // Global Error Handler
 app.use(errorHandler);
 

@@ -33,6 +33,8 @@ import AltRouteRoundedIcon from '@mui/icons-material/AltRouteRounded';
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
+import LockResetRoundedIcon from '@mui/icons-material/LockResetRounded';
+import GetAppRoundedIcon from '@mui/icons-material/GetAppRounded';
 import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { HealthApi, API_BASE_URL } from '../services/api';
 import {
@@ -42,6 +44,9 @@ import {
   YEAR_CHANGE_EVENT,
 } from '../utils/yearContext';
 import { PRODUCT_SUB_PAGES, type ProductSubPage } from '../types/productSubPages';
+import { ChangePasswordModal } from './ChangePasswordModal';
+import { InstallAppModal } from './InstallAppModal';
+import { checkIsStandalone, canInstallPwa, promptPwaInstall } from '../utils/pwaInstall';
 
 export type NavTab = 'All Customers' | 'Sales' | 'Estimate' | 'Product' | 'Quotation' | 'Categories' | 'Stock' | 'GST Bill' | 'Despatch' | 'Settings';
 
@@ -69,11 +74,42 @@ export const Navbar: FC<NavbarProps> = ({
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [productMenuAnchorEl, setProductMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [installModalOpen, setInstallModalOpen] = useState(false);
+  const [isInstalled, setIsInstalled] = useState<boolean>(() => checkIsStandalone());
+  const [currentUsername, setCurrentUsername] = useState<string>('Administrator');
   const [companySettings, setCompanySettings] = useState<CompanySettings>(getStoredSettings);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [backendUrl, setBackendUrl] = useState<string>(API_BASE_URL);
   const [selectedYear, setSelectedYear] = useState<number>(getActiveBillingYear);
   const yearOptions = useMemo(() => getStandardYearOptions(), []);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('svm_auth_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.username) {
+          setCurrentUsername(parsed.username);
+        }
+      }
+    } catch {}
+
+    const onInstalled = () => setIsInstalled(true);
+    window.addEventListener('pwa_installed', onInstalled);
+    return () => window.removeEventListener('pwa_installed', onInstalled);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (canInstallPwa()) {
+      const outcome = await promptPwaInstall();
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+        return;
+      }
+    }
+    setInstallModalOpen(true);
+  };
 
   const checkBackendHealth = async () => {
     try {
@@ -481,8 +517,8 @@ export const Navbar: FC<NavbarProps> = ({
             <AdminPanelSettingsRoundedIcon sx={{ fontSize: 18, color: '#1E40AF' }} />
           </ListItemIcon>
           <Box>
-            <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
-              Administrator
+            <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', textTransform: 'capitalize' }}>
+              {currentUsername}
             </Typography>
             <Typography sx={{ fontSize: '10px', color: '#16A34A', fontWeight: 600 }}>
               System Ready
@@ -504,6 +540,39 @@ export const Navbar: FC<NavbarProps> = ({
             System Settings
           </Typography>
         </MenuItem>
+        {/* Change Password above Logout */}
+        <MenuItem
+          onClick={() => {
+            handleCloseMenu();
+            setChangePasswordOpen(true);
+          }}
+          sx={{ py: 0.8 }}
+        >
+          <ListItemIcon>
+            <LockResetRoundedIcon sx={{ fontSize: 16, color: '#1E40AF' }} />
+          </ListItemIcon>
+          <Typography sx={{ fontSize: '12.5px', fontWeight: 600, color: '#1E293B' }}>
+            Change Password
+          </Typography>
+        </MenuItem>
+
+        {/* Install Desktop App in Profile Menu */}
+        {!isInstalled && (
+          <MenuItem
+            onClick={() => {
+              handleCloseMenu();
+              handleInstallClick();
+            }}
+            sx={{ py: 0.8, backgroundColor: '#F0F9FF', '&:hover': { backgroundColor: '#E0F2FE' } }}
+          >
+            <ListItemIcon>
+              <GetAppRoundedIcon sx={{ fontSize: 16, color: '#0284C7' }} />
+            </ListItemIcon>
+            <Typography sx={{ fontSize: '12.5px', fontWeight: 700, color: '#0369A1' }}>
+              Install Desktop App
+            </Typography>
+          </MenuItem>
+        )}
         <MenuItem onClick={handleLogoutClick} sx={{ color: '#DC2626', py: 0.8 }}>
           <ListItemIcon>
             <LogoutRoundedIcon sx={{ fontSize: 16, color: '#DC2626' }} />
@@ -671,6 +740,19 @@ export const Navbar: FC<NavbarProps> = ({
           ))}
         </List>
       </Drawer>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        open={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+      />
+
+      {/* PWA Device Installation Instructions Modal */}
+      <InstallAppModal
+        open={installModalOpen}
+        onClose={() => setInstallModalOpen(false)}
+        onInstalled={() => setIsInstalled(true)}
+      />
     </Box>
   );
 };
