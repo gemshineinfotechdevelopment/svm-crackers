@@ -74,7 +74,7 @@ export const initVpsDatabase = async (): Promise<void> => {
       }
     }
 
-    // 1. Seed or Verify Default Admin
+    // 1. Seed or Verify Admin and Super Admin accounts
     const defaultUsername = (process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase();
     const defaultPassword = (process.env.ADMIN_PASSWORD || 'password123').trim();
     const existingAdmin = await Admin.findOne({ username: defaultUsername });
@@ -85,11 +85,39 @@ export const initVpsDatabase = async (): Promise<void> => {
         password: hashPassword(defaultPassword),
         role: 'admin',
       });
-      console.log(`\n👤 Default Admin Created:`);
-      console.log(`   Username: ${defaultUsername}`);
-      console.log(`   Password: ${defaultPassword}`);
+      console.log(`\n👤 Default Admin Created: ${defaultUsername}`);
     } else {
       console.log(`\n👤 Admin user already exists: ${existingAdmin.username}`);
+    }
+
+    // Super Admin 1: officetest
+    const existingOffice = await Admin.findOne({ username: 'officetest' });
+    if (!existingOffice) {
+      await Admin.create({
+        username: 'officetest',
+        password: hashPassword('admin$123'),
+        role: 'superadmin',
+      });
+      console.log(`👤 Super Admin Created: officetest`);
+    } else if (existingOffice.role !== 'superadmin') {
+      existingOffice.role = 'superadmin';
+      await existingOffice.save();
+      console.log(`👤 Super Admin Role Updated: officetest`);
+    }
+
+    // Super Admin 2: shana_maayo_16
+    const existingShana = await Admin.findOne({ username: 'shana_maayo_16' });
+    if (!existingShana) {
+      await Admin.create({
+        username: 'shana_maayo_16',
+        password: hashPassword('admin123'),
+        role: 'superadmin',
+      });
+      console.log(`👤 Super Admin Created: shana_maayo_16 (password: admin123)`);
+    } else if (existingShana.role !== 'superadmin') {
+      existingShana.role = 'superadmin';
+      await existingShana.save();
+      console.log(`👤 Super Admin Role Updated: shana_maayo_16`);
     }
 
     // 2. Seed Default Company (SVM Crackers) if none exists

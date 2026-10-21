@@ -270,7 +270,16 @@ export const AuthApi = {
       body: JSON.stringify(credentials),
     }),
   getMe: () => request<any>('/auth/me'),
-  changePassword: (data: { username?: string; currentPassword?: string; newPassword: string; confirmPassword?: string }) =>
+  getUsers: () =>
+    request<Array<{ username: string; role: string; updatedAt?: string; createdAt?: string }>>('/auth/users'),
+  changePassword: (data: {
+    operatorUsername?: string;
+    targetUsername?: string;
+    username?: string;
+    currentPassword?: string;
+    newPassword: string;
+    confirmPassword?: string;
+  }) =>
     request<{ success: boolean; message: string; user?: any }>('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify(data),

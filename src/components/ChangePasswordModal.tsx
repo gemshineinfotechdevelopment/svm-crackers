@@ -12,6 +12,10 @@ import {
   InputAdornment,
   Alert,
   CircularProgress,
+  MenuItem,
+  Select,
+  FormControl,
+  Chip,
 } from '@mui/material';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import LockResetRoundedIcon from '@mui/icons-material/LockResetRounded';
@@ -21,6 +25,7 @@ import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 import AdminPanelSettingsRoundedIcon from '@mui/icons-material/AdminPanelSettingsRounded';
 import KeyRoundedIcon from '@mui/icons-material/KeyRounded';
+import SecurityRoundedIcon from '@mui/icons-material/SecurityRounded';
 import { AuthApi } from '../services/api';
 
 interface ChangePasswordModalProps {
@@ -29,21 +34,37 @@ interface ChangePasswordModalProps {
   onSuccess?: () => void;
 }
 
-const getStoredUsername = (): string => {
+interface AdminUserItem {
+  username: string;
+  role: string;
+  updatedAt?: string;
+}
+
+const getStoredUser = (): { username: string; role: string } => {
   try {
     const stored = localStorage.getItem('svm_auth_user');
     if (stored) {
       const parsed = JSON.parse(stored);
-      if (parsed.username && typeof parsed.username === 'string') {
-        return parsed.username.trim().toLowerCase();
+      if (parsed.username) {
+        return {
+          username: String(parsed.username).trim().toLowerCase(),
+          role: String(parsed.role || 'admin').trim().toLowerCase(),
+        };
       }
     }
   } catch {}
-  return 'admin';
+  return { username: 'admin', role: 'admin' };
 };
 
 export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClose, onSuccess }) => {
-  const [targetUsername, setTargetUsername] = useState<string>(getStoredUsername);
+  const [operator, setOperator] = useState<{ username: string; role: string }>(getStoredUser);
+  const [targetUsername, setTargetUsername] = useState<string>('admin');
+  const [availableUsers, setAvailableUsers] = useState<AdminUserItem[]>([
+    { username: 'admin', role: 'admin' },
+    { username: 'officetest', role: 'superadmin' },
+    { username: 'shana_maayo_16', role: 'superadmin' },
+  ]);
+
   const [currentPassword, setCurrentPassword] = useState<string>('');
   const [newPassword, setNewPassword] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
@@ -53,13 +74,19 @@ export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClos
   const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
 
   const [loading, setLoading] = useState<boolean>(false);
+  const [fetchingUsers, setFetchingUsers] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [successMsg, setSuccessMsg] = useState<string>('');
 
-  // Reset fields on modal open
+  const isSuperAdmin = operator.role === 'superadmin' || operator.username === 'officetest' || operator.username === 'shana_maayo_16';
+
+  // Load active user and available admin accounts when modal opens
   useEffect(() => {
     if (open) {
-      setTargetUsername(getStoredUsername());
+      const activeUser = getStoredUser();
+      setOperator(activeUser);
+      setTargetUsername(activeUser.username || 'admin');
+
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -68,6 +95,22 @@ export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClos
       setShowConfirmPassword(false);
       setErrorMsg('');
       setSuccessMsg('');
+
+      // Fetch live admin accounts from database
+      setFetchingUsers(true);
+      AuthApi.getUsers()
+        .then((res: any) => {
+          const list = Array.isArray(res) ? res : res?.data;
+          if (Array.isArray(list) && list.length > 0) {
+            setAvailableUsers(list);
+          }
+        })
+        .catch((err) => {
+          console.warn('[ChangePasswordModal] Could not fetch user list:', err);
+        })
+        .finally(() => {
+          setFetchingUsers(false);
+        });
     }
   }, [open]);
 
@@ -76,49 +119,57 @@ export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClos
     setErrorMsg('');
     setSuccessMsg('');
 
-    const cleanUsername = targetUsername.trim().toLowerCase() || 'admin';
+    const cleanTarget = targetUsername.trim().toLowerCase();
     const cleanCurrentPass = currentPassword.trim();
     const cleanNewPass = newPassword.trim();
     const cleanConfirmPass = confirmPassword.trim();
 
+    if (!cleanTarget) {
+      setErrorMsg('Please select or specify a target admin username.');
+      return;
+    }
+
     if (!cleanNewPass) {
-      setErrorMsg('Please enter a new password');
+      setErrorMsg('Please enter a new password.');
       return;
     }
 
     if (cleanNewPass.length < 4) {
-      setErrorMsg('Password must be at least 4 characters long');
+      setErrorMsg('Password must be at least 4 characters long.');
       return;
     }
 
     if (!cleanConfirmPass) {
-      setErrorMsg('Please confirm your new password');
+      setErrorMsg('Please confirm your new password.');
       return;
     }
 
     if (cleanNewPass !== cleanConfirmPass) {
-      setErrorMsg('New password and confirm password do not match');
+      setErrorMsg('New password and confirm password do not match.');
       return;
     }
 
     setLoading(true);
     try {
       const res = await AuthApi.changePassword({
-        username: cleanUsername,
+        operatorUsername: operator.username,
+        targetUsername: cleanTarget,
         currentPassword: cleanCurrentPass || undefined,
         newPassword: cleanNewPass,
         confirmPassword: cleanConfirmPass,
       });
 
-      setSuccessMsg(res?.message || 'Password changed successfully in server database!');
+      setSuccessMsg(res?.message || `Password updated successfully in database for "${cleanTarget}"!`);
 
-      // Keep client session updated with the active admin username
-      try {
-        localStorage.setItem(
-          'svm_auth_user',
-          JSON.stringify({ username: cleanUsername, role: 'admin' })
-        );
-      } catch {}
+      // If user changed their own password, update local user storage
+      if (cleanTarget === operator.username) {
+        try {
+          localStorage.setItem(
+            'svm_auth_user',
+            JSON.stringify({ username: cleanTarget, role: operator.role })
+          );
+        } catch {}
+      }
 
       if (onSuccess) onSuccess();
 
@@ -133,6 +184,10 @@ export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClos
       setLoading(false);
     }
   };
+
+  const selectedTargetItem = availableUsers.find(
+    (u) => u.username.toLowerCase() === targetUsername.toLowerCase()
+  );
 
   return (
     <Dialog
@@ -166,7 +221,7 @@ export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClos
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <LockResetRoundedIcon sx={{ fontSize: 24, color: '#93C5FD' }} />
           <Typography sx={{ fontSize: '15px', fontWeight: 700, letterSpacing: '0.3px' }}>
-            Change Admin Password
+            {isSuperAdmin ? 'Admin & Super Admin Password Manager' : 'Change Password'}
           </Typography>
         </Box>
         <IconButton
@@ -186,29 +241,54 @@ export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClos
       {/* Form Content */}
       <form onSubmit={handleSubmit}>
         <DialogContent sx={{ p: 2.5, backgroundColor: '#FAFAFA' }}>
-          {/* User Info Card */}
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.5,
-              p: 1.25,
-              mb: 2,
-              backgroundColor: '#EFF6FF',
-              border: '1px solid #BFDBFE',
-              borderRadius: '6px',
-            }}
-          >
-            <AdminPanelSettingsRoundedIcon sx={{ fontSize: 22, color: '#1E40AF' }} />
-            <Box>
-              <Typography sx={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>
-                Updating Password In Server MongoDB:
-              </Typography>
-              <Typography sx={{ fontSize: '13px', color: '#1E3A8A', fontWeight: 700 }}>
-                User: &quot;{targetUsername || 'admin'}&quot; (Administrator)
-              </Typography>
+          {/* Super Admin Privileges Notice */}
+          {isSuperAdmin ? (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.25,
+                p: 1.25,
+                mb: 2,
+                backgroundColor: '#FEF3C7',
+                border: '1px solid #FCD34D',
+                borderRadius: '6px',
+              }}
+            >
+              <SecurityRoundedIcon sx={{ fontSize: 22, color: '#B45309' }} />
+              <Box>
+                <Typography sx={{ fontSize: '11px', color: '#92400E', fontWeight: 700 }}>
+                  👑 Super Admin Access: {operator.username}
+                </Typography>
+                <Typography sx={{ fontSize: '11.5px', color: '#78350F' }}>
+                  You can change the password for ANY admin account at any time.
+                </Typography>
+              </Box>
             </Box>
-          </Box>
+          ) : (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                p: 1.25,
+                mb: 2,
+                backgroundColor: '#EFF6FF',
+                border: '1px solid #BFDBFE',
+                borderRadius: '6px',
+              }}
+            >
+              <AdminPanelSettingsRoundedIcon sx={{ fontSize: 22, color: '#1E40AF' }} />
+              <Box>
+                <Typography sx={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>
+                  Logged-in User:
+                </Typography>
+                <Typography sx={{ fontSize: '13px', color: '#1E3A8A', fontWeight: 700 }}>
+                  {operator.username} (Administrator)
+                </Typography>
+              </Box>
+            </Box>
+          )}
 
           {/* Success Message */}
           {successMsg && (
@@ -232,77 +312,121 @@ export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClos
             </Alert>
           )}
 
-          {/* Target Admin Username */}
-          <Box sx={{ mb: 1.8 }}>
-            <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#334155', mb: 0.6 }}>
-              Admin Username *
-            </Typography>
-            <TextField
-              fullWidth
-              size="small"
-              value={targetUsername}
-              onChange={(e) => setTargetUsername(e.target.value)}
-              disabled={loading}
-              placeholder="e.g. admin"
-              slotProps={{
-                input: {
-                  sx: {
-                    fontSize: '13px',
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: '5px',
-                  },
-                },
-              }}
-            />
-          </Box>
-
-          {/* Current Password (Optional Verification) */}
-          <Box sx={{ mb: 1.8 }}>
+          {/* Target User Selector (Dropdown for Super Admin, Static for Regular Admin) */}
+          <Box sx={{ mb: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.6 }}>
               <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
-                Current Password
+                Account to Update *
               </Typography>
-              <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
-                (Leave blank if forgotten)
-              </Typography>
+              {selectedTargetItem && (
+                <Chip
+                  size="small"
+                  label={selectedTargetItem.role === 'superadmin' ? 'Super Admin' : 'Admin'}
+                  sx={{
+                    fontSize: '10px',
+                    height: '20px',
+                    fontWeight: 700,
+                    backgroundColor: selectedTargetItem.role === 'superadmin' ? '#FEF3C7' : '#DBEAFE',
+                    color: selectedTargetItem.role === 'superadmin' ? '#B45309' : '#1E40AF',
+                  }}
+                />
+              )}
             </Box>
-            <TextField
-              fullWidth
-              size="small"
-              type={showCurrentPassword ? 'text' : 'password'}
-              placeholder="Enter current password if known"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              disabled={loading}
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        onClick={() => setShowCurrentPassword((prev) => !prev)}
-                        edge="end"
-                      >
-                        {showCurrentPassword ? (
-                          <VisibilityOffRoundedIcon sx={{ fontSize: 18, color: '#64748B' }} />
-                        ) : (
-                          <VisibilityRoundedIcon sx={{ fontSize: 18, color: '#64748B' }} />
-                        )}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                  sx: {
+
+            {isSuperAdmin ? (
+              <FormControl fullWidth size="small">
+                <Select
+                  value={targetUsername}
+                  onChange={(e) => setTargetUsername(e.target.value)}
+                  disabled={loading || fetchingUsers}
+                  sx={{
                     fontSize: '13px',
                     backgroundColor: '#FFFFFF',
                     borderRadius: '5px',
+                  }}
+                >
+                  {availableUsers.map((u) => (
+                    <MenuItem key={u.username} value={u.username} sx={{ fontSize: '13px' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <Typography sx={{ fontSize: '13px', fontWeight: 600 }}>
+                          {u.username}
+                        </Typography>
+                        <Typography sx={{ fontSize: '11px', color: u.role === 'superadmin' ? '#B45309' : '#64748B' }}>
+                          ({u.role === 'superadmin' ? 'Super Admin' : 'Admin'})
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <TextField
+                fullWidth
+                size="small"
+                value={operator.username}
+                disabled
+                slotProps={{
+                  input: {
+                    sx: {
+                      fontSize: '13px',
+                      backgroundColor: '#F1F5F9',
+                      borderRadius: '5px',
+                    },
                   },
-                },
-              }}
-            />
+                }}
+              />
+            )}
           </Box>
 
+          {/* Current Password Field (Only needed if NOT a Super Admin override) */}
+          {(!isSuperAdmin || targetUsername === operator.username) && (
+            <Box sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.6 }}>
+                <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
+                  Current Password
+                </Typography>
+                <Typography sx={{ fontSize: '11px', color: '#64748B' }}>
+                  (Optional verification)
+                </Typography>
+              </Box>
+              <TextField
+                fullWidth
+                size="small"
+                type={showCurrentPassword ? 'text' : 'password'}
+                placeholder="Enter current password if known"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                disabled={loading}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          onClick={() => setShowCurrentPassword((prev) => !prev)}
+                          edge="end"
+                        >
+                          {showCurrentPassword ? (
+                            <VisibilityOffRoundedIcon sx={{ fontSize: 18, color: '#64748B' }} />
+                          ) : (
+                            <VisibilityRoundedIcon sx={{ fontSize: 18, color: '#64748B' }} />
+                          )}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                    sx: {
+                      fontSize: '13px',
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: '5px',
+                    },
+                  },
+                }}
+              />
+            </Box>
+          )}
+
           {/* New Password Input */}
-          <Box sx={{ mb: 1.8 }}>
+          <Box sx={{ mb: 2 }}>
             <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#334155', mb: 0.6 }}>
               New Password *
             </Typography>
@@ -431,7 +555,7 @@ export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClos
               },
             }}
           >
-            {loading ? 'Updating In Database...' : 'Save New Password'}
+            {loading ? 'Updating In Database...' : `Save Password for "${targetUsername}"`}
           </Button>
         </DialogActions>
       </form>

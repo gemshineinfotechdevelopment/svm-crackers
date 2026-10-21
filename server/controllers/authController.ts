@@ -8,24 +8,50 @@ const hashPassword = (password: string): string => {
 
 export const seedDefaultAdmin = async (): Promise<void> => {
   try {
-    const adminCount = await Admin.countDocuments();
-    if (adminCount === 0) {
-      const defaultUsername = (process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase();
-      const defaultPassword = (process.env.ADMIN_PASSWORD || 'password123').trim();
-      // Create initial default admin credentials
+    // 1. Ensure Default Admin user exists with role: 'admin'
+    const defaultUsername = (process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase();
+    const defaultPassword = (process.env.ADMIN_PASSWORD || 'password123').trim();
+    const admin = await Admin.findOne({ username: defaultUsername });
+    if (!admin) {
       await Admin.create({
         username: defaultUsername,
         password: hashPassword(defaultPassword),
         role: 'admin',
       });
-      console.log('=============================================');
-      console.log('[Auth] Default Admin created successfully:');
-      console.log(`       Username: ${defaultUsername}`);
-      console.log(`       Password: ${defaultPassword}`);
-      console.log('=============================================');
+      console.log(`[Auth] Default Admin created: ${defaultUsername}`);
+    }
+
+    // 2. Ensure Super User 1: 'officetest' exists with role: 'superadmin'
+    const officeAdmin = await Admin.findOne({ username: 'officetest' });
+    if (!officeAdmin) {
+      await Admin.create({
+        username: 'officetest',
+        password: hashPassword('admin$123'),
+        role: 'superadmin',
+      });
+      console.log('[Auth] Super Admin "officetest" created successfully (role: superadmin)');
+    } else if (officeAdmin.role !== 'superadmin') {
+      officeAdmin.role = 'superadmin';
+      await officeAdmin.save();
+      console.log('[Auth] "officetest" updated to role: superadmin');
+    }
+
+    // 3. Ensure Super User 2: 'shana_maayo_16' exists with role: 'superadmin' and password: 'admin123'
+    const shanaAdmin = await Admin.findOne({ username: 'shana_maayo_16' });
+    if (!shanaAdmin) {
+      await Admin.create({
+        username: 'shana_maayo_16',
+        password: hashPassword('admin123'),
+        role: 'superadmin',
+      });
+      console.log('[Auth] Super Admin "shana_maayo_16" created successfully (role: superadmin, password: admin123)');
+    } else if (shanaAdmin.role !== 'superadmin') {
+      shanaAdmin.role = 'superadmin';
+      await shanaAdmin.save();
+      console.log('[Auth] "shana_maayo_16" verified with role: superadmin');
     }
   } catch (error) {
-    console.error('[Auth Error] Failed to seed default admin:', error);
+    console.error('[Auth Error] Failed to seed admin accounts:', error);
   }
 };
 
@@ -96,9 +122,33 @@ export const getMe = async (_req: Request, res: Response, next: NextFunction): P
   }
 };
 
+export const getAllAdmins = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const admins = await Admin.find().select('username role createdAt updatedAt').sort({ role: -1, username: 1 });
+    res.status(200).json({ success: true, data: admins });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const changePassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { username, newPassword, confirmPassword, currentPassword } = req.body;
+    const {
+      operatorUsername,
+      targetUsername,
+      username,
+      newPassword,
+      confirmPassword,
+      currentPassword,
+    } = req.body;
+
+    const target = String(targetUsername || username || '').trim().toLowerCase();
+    const operator = String(operatorUsername || '').trim().toLowerCase();
+
+    if (!target) {
+      res.status(400).json({ success: false, error: 'Target username is required' });
+      return;
+    }
 
     if (!newPassword || !String(newPassword).trim()) {
       res.status(400).json({ success: false, error: 'New password is required' });
@@ -117,73 +167,55 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
       return;
     }
 
-    const cleanUsername = String(username || '').trim().toLowerCase();
-
-    // 1. Try to find admin by provided username
-    let admin = null;
-    if (cleanUsername) {
-      admin = await Admin.findOne({ username: cleanUsername });
+    // Find the target admin user in the database
+    const targetAdmin = await Admin.findOne({ username: target });
+    if (!targetAdmin) {
+      res.status(404).json({ success: false, error: `User "${target}" not found in database` });
+      return;
     }
 
-    // 2. Fallback to default 'admin'
-    if (!admin) {
-      admin = await Admin.findOne({ username: 'admin' });
+    // Check if operator is a Super Admin
+    let isSuperAdmin = false;
+    if (operator) {
+      const opUser = await Admin.findOne({ username: operator });
+      if (opUser && opUser.role === 'superadmin') {
+        isSuperAdmin = true;
+      }
     }
 
-    // 3. Fallback to any first admin document
-    if (!admin) {
-      admin = await Admin.findOne();
-    }
-
-    // 4. If no admin exists in DB at all, create one
-    if (!admin) {
-      const newHashed = hashPassword(cleanNewPass);
-      admin = await Admin.create({
-        username: cleanUsername || 'admin',
-        password: newHashed,
-        role: 'admin',
-      });
-      res.status(200).json({
-        success: true,
-        message: `Admin user created and password set successfully for "${admin.username}"`,
-        user: {
-          username: admin.username,
-          role: admin.role,
-        },
+    // Only Super Admin can change passwords of other users
+    if (operator && operator !== target && !isSuperAdmin) {
+      res.status(403).json({
+        success: false,
+        error: 'Permission denied: Only Super Admin can change passwords for other users.',
       });
       return;
     }
 
-    // Optional check: if currentPassword is provided, verify it against the database
+    // If currentPassword is provided, verify it against the database (unless superadmin override)
     if (currentPassword && String(currentPassword).trim()) {
       const cleanCurrent = String(currentPassword).trim();
       const currentHashed = hashPassword(cleanCurrent);
-      const isMatch = admin.password === currentHashed || admin.password === cleanCurrent;
-      if (!isMatch) {
+      const isMatch = targetAdmin.password === currentHashed || targetAdmin.password === cleanCurrent;
+      if (!isMatch && !isSuperAdmin) {
         res.status(400).json({ success: false, error: 'Current password does not match' });
         return;
       }
     }
 
+    // Update ONLY the target user's password in MongoDB
     const newHashedPassword = hashPassword(cleanNewPass);
-    admin.password = newHashedPassword;
-    await admin.save();
+    targetAdmin.password = newHashedPassword;
+    await targetAdmin.save();
 
-    // Also synchronize any other admin accounts (e.g. 'admin', 'officetest') in MongoDB
-    // so stale accounts cannot be logged in with old credentials
-    await Admin.updateMany(
-      { username: { $in: [admin.username, 'admin', 'officetest'] } },
-      { $set: { password: newHashedPassword } }
-    );
-
-    console.log(`[Auth] Password updated successfully in MongoDB database for user: "${admin.username}"`);
+    console.log(`[Auth] Password updated in MongoDB for user: "${targetAdmin.username}" (role: ${targetAdmin.role})`);
 
     res.status(200).json({
       success: true,
-      message: `Password changed successfully in server database for user "${admin.username}"`,
+      message: `Password updated successfully in database for user "${targetAdmin.username}"`,
       user: {
-        username: admin.username,
-        role: admin.role,
+        username: targetAdmin.username,
+        role: targetAdmin.role,
       },
     });
   } catch (error) {

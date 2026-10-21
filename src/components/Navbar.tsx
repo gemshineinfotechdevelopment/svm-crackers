@@ -78,6 +78,7 @@ export const Navbar: FC<NavbarProps> = ({
   const [installModalOpen, setInstallModalOpen] = useState(false);
   const [isInstalled, setIsInstalled] = useState<boolean>(() => checkIsStandalone());
   const [currentUsername, setCurrentUsername] = useState<string>('Administrator');
+  const [currentUserRole, setCurrentUserRole] = useState<string>('admin');
   const [companySettings, setCompanySettings] = useState<CompanySettings>(getStoredSettings);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [backendUrl, setBackendUrl] = useState<string>(API_BASE_URL);
@@ -91,6 +92,9 @@ export const Navbar: FC<NavbarProps> = ({
         const parsed = JSON.parse(stored);
         if (parsed.username) {
           setCurrentUsername(parsed.username);
+        }
+        if (parsed.role) {
+          setCurrentUserRole(parsed.role);
         }
       }
     } catch {}
@@ -520,8 +524,8 @@ export const Navbar: FC<NavbarProps> = ({
             <Typography sx={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', textTransform: 'capitalize' }}>
               {currentUsername}
             </Typography>
-            <Typography sx={{ fontSize: '10px', color: '#16A34A', fontWeight: 600 }}>
-              System Ready
+            <Typography sx={{ fontSize: '10px', color: currentUserRole === 'superadmin' ? '#D97706' : '#16A34A', fontWeight: 700 }}>
+              {currentUserRole === 'superadmin' ? '👑 Super Admin' : 'Administrator'}
             </Typography>
           </Box>
         </MenuItem>
