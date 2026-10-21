@@ -21,22 +21,7 @@ export const seedDefaultAdmin = async (): Promise<void> => {
       console.log(`[Auth] Default Admin created: ${defaultUsername}`);
     }
 
-    // 2. Ensure Super User 1: 'officetest' exists with role: 'superadmin'
-    const officeAdmin = await Admin.findOne({ username: 'officetest' });
-    if (!officeAdmin) {
-      await Admin.create({
-        username: 'officetest',
-        password: hashPassword('admin$123'),
-        role: 'superadmin',
-      });
-      console.log('[Auth] Super Admin "officetest" created successfully (role: superadmin)');
-    } else if (officeAdmin.role !== 'superadmin') {
-      officeAdmin.role = 'superadmin';
-      await officeAdmin.save();
-      console.log('[Auth] "officetest" updated to role: superadmin');
-    }
-
-    // 3. Ensure Super User 2: 'shana_maayo_16' exists with role: 'superadmin' and password: 'admin123'
+    // 2. Ensure Super User: 'shana_maayo_16' exists with role: 'superadmin' and password: 'admin123'
     const shanaAdmin = await Admin.findOne({ username: 'shana_maayo_16' });
     if (!shanaAdmin) {
       await Admin.create({

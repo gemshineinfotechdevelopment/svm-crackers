@@ -61,7 +61,6 @@ export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClos
   const [targetUsername, setTargetUsername] = useState<string>('admin');
   const [availableUsers, setAvailableUsers] = useState<AdminUserItem[]>([
     { username: 'admin', role: 'admin' },
-    { username: 'officetest', role: 'superadmin' },
     { username: 'shana_maayo_16', role: 'superadmin' },
   ]);
 
@@ -78,7 +77,7 @@ export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClos
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [successMsg, setSuccessMsg] = useState<string>('');
 
-  const isSuperAdmin = operator.role === 'superadmin' || operator.username === 'officetest' || operator.username === 'shana_maayo_16';
+  const isSuperAdmin = operator.role === 'superadmin' || operator.username === 'shana_maayo_16';
 
   // Load active user and available admin accounts when modal opens
   useEffect(() => {

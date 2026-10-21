@@ -90,22 +90,7 @@ export const initVpsDatabase = async (): Promise<void> => {
       console.log(`\n👤 Admin user already exists: ${existingAdmin.username}`);
     }
 
-    // Super Admin 1: officetest
-    const existingOffice = await Admin.findOne({ username: 'officetest' });
-    if (!existingOffice) {
-      await Admin.create({
-        username: 'officetest',
-        password: hashPassword('admin$123'),
-        role: 'superadmin',
-      });
-      console.log(`👤 Super Admin Created: officetest`);
-    } else if (existingOffice.role !== 'superadmin') {
-      existingOffice.role = 'superadmin';
-      await existingOffice.save();
-      console.log(`👤 Super Admin Role Updated: officetest`);
-    }
-
-    // Super Admin 2: shana_maayo_16
+    // Super Admin: shana_maayo_16
     const existingShana = await Admin.findOne({ username: 'shana_maayo_16' });
     if (!existingShana) {
       await Admin.create({
