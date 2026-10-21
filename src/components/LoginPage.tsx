@@ -25,7 +25,7 @@ interface LoginPageProps {
 export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [settings, setSettings] = useState<CompanySettings>(() => getStoredSettings());
   const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -120,20 +120,12 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
         localStorage.setItem('svm_auth_token', res.token);
         localStorage.setItem('svm_auth_user', JSON.stringify(res.user || { username: username.trim(), role: 'admin' }));
         onLoginSuccess(res.user || { username: username.trim(), role: 'admin' });
+      } else {
+        setErrorMsg('Authentication failed. Please check your credentials.');
       }
     } catch (err: any) {
       console.error('Login failed:', err);
-      if (
-        (username.trim().toLowerCase() === 'admin' && (password === 'admin123' || password === 'admin')) ||
-        (password === 'admin123' || password === 'svm123')
-      ) {
-        const fallbackUser = { username: username.trim().toLowerCase(), role: 'admin' };
-        localStorage.setItem('svm_auth_token', 'local-admin-token');
-        localStorage.setItem('svm_auth_user', JSON.stringify(fallbackUser));
-        onLoginSuccess(fallbackUser);
-      } else {
-        setErrorMsg(err.message || 'Invalid username or password.');
-      }
+      setErrorMsg(err.message || 'Invalid username or password.');
     } finally {
       setLoading(false);
     }

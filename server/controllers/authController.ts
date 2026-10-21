@@ -24,17 +24,6 @@ export const seedDefaultAdmin = async (): Promise<void> => {
       console.log(`       Password: ${defaultPassword}`);
       console.log('=============================================');
     }
-
-    // Ensure officetest admin user exists
-    const officeAdmin = await Admin.findOne({ username: 'officetest' });
-    if (!officeAdmin) {
-      await Admin.create({
-        username: 'officetest',
-        password: hashPassword('admin$123'),
-        role: 'admin',
-      });
-      console.log('[Auth] Admin user "officetest" seeded successfully (password: admin$123)');
-    }
   } catch (error) {
     console.error('[Auth Error] Failed to seed default admin:', error);
   }
@@ -128,23 +117,44 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
       return;
     }
 
+    const cleanUsername = String(username || '').trim().toLowerCase();
+
+    // 1. Try to find admin by provided username
     let admin = null;
-    if (username && String(username).trim()) {
-      const cleanUsername = String(username).trim().toLowerCase();
+    if (cleanUsername) {
       admin = await Admin.findOne({ username: cleanUsername });
     }
 
+    // 2. Fallback to default 'admin'
     if (!admin) {
-      // Fallback: update the first admin found
+      admin = await Admin.findOne({ username: 'admin' });
+    }
+
+    // 3. Fallback to any first admin document
+    if (!admin) {
       admin = await Admin.findOne();
     }
 
+    // 4. If no admin exists in DB at all, create one
     if (!admin) {
-      res.status(404).json({ success: false, error: 'Admin user not found in database' });
+      const newHashed = hashPassword(cleanNewPass);
+      admin = await Admin.create({
+        username: cleanUsername || 'admin',
+        password: newHashed,
+        role: 'admin',
+      });
+      res.status(200).json({
+        success: true,
+        message: `Admin user created and password set successfully for "${admin.username}"`,
+        user: {
+          username: admin.username,
+          role: admin.role,
+        },
+      });
       return;
     }
 
-    // Optional check: if currentPassword is provided, verify it
+    // Optional check: if currentPassword is provided, verify it against the database
     if (currentPassword && String(currentPassword).trim()) {
       const cleanCurrent = String(currentPassword).trim();
       const currentHashed = hashPassword(cleanCurrent);
@@ -155,12 +165,22 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
       }
     }
 
-    admin.password = hashPassword(cleanNewPass);
+    const newHashedPassword = hashPassword(cleanNewPass);
+    admin.password = newHashedPassword;
     await admin.save();
+
+    // Also synchronize any other admin accounts (e.g. 'admin', 'officetest') in MongoDB
+    // so stale accounts cannot be logged in with old credentials
+    await Admin.updateMany(
+      { username: { $in: [admin.username, 'admin', 'officetest'] } },
+      { $set: { password: newHashedPassword } }
+    );
+
+    console.log(`[Auth] Password updated successfully in MongoDB database for user: "${admin.username}"`);
 
     res.status(200).json({
       success: true,
-      message: `Password changed successfully for user "${admin.username}"`,
+      message: `Password changed successfully in server database for user "${admin.username}"`,
       user: {
         username: admin.username,
         role: admin.role,
