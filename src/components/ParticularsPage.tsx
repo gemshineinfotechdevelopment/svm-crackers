@@ -38,13 +38,14 @@ import {
 } from '../services/api';
 import {
   fetchPriceMaps,
+  getLocalPriceMaps,
   DEFAULT_PRICE_MAP_NAMES,
   PRICEMAP_CHANGE_EVENT,
 } from '../utils/priceMapStorage';
 import { getNormalizedRetailProducts } from '../utils/productUtils';
 import { getStoredSettings } from './SettingsPage';
 import { BillPrintModal } from './BillPrintModal';
-import type { BillPrintData } from './BillPrintTemplate';
+import { type BillPrintData, DEFAULT_CRACKER_CODES } from './BillPrintTemplate';
 import { DuplicateBillModal } from './DuplicateBillModal';
 import { toIsoDate, fromIsoDate } from './GstBillPage';
 import {
@@ -141,6 +142,49 @@ const findProductByCode = (code: string | undefined | null, options: ProductCata
   return null;
 };
 
+const resolveProductCode = (
+  item: { code?: string; particular?: string },
+  options: ProductCatalogOption[],
+  rawList: any[] = []
+): string => {
+  if (item.code !== undefined && item.code !== null && String(item.code).trim() !== '') {
+    return String(item.code).trim();
+  }
+  const cleanName = (item.particular || '').toLowerCase().trim();
+  if (!cleanName) return '';
+
+  // 1. Match from options
+  const match =
+    options.find((p) => p.name.trim().toLowerCase() === cleanName) ||
+    options.find((p) => p.name.trim().toLowerCase().replace(/\(.*?\)/g, '').trim() === cleanName.replace(/\(.*?\)/g, '').trim());
+  if (match) {
+    const c = match.slNo !== undefined && match.slNo !== null && String(match.slNo) !== ''
+      ? String(match.slNo)
+      : String(match.sku || (match as any).code || '');
+    if (c) return c;
+  }
+
+  // 2. Match from rawList
+  if (rawList && rawList.length > 0) {
+    const rawMatch =
+      rawList.find((p) => (p.name || '').trim().toLowerCase() === cleanName) ||
+      rawList.find((p) => (p.name || '').trim().toLowerCase().replace(/\(.*?\)/g, '').trim() === cleanName.replace(/\(.*?\)/g, '').trim());
+    if (rawMatch) {
+      const c = rawMatch.slNo !== undefined && rawMatch.slNo !== null && String(rawMatch.slNo) !== ''
+        ? String(rawMatch.slNo)
+        : String(rawMatch.sku || rawMatch.code || '');
+      if (c) return c;
+    }
+  }
+
+  // 3. Match from DEFAULT_CRACKER_CODES
+  if (DEFAULT_CRACKER_CODES[cleanName]) return DEFAULT_CRACKER_CODES[cleanName];
+  const noParens = cleanName.replace(/\(.*?\)/g, '').trim();
+  if (DEFAULT_CRACKER_CODES[noParens]) return DEFAULT_CRACKER_CODES[noParens];
+
+  return '';
+};
+
 const getRateForType = (prod: ProductCatalogOption | undefined | null, rType: string, isPriceMapActive?: boolean): number => {
   if (!prod) return 0;
   if (isPriceMapActive) {
@@ -217,6 +261,13 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
   const [sessions, setSessions] = useState<ParticularDraftSession[]>(() => initialSessionData.sessions);
   const [activeSessionId, setActiveSessionId] = useState<string>(() => initialSessionData.activeId);
+  const [activeEditingBillId, setActiveEditingBillId] = useState<string | null>(() => {
+    if (editBillData && (editBillData._id || editBillData.id)) {
+      return editBillData._id || editBillData.id;
+    }
+    return initialDraft?.editingBillId || null;
+  });
+  const [searchingBillNo, setSearchingBillNo] = useState<boolean>(false);
 
   // Dropdown options
   const [customerOptions, setCustomerOptions] = useState<CustomerOptionItem[]>([]);
@@ -229,11 +280,34 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     return initialDraft?.priceMap || localStorage.getItem('svm_selected_pricemap_name') || 'SVM';
   });
 
+  // Dynamic Price Map Sync Refs to prevent stale closures across rapid product additions
+  const selectedPriceMapRef = useRef<string>(selectedPriceMap);
+  const productOptionsRef = useRef<ProductCatalogOption[]>(productOptions);
+  const rawProductsRef = useRef<any[]>(rawProducts);
+  const priceMapsRef = useRef<PriceMapRecord[]>(priceMaps);
+
+  useEffect(() => {
+    selectedPriceMapRef.current = selectedPriceMap;
+  }, [selectedPriceMap]);
+
+  useEffect(() => {
+    productOptionsRef.current = productOptions;
+  }, [productOptions]);
+
+  useEffect(() => {
+    rawProductsRef.current = rawProducts;
+  }, [rawProducts]);
+
+  useEffect(() => {
+    priceMapsRef.current = priceMaps;
+  }, [priceMaps]);
+
   // 1. Customer Info Left Box State
   const [customerNo, setCustomerNo] = useState<string>(() => initialDraft?.customerNo || '');
   const [billDate, setBillDate] = useState<string>(() => (isEditMode && editBillData?.date) ? editBillData.date : getInitialDateStr());
   const billDatePickerRef = useRef<HTMLInputElement>(null);
   const [billNo, setBillNo] = useState<string>(() => initialDraft?.billNo || '');
+  const activeSessionAssignedBillNoRef = useRef<string>(initialDraft?.assignedBillNo || initialDraft?.billNo || '');
   const [rateType, setRateType] = useState<string>(() => initialDraft?.rateType || 'Befor Rate');
   const [customerGst, setCustomerGst] = useState<string>(() => initialDraft?.customerGst || '');
 
@@ -283,14 +357,19 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const applySessionToForm = (sess: ParticularDraftSession) => {
     setCustomerNo(sess.customerNo || '');
     setBillDate(sess.billDate || getInitialDateStr());
-    setBillNo(sess.billNo || '');
+    const sessBillNo = sess.billNo || sess.assignedBillNo || '';
+    setBillNo(sessBillNo);
+    activeSessionAssignedBillNoRef.current = sess.assignedBillNo || sessBillNo;
     setRateType(sess.rateType || 'Befor Rate');
     setCustomerGst(sess.customerGst || '');
     setCustomerName(sess.customerName || '');
     setCustomerMobile(sess.customerMobile || '');
     setCustomerAddress(sess.customerAddress || '');
     setCompanyName(sess.companyName || storeSettings.companyName || 'Manjula Crackers');
-    setSelectedPriceMap(sess.priceMap || '');
+    setActiveEditingBillId(sess.editingBillId || null);
+    const targetMap = sess.priceMap !== undefined ? sess.priceMap : (localStorage.getItem('svm_selected_pricemap_name') || 'SVM');
+    setSelectedPriceMap(targetMap);
+    selectedPriceMapRef.current = targetMap;
     setSelectedCustomer(null);
     setProductRows(
       sess.productRows && sess.productRows.length > 0
@@ -303,6 +382,15 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setPackingPercent(sess.packingPercent || '');
     setRemarks(sess.remarks || '');
     setPaymentMode(sess.paymentMode || 'Cash');
+
+    // Dynamically rebuild product options for restored session's price map
+    const prods = rawProductsRef.current;
+    const maps = priceMapsRef.current;
+    if (prods.length > 0 && maps.length > 0) {
+      const unified = buildProductOptions(prods, maps, targetMap);
+      setProductOptions(unified);
+      productOptionsRef.current = unified;
+    }
   };
 
   // Real-time draft session autosave
@@ -316,6 +404,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             customerNo,
             billDate,
             billNo,
+            assignedBillNo: s.assignedBillNo || activeSessionAssignedBillNoRef.current || billNo,
             rateType,
             customerGst,
             customerName,
@@ -331,6 +420,8 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             remarks,
             paymentMode,
             lastUpdated: Date.now(),
+            isEdit: Boolean(activeEditingBillId),
+            editingBillId: activeEditingBillId || undefined,
           };
         }
         return s;
@@ -341,6 +432,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   }, [
     isEditMode,
     activeSessionId,
+    activeEditingBillId,
     mode,
     customerNo,
     billDate,
@@ -379,6 +471,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       customerNo: '',
       billDate: getInitialDateStr(),
       billNo: nextNum,
+      assignedBillNo: nextNum,
       rateType: 'Befor Rate',
       customerGst: '',
       customerName: '',
@@ -394,11 +487,14 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       paymentMode: 'Cash',
       selectedYear,
       lastUpdated: Date.now(),
+      isEdit: false,
+      editingBillId: undefined,
     };
 
     const updated = [...sessions, newSession];
     setSessions(updated);
     setActiveSessionId(newSession.id);
+    setActiveEditingBillId(null);
     saveParticularSessions(mode, updated, newSession.id);
     applySessionToForm(newSession);
 
@@ -418,12 +514,14 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           customerNo,
           billDate,
           billNo,
+          assignedBillNo: s.assignedBillNo || activeSessionAssignedBillNoRef.current || billNo,
           rateType,
           customerGst,
           customerName,
           customerMobile,
           customerAddress,
           companyName,
+          priceMap: selectedPriceMap,
           productRows,
           discountPercent,
           discountRs,
@@ -432,6 +530,8 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           remarks,
           paymentMode,
           lastUpdated: Date.now(),
+          isEdit: Boolean(activeEditingBillId),
+          editingBillId: activeEditingBillId || undefined,
         };
       }
       return s;
@@ -473,6 +573,169 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setSessions(remaining);
     setActiveSessionId(nextId);
     saveParticularSessions(mode, remaining, nextId);
+  };
+
+  // Lookup old bill by Bill No and load into a dedicated editable session
+  const handleBillNoLookup = async (inputBillNo?: string) => {
+    const targetNo = (inputBillNo !== undefined ? inputBillNo : billNo).trim();
+    if (!targetNo) return;
+
+    // Check if the current session is untouched/empty
+    const isCurrentSessionUntouched =
+      (!customerName || !customerName.trim()) &&
+      (!productRows || productRows.length === 0 || (productRows.length === 1 && !productRows[0].particular.trim())) &&
+      !activeEditingBillId;
+
+    const currentSession = sessions.find((s) => s.id === activeSessionId);
+    // Determine the true assigned bill number of the current draft so it is never lost or mutated
+    const currentDraftOriginalBillNo = currentSession?.assignedBillNo || activeSessionAssignedBillNoRef.current || billNo || '1001';
+
+    // If currently already editing this bill in active session, do nothing
+    if (activeEditingBillId && currentSession && (currentSession.billNo === targetNo || currentSession.assignedBillNo === targetNo)) {
+      return;
+    }
+
+    setSearchingBillNo(true);
+    try {
+      const bType = mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR';
+      const foundBill = await ParticularsApi.getByBillNo(targetNo, bType, selectedYear);
+
+      if (foundBill && (foundBill._id || foundBill.id)) {
+        const foundId = foundBill._id || foundBill.id;
+
+        // Check if an existing open session already has this bill
+        const existingSession = sessions.find(
+          (s) => s.editingBillId === foundId || (s.isEdit && String(s.billNo).trim() === String(foundBill.billNo).trim())
+        );
+        if (existingSession) {
+          // If current session was incomplete, restore its legitimate bill number so it is not mutated
+          if (!isCurrentSessionUntouched && currentSession) {
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === activeSessionId
+                  ? { ...s, billNo: currentDraftOriginalBillNo, assignedBillNo: currentDraftOriginalBillNo }
+                  : s
+              )
+            );
+          }
+          handleSwitchSession(existingSession.id);
+          setSnackbarMessage(`Switched to open tab for ${mode === 'QUOTATION' ? 'Quotation' : 'Bill'} #${foundBill.billNo}`);
+          setSnackbarOpen(true);
+          return;
+        }
+
+        // Convert foundBill products to ProductRowItem format
+        const loadedRows: ProductRowItem[] = (Array.isArray(foundBill.products) && foundBill.products.length > 0)
+          ? foundBill.products.map((p: any, i: number) => ({
+              id: `edit-row-${i}-${Date.now()}`,
+              code: p.code
+                ? String(p.code)
+                : (p.itemCode
+                  ? String(p.itemCode)
+                  : (p.slNo
+                    ? String(p.slNo)
+                    : resolveProductCode({ particular: p.particular || p.productName || p.name || '' }, productOptionsRef.current, rawProductsRef.current))),
+              particular: p.particular || p.productName || p.name || '',
+              pktUnit: p.pktUnit || p.unit || '1 Box',
+              rate: String(p.rate ?? '0'),
+              quantity: String(p.quantity ?? '1'),
+              pcs: String(p.pcs ?? '0'),
+              amount: String(p.amount ?? (Number(p.quantity || 1) * Number(p.rate || 0)).toFixed(2)),
+            }))
+          : [{ id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', pcs: '0', amount: '0' }];
+
+        const targetSessionId = isCurrentSessionUntouched && activeSessionId
+          ? activeSessionId
+          : `session_${Date.now()}_${sessions.length + 1}`;
+
+        const billSession: ParticularDraftSession = {
+          id: targetSessionId,
+          title: `${mode === 'QUOTATION' ? 'Quot' : 'Bill'} #${foundBill.billNo}`,
+          mode,
+          customerNo: foundBill.customerNo || '',
+          billDate: foundBill.date || getInitialDateStr(),
+          billNo: String(foundBill.billNo || targetNo),
+          assignedBillNo: String(foundBill.billNo || targetNo),
+          rateType: foundBill.rateType || 'Befor Rate',
+          customerGst: foundBill.customerGst || '',
+          customerName: foundBill.customerName || '',
+          customerMobile: foundBill.customerPhone || '',
+          customerAddress: foundBill.customerAddress || '',
+          companyName: foundBill.companyName || storeSettings.companyName || 'S.V.M Fireworks Agencies',
+          productRows: loadedRows,
+          discountPercent: String(foundBill.discountPercent ?? '0'),
+          discountRs: String(foundBill.discount ?? '0'),
+          packingRs: String(foundBill.packing ?? ''),
+          packingPercent: String(foundBill.packingPercent ?? ''),
+          remarks: foundBill.notes || '',
+          paymentMode: foundBill.paymentMode || 'Cash',
+          priceMap: foundBill.priceMap || 'SVM',
+          selectedYear: foundBill.year ? Number(foundBill.year) : selectedYear,
+          lastUpdated: Date.now(),
+          isEdit: true,
+          editingBillId: foundId,
+        };
+
+        let updatedSessions: ParticularDraftSession[];
+        if (isCurrentSessionUntouched && activeSessionId) {
+          updatedSessions = sessions.map((s) => (s.id === activeSessionId ? billSession : s));
+        } else {
+          // IMPORTANT: Strictly preserve the current incomplete bill's original bill number!
+          updatedSessions = sessions
+            .map((s) => {
+              if (s.id === activeSessionId) {
+                return {
+                  ...s,
+                  billNo: currentDraftOriginalBillNo,
+                  assignedBillNo: currentDraftOriginalBillNo,
+                };
+              }
+              return s;
+            })
+            .concat(billSession);
+        }
+
+        setSessions(updatedSessions);
+        setActiveSessionId(targetSessionId);
+        setActiveEditingBillId(foundId);
+        activeSessionAssignedBillNoRef.current = String(foundBill.billNo || targetNo);
+        saveParticularSessions(mode, updatedSessions, targetSessionId);
+        applySessionToForm(billSession);
+
+        if (!isCurrentSessionUntouched) {
+          setSnackbarMessage(`Loaded Bill #${foundBill.billNo} in new tab. Incomplete Bill #${currentDraftOriginalBillNo} is safely preserved.`);
+        } else {
+          setSnackbarMessage(`Loaded ${mode === 'QUOTATION' ? 'Quotation' : 'Bill'} #${foundBill.billNo} (${foundBill.customerName || 'Customer'}) in editable mode.`);
+        }
+        setSnackbarOpen(true);
+      } else {
+        // Not found in database
+        if (!isCurrentSessionUntouched) {
+          // Revert current incomplete draft's billNo so it is not mutated
+          setBillNo(currentDraftOriginalBillNo);
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === activeSessionId
+                ? { ...s, billNo: currentDraftOriginalBillNo, assignedBillNo: currentDraftOriginalBillNo }
+                : s
+            )
+          );
+          setSnackbarMessage(`Bill #${targetNo} not found in database. Incomplete bill #${currentDraftOriginalBillNo} preserved.`);
+        } else {
+          setSnackbarMessage(`Bill #${targetNo} not found in existing records. Using as new bill number.`);
+        }
+        setSnackbarOpen(true);
+      }
+    } catch (err) {
+      console.error('Error in handleBillNoLookup:', err);
+      if (!isCurrentSessionUntouched) {
+        setBillNo(currentDraftOriginalBillNo);
+      }
+      setSnackbarMessage(`Failed to lookup Bill #${targetNo}. Please try again.`);
+      setSnackbarOpen(true);
+    } finally {
+      setSearchingBillNo(false);
+    }
   };
 
   // UI status
@@ -521,21 +784,27 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   ): ProductCatalogOption[] => {
     const cleanMap = (mapName || '').trim().toLowerCase().replace(/[\s\-_]/g, '');
 
-    // Find matching price map record from Price Map Master if selected
+    // Flexible matching: exact match, cleaned match, or startsWith / includes (e.g. "SVM Price Map" matches "SVM")
     const targetMap = cleanMap
-      ? priceMapsList.find((m) => (m.name || '').trim().toLowerCase().replace(/[\s\-_]/g, '') === cleanMap)
+      ? priceMapsList.find((m) => {
+          const mClean = (m.name || '').trim().toLowerCase().replace(/[\s\-_]/g, '');
+          return mClean === cleanMap || cleanMap.startsWith(mClean) || mClean.startsWith(cleanMap);
+        })
       : priceMapsList.find((m) => (m.name || '').trim().toLowerCase() === 'svm') || priceMapsList[0];
 
     const existingRatesMap = new Map<string, number>();
     const codeLookup = new Map<string, number>();
+    const idLookup = new Map<string, number>();
 
     if (targetMap && Array.isArray(targetMap.rates)) {
       targetMap.rates.forEach((r) => {
-        if (r.productName && typeof r.rate === 'number' && r.rate >= 0) {
-          existingRatesMap.set(r.productName.trim().toLowerCase(), r.rate);
-        }
-        if (r.code !== undefined && r.code !== null && typeof r.rate === 'number' && r.rate >= 0) {
-          codeLookup.set(String(r.code).trim().toLowerCase(), r.rate);
+        const numRate = Number(r.rate);
+        if (!isNaN(numRate) && numRate >= 0) {
+          if (r.productId) idLookup.set(String(r.productId), numRate);
+          if (r.productName) existingRatesMap.set(r.productName.trim().toLowerCase(), numRate);
+          if (r.code !== undefined && r.code !== null && String(r.code).trim() !== '') {
+            codeLookup.set(String(r.code).trim().toLowerCase(), numRate);
+          }
         }
       });
     }
@@ -544,15 +813,18 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     const retailProducts = getNormalizedRetailProducts(prodList);
 
     const combinedOptions: ProductCatalogOption[] = retailProducts.map((p) => {
-      const lowerKey = p.name.trim().toLowerCase();
-      const slStr = String(p.slNo).trim().toLowerCase();
+      const pId = p.id || p._id ? String(p.id || p._id) : '';
+      const lowerKey = p.name ? p.name.trim().toLowerCase() : '';
+      const slStr = p.slNo !== undefined ? String(p.slNo).trim().toLowerCase() : '';
 
-      let rateVal = p.rate;
+      let rateVal = Number(p.rate) || 0;
 
-      // Check if rate is defined in active price map
-      if (existingRatesMap.has(lowerKey)) {
+      // Priority lookup in active price map: ID -> Name -> Code
+      if (pId && idLookup.has(pId)) {
+        rateVal = idLookup.get(pId)!;
+      } else if (lowerKey && existingRatesMap.has(lowerKey)) {
         rateVal = existingRatesMap.get(lowerKey)!;
-      } else if (codeLookup.has(slStr)) {
+      } else if (slStr && codeLookup.has(slStr)) {
         rateVal = codeLookup.get(slStr)!;
       }
 
@@ -578,31 +850,63 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     return combinedOptions.sort((a, b) => Number(a.slNo) - Number(b.slNo));
   };
 
-  // Switch Price Map and recalculate rates for all rows in the bill
-  const handlePriceMapChange = (mapVal: string) => {
+  // Switch Price Map and recalculate rates dynamically for all rows in the bill
+  const handlePriceMapChange = async (mapVal: string) => {
     setSelectedPriceMap(mapVal);
+    selectedPriceMapRef.current = mapVal;
     if (mapVal) {
       localStorage.setItem('svm_selected_pricemap_name', mapVal);
     }
-    const updatedOptions = buildProductOptions(rawProducts, priceMaps, mapVal);
-    setProductOptions(updatedOptions);
 
-    if (selectedCatalogProduct) {
-      const matched = updatedOptions.find(
-        (p) => p.name.toLowerCase().trim() === selectedCatalogProduct.name.toLowerCase().trim()
-      );
-      if (matched) setSelectedCatalogProduct(matched);
+    // Always ensure fresh price maps
+    let currentMaps = priceMapsRef.current;
+    if (!currentMaps || currentMaps.length === 0) {
+      currentMaps = getLocalPriceMaps(selectedYear);
+      if (!currentMaps || currentMaps.length === 0) {
+        currentMaps = await fetchPriceMaps(selectedYear).catch(() => []);
+      }
+      if (currentMaps && currentMaps.length > 0) {
+        setPriceMaps(currentMaps);
+        priceMapsRef.current = currentMaps;
+      }
     }
+
+    let prods = rawProductsRef.current;
+    if (!prods || prods.length === 0) {
+      prods = await ProductsApi.getAll(undefined, selectedYear).catch(() => []);
+      if (prods && prods.length > 0) {
+        setRawProducts(prods);
+        rawProductsRef.current = prods;
+      }
+    }
+
+    const updatedOptions = buildProductOptions(prods, currentMaps, mapVal);
+    setProductOptions(updatedOptions);
+    productOptionsRef.current = updatedOptions;
+
+    // Immediately update currently selected / staged product in top bar if present
+    setSelectedCatalogProduct((prevSelected) => {
+      if (!prevSelected) return null;
+      const matched = updatedOptions.find(
+        (p) =>
+          (p.id && prevSelected.id && String(p.id) === String(prevSelected.id)) ||
+          p.name.toLowerCase().trim() === prevSelected.name.toLowerCase().trim() ||
+          (p.slNo && prevSelected.slNo && String(p.slNo) === String(prevSelected.slNo))
+      );
+      return matched || prevSelected;
+    });
 
     // Automatically recalculate all product rows in the bill with the new Price Map rates
     setProductRows((prev) =>
       prev.map((row) => {
         if (!row.particular.trim()) return row;
         const matched = updatedOptions.find(
-          (p) => p.name.toLowerCase().trim() === row.particular.toLowerCase().trim()
+          (p) =>
+            p.name.toLowerCase().trim() === row.particular.toLowerCase().trim() ||
+            (row.code && (String(p.slNo) === String(row.code) || String(p.sku) === String(row.code)))
         );
         if (matched) {
-          const newRate = Number(matched.rate) || 0;
+          const newRate = getRateForType(matched, rateType, Boolean(mapVal));
           const q = parseFloat(row.quantity) || 1;
           const amt = String(Math.round(q * newRate));
           return {
@@ -626,8 +930,9 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   };
 
   // Load backend data for a specific year
-  const loadOptions = async (targetYear: number = selectedYear) => {
+  const loadOptions = async (targetYear: number = selectedYear, targetPriceMap?: string) => {
     try {
+      const activeMap = targetPriceMap !== undefined ? targetPriceMap : selectedPriceMapRef.current;
       const [custRes, compRes, prodRes, priceMapsRes, lastBillRes] = await Promise.all([
         CustomersApi.getAll(targetYear).catch(() => []),
         CompaniesApi.getAll().catch(() => []),
@@ -676,7 +981,9 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       const productsArray = Array.isArray(prodRes) ? prodRes : [];
       const mapsArray = Array.isArray(priceMapsRes) ? priceMapsRes : [];
       setRawProducts(productsArray);
+      rawProductsRef.current = productsArray;
       setPriceMaps(mapsArray);
+      priceMapsRef.current = mapsArray;
 
       // Build dynamic price map options from Price Map Master records + presets
       const dynamicMaps = new Set<string>();
@@ -691,8 +998,9 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       }
       setPriceMapOptions(Array.from(dynamicMaps));
 
-      const unified = buildProductOptions(productsArray, mapsArray, selectedPriceMap);
+      const unified = buildProductOptions(productsArray, mapsArray, activeMap);
       setProductOptions(unified);
+      productOptionsRef.current = unified;
     } catch (err) {
       console.error('Error loading data for Quotation / Estimate page:', err);
     }
@@ -710,7 +1018,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     };
 
     const handlePriceMapsUpdated = () => {
-      loadOptions(selectedYear);
+      loadOptions(selectedYear, selectedPriceMapRef.current);
     };
 
     window.addEventListener(YEAR_CHANGE_EVENT, handleGlobalYear);
@@ -756,7 +1064,13 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         setProductRows(
           editBillData.products.map((p: any, i: number) => ({
             id: `edit-${i}-${Date.now()}`,
-            code: p.code ? String(p.code) : (p.itemCode ? String(p.itemCode) : (p.slNo ? String(p.slNo) : '')),
+            code: p.code
+              ? String(p.code)
+              : (p.itemCode
+                ? String(p.itemCode)
+                : (p.slNo
+                  ? String(p.slNo)
+                  : resolveProductCode({ particular: p.particular || p.name || '' }, productOptionsRef.current, rawProductsRef.current))),
             particular: p.particular || p.name || '',
             quantity: String(p.quantity ?? '1'),
             pcs: String(p.pcs ?? '0'),
@@ -899,15 +1213,19 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         const updated = { ...row, [field]: val };
 
         if (field === 'particular') {
+          const currentOptions = productOptionsRef.current.length > 0 ? productOptionsRef.current : productOptions;
           const match =
-            productOptions.find((p) => p.name.trim().toLowerCase() === val.trim().toLowerCase()) ||
-            findProductByCode(val, productOptions);
+            currentOptions.find((p) => p.name.trim().toLowerCase() === val.trim().toLowerCase()) ||
+            findProductByCode(val, currentOptions);
           if (match) {
             updated.particular = match.name;
-            const calculatedRate = getRateForType(match, rateType, Boolean(selectedPriceMap));
+            const calculatedRate = getRateForType(match, rateType, Boolean(selectedPriceMapRef.current));
             updated.rate = String(calculatedRate);
             if (match.unit) updated.pktUnit = match.unit;
-            if (match.slNo || match.sku) updated.code = String(match.slNo || match.sku);
+            const matchCode = match.slNo !== undefined && match.slNo !== null && String(match.slNo) !== ''
+              ? String(match.slNo)
+              : String(match.sku || (match as any).code || '');
+            if (matchCode) updated.code = matchCode;
             if (match.pcs !== undefined && match.pcs !== null && match.pcs > 0) {
               const qVal = parseFloat(updated.quantity) || 1;
               updated.pcs = String(Number(match.pcs) * qVal);
@@ -925,7 +1243,8 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
         // When quantity changes, auto update pieces if product has pcs defined
         if (field === 'quantity') {
-          const match = productOptions.find((p) => p.name.trim().toLowerCase() === updated.particular.trim().toLowerCase());
+          const currentOptions = productOptionsRef.current.length > 0 ? productOptionsRef.current : productOptions;
+          const match = currentOptions.find((p) => p.name.trim().toLowerCase() === updated.particular.trim().toLowerCase());
           if (match && match.pcs !== undefined && match.pcs !== null && match.pcs > 0) {
             updated.pcs = String(Number(match.pcs) * (q || 1));
           }
@@ -995,15 +1314,27 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const handleAddProductFromBar = (prod: ProductCatalogOption | null, qtyVal: string = quickQty) => {
     if (!prod) return;
 
+    // Always fetch latest rate using active Price Map and current options
+    const activeMap = selectedPriceMapRef.current;
+    const currentOptions = productOptionsRef.current.length > 0 ? productOptionsRef.current : productOptions;
+
+    // Ensure we use the freshly mapped product rate for the active price map
+    const freshProd = currentOptions.find(
+      (p) =>
+        (p.id && prod.id && String(p.id) === String(prod.id)) ||
+        p.name.toLowerCase().trim() === prod.name.toLowerCase().trim() ||
+        (p.slNo && prod.slNo && String(p.slNo) === String(prod.slNo))
+    ) || prod;
+
     // Block adding Out of Stock product
-    const isOut = Boolean(prod.isOutOfStock || (typeof prod.qty === 'number' && prod.qty <= 0));
+    const isOut = Boolean(freshProd.isOutOfStock || (typeof freshProd.qty === 'number' && freshProd.qty <= 0));
     if (isOut) {
       showQuantityWarningDialog([
         {
-          name: prod.name,
+          name: freshProd.name,
           requestedQty: qtyVal || '1',
           availableStock: 0,
-          unit: prod.unit || quickUnit || '1 Box',
+          unit: freshProd.unit || quickUnit || '1 Box',
           issue: 'OUT_OF_STOCK',
         },
       ]);
@@ -1017,9 +1348,9 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       if (!qtyVal || isNaN(q) || q <= 0) {
         showQuantityWarningDialog([
           {
-            name: prod.name,
+            name: freshProd.name,
             requestedQty: qtyVal || '0',
-            unit: prod.unit || quickUnit || '1 Box',
+            unit: freshProd.unit || quickUnit || '1 Box',
             issue: 'MISSING_QTY',
           },
         ]);
@@ -1027,14 +1358,17 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       }
     }
 
-    const rateVal = getRateForType(prod, rateType, Boolean(selectedPriceMap));
+    const rateVal = getRateForType(freshProd, rateType, Boolean(activeMap));
     const validQ = isNaN(q) || q <= 0 ? 1 : q;
-    const computedPcs = prod.pcs ? String(Number(prod.pcs) * validQ) : '0';
+    const computedPcs = freshProd.pcs ? String(Number(freshProd.pcs) * validQ) : '0';
+    const codeVal = freshProd.slNo !== undefined && freshProd.slNo !== null && String(freshProd.slNo) !== ''
+      ? String(freshProd.slNo)
+      : String(freshProd.sku || (freshProd as any).code || '');
     const newRow: ProductRowItem = {
       id: String(Date.now()),
-      code: String(prod.slNo || prod.sku || ''),
-      particular: prod.name,
-      pktUnit: prod.unit || quickUnit || '1 Box',
+      code: codeVal,
+      particular: freshProd.name,
+      pktUnit: freshProd.unit || quickUnit || '1 Box',
       pcs: computedPcs,
       rate: String(rateVal),
       quantity: String(validQ),
@@ -1057,7 +1391,8 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   // Code field auto-fill & Enter handler
   const handleQuickCodeChange = (val: string) => {
     setQuickCode(val);
-    const match = findProductByCode(val, productOptions);
+    const currentOptions = productOptionsRef.current.length > 0 ? productOptionsRef.current : productOptions;
+    const match = findProductByCode(val, currentOptions);
     if (match) {
       setSelectedCatalogProduct(match);
       if (match.unit) setQuickUnit(match.unit);
@@ -1069,7 +1404,8 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const handleQuickCodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const match = findProductByCode(quickCode, productOptions) || selectedCatalogProduct;
+      const currentOptions = productOptionsRef.current.length > 0 ? productOptionsRef.current : productOptions;
+      const match = findProductByCode(quickCode, currentOptions) || selectedCatalogProduct;
       if (match) {
         setSelectedCatalogProduct(match);
         if (match.unit) setQuickUnit(match.unit);
@@ -1083,7 +1419,8 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const handleQuickQtyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const prod = selectedCatalogProduct || findProductByCode(quickCode, productOptions);
+      const currentOptions = productOptionsRef.current.length > 0 ? productOptionsRef.current : productOptions;
+      const prod = selectedCatalogProduct || findProductByCode(quickCode, currentOptions);
       if (prod) {
         handleAddProductFromBar(prod, quickQty);
       }
@@ -1146,6 +1483,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         priceMap: selectedPriceMap,
         billType: mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR',
         products: validRows.map((r) => ({
+          code: resolveProductCode(r, productOptionsRef.current, rawProductsRef.current),
           particular: r.particular,
           quantity: r.quantity,
           pcs: r.pcs || '0',
@@ -1155,9 +1493,10 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         })),
       };
 
-      if (isEditMode && editBillData) {
-        const id = editBillData._id || editBillData.id;
-        await ParticularsApi.update(id, payload);
+      const targetEditId = activeEditingBillId || (isEditMode && editBillData ? (editBillData._id || editBillData.id) : null);
+
+      if (targetEditId) {
+        await ParticularsApi.update(targetEditId, payload);
         setSnackbarMessage(mode === 'QUOTATION' ? 'Quotation updated successfully!' : 'Estimate / Bill updated successfully!');
       } else {
         await ParticularsApi.create(payload);
@@ -1170,19 +1509,6 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
       window.dispatchEvent(new Event('svm_bill_saved'));
       setSnackbarOpen(true);
-
-      // Refresh next bill number for fresh quotations
-      if (!isEditMode) {
-        ParticularsApi.getNextBillNo('REGULAR', selectedYear)
-          .then((res) => {
-            if (res && res.nextBillNo) setBillNo(res.nextBillNo);
-          })
-          .catch(() => { });
-      }
-
-      if (isEditMode && onEditSuccess) {
-        onEditSuccess();
-      }
 
       // Construct bill data and open PDF Preview & Print Modal immediately
       const savedBillData: BillPrintData = {
@@ -1203,20 +1529,28 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         logoUrl: storeSettings.logoUrl,
         subtotal: subtotal,
         discount: discountAmount,
+        discountPercent: discountPercent,
         packing: packingAmount,
+        packingCharges: packingAmount,
+        packingPercent: packingPercent,
         total: netPayment,
         invoiceTitle: mode === 'QUOTATION' ? 'QUOTATION' : 'ESTIMATE',
         products: validRows.map((r) => ({
+          code: resolveProductCode(r, productOptionsRef.current, rawProductsRef.current),
           particular: r.particular,
           quantity: r.quantity,
           rate: r.rate,
           pktUnit: r.pktUnit,
+          content: r.pktUnit || '1',
           amount: r.amount,
         })),
       };
 
       setSelectedBillForPrint(savedBillData);
       setPrintModalOpen(true);
+
+      // Immediately reset and clear form so user is ready for new bill entry
+      await resetFormForNewBill();
     } catch (err: any) {
       console.error('Failed to save bill:', err);
       setSnackbarMessage(err.message || `Failed to save ${mode === 'QUOTATION' ? 'Quotation' : 'Estimate Bill'}.`);
@@ -1250,8 +1584,9 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
     setSavingBill(true);
     try {
-      if (isEditMode && editBillData) {
-        const id = editBillData._id || editBillData.id;
+      const targetEditId = activeEditingBillId || (isEditMode && editBillData ? (editBillData._id || editBillData.id) : null);
+      if (targetEditId) {
+        const id = targetEditId;
         const res = await ParticularsApi.convertToBill(id);
         const converted = res?.data || res;
         setSnackbarMessage(`Quotation converted to Estimate Bill #${converted.billNo || ''} successfully! Added to Sales.`);
@@ -1280,6 +1615,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           notes: remarks,
           billType: 'REGULAR',
           products: validRows.map((r) => ({
+            code: resolveProductCode(r, productOptionsRef.current, rawProductsRef.current),
             particular: r.particular,
             quantity: r.quantity,
             pcs: r.pcs || '0',
@@ -1363,7 +1699,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       total: netPayment,
       invoiceTitle: mode === 'QUOTATION' ? 'QUOTATION' : 'ESTIMATE',
       products: validRows.map((r) => ({
-        code: r.code || '',
+        code: resolveProductCode(r, productOptionsRef.current, rawProductsRef.current),
         particular: r.particular,
         quantity: r.quantity,
         rate: r.rate,
@@ -1377,13 +1713,20 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setPrintModalOpen(true);
   };
 
-  // Reset / Exit Form
-  const handleExitReset = () => {
+  // Helper to completely clear the form and reset draft session for a fresh new bill
+  const resetFormForNewBill = async (overrideNextBillNo?: string) => {
+    setActiveEditingBillId(null);
     setCustomerName('');
     setCustomerMobile('');
     setCustomerAddress('');
     setCustomerGst('');
+    setCustomerNo('');
     setSelectedCustomer(null);
+    setCustomerHistoryInfo(null);
+    setQuickCode('');
+    setSelectedCatalogProduct(null);
+    setQuickUnit('1 Box');
+    setQuickQty('1');
     setProductRows([
       { id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', pcs: '0', amount: '0' },
     ]);
@@ -1392,6 +1735,68 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setPackingRs('');
     setPackingPercent('');
     setRemarks('');
+    setPaymentMode('Cash');
+    setBillDate(getInitialDateStr());
+
+    let nextNum = overrideNextBillNo;
+    if (!nextNum) {
+      try {
+        const nextRes = await ParticularsApi.getNextBillNo(mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR', selectedYear);
+        if (nextRes?.nextBillNo) nextNum = nextRes.nextBillNo;
+      } catch (err) {
+        console.warn('Could not fetch next bill no:', err);
+      }
+    }
+    const freshBillNo = nextNum || '1001';
+    setBillNo(freshBillNo);
+    activeSessionAssignedBillNoRef.current = freshBillNo;
+
+    // Reset active session in sessions array and localStorage
+    if (activeSessionId) {
+      setSessions((prev) => {
+        const updated = prev.map((s) => {
+          if (s.id === activeSessionId) {
+            const idx = prev.findIndex((item) => item.id === activeSessionId);
+            return {
+              ...s,
+              title: `${mode === 'QUOTATION' ? 'Quotation' : 'Bill'} ${idx >= 0 ? idx + 1 : 1}`,
+              customerNo: '',
+              billDate: getInitialDateStr(),
+              billNo: freshBillNo,
+              assignedBillNo: freshBillNo,
+              rateType: 'Befor Rate',
+              customerGst: '',
+              customerName: '',
+              customerMobile: '',
+              customerAddress: '',
+              companyName: storeSettings.companyName || 'Manjula Crackers',
+              productRows: [{ id: '1', particular: '', pktUnit: '1 Box', rate: '0', quantity: '1', pcs: '0', amount: '0' }],
+              discountPercent: '0',
+              discountRs: '0',
+              packingRs: '',
+              packingPercent: '',
+              remarks: '',
+              paymentMode: 'Cash',
+              lastUpdated: Date.now(),
+              isEdit: false,
+              editingBillId: undefined,
+            };
+          }
+          return s;
+        });
+        saveParticularSessions(mode, updated, activeSessionId);
+        return updated;
+      });
+    }
+
+    setTimeout(() => {
+      codeInputRef.current?.focus();
+    }, 100);
+  };
+
+  // Reset / Exit Form
+  const handleExitReset = () => {
+    resetFormForNewBill();
   };
 
   // Filter products in catalog modal
@@ -1519,6 +1924,21 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                     }}
                   >
                     <span>{displayName}</span>
+                    {(sess.editingBillId || sess.isEdit) && (
+                      <span
+                        style={{
+                          fontSize: '9px',
+                          padding: '1px 5px',
+                          borderRadius: '3px',
+                          backgroundColor: isActive ? '#F59E0B' : '#FEF3C7',
+                          color: isActive ? '#FFFFFF' : '#92400E',
+                          fontWeight: 700,
+                          letterSpacing: '0.3px',
+                        }}
+                      >
+                        EDIT
+                      </span>
+                    )}
                     {rowCount > 0 && (
                       <span
                         style={{
@@ -1710,18 +2130,74 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                 </Box>
 
                 {/* Bill No */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '75px' }}>
-                    Bill No
-                  </Typography>
-                  <input
-                    type="text"
-                    value={billNo}
-                    onChange={(e) => setBillNo(e.target.value)}
-                    placeholder="Auto"
-                    className="erp-input"
-                    style={{ width: '120px' }}
-                  />
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0.5 }}>
+                    <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '60px' }}>
+                      Bill No
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <input
+                        type="text"
+                        value={billNo}
+                        onChange={(e) => setBillNo(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleBillNoLookup(billNo);
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            const currentSession = sessions.find((s) => s.id === activeSessionId);
+                            const revert = currentSession?.assignedBillNo || activeSessionAssignedBillNoRef.current || billNo;
+                            setBillNo(revert);
+                          }
+                        }}
+                        placeholder="Auto"
+                        className="erp-input"
+                        style={{
+                          width: '100px',
+                          borderColor: activeEditingBillId ? '#D97706' : undefined,
+                          backgroundColor: activeEditingBillId ? '#FFFBEB' : undefined,
+                        }}
+                        title="Enter old bill no and press Enter or search button to load"
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={() => handleBillNoLookup(billNo)}
+                        disabled={searchingBillNo || !billNo.trim()}
+                        title="Search & load bill"
+                        sx={{
+                          p: '3px',
+                          bgcolor: '#EFF6FF',
+                          border: '1px solid #BFDBFE',
+                          borderRadius: '3px',
+                          color: '#1D4ED8',
+                          '&:hover': { bgcolor: '#DBEAFE' },
+                        }}
+                      >
+                        {searchingBillNo ? <CircularProgress size={13} color="inherit" /> : <SearchRoundedIcon sx={{ fontSize: 15 }} />}
+                      </IconButton>
+                    </Box>
+                  </Box>
+                  {activeEditingBillId && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 0.5 }}>
+                      <span style={{ fontSize: '9.5px', color: '#B45309', fontWeight: 700 }}>
+                        ● Editing Existing {mode === 'QUOTATION' ? 'Quotation' : 'Bill'}
+                      </span>
+                      <span
+                        onClick={() => {
+                          setActiveEditingBillId(null);
+                          ParticularsApi.getNextBillNo(mode === 'QUOTATION' ? 'QUOTATION' : 'REGULAR', selectedYear)
+                            .then((res) => { if (res?.nextBillNo) setBillNo(res.nextBillNo); })
+                            .catch(() => {});
+                          setSnackbarMessage('Switched back to new bill creation.');
+                          setSnackbarOpen(true);
+                        }}
+                        style={{ fontSize: '9.5px', color: '#2563EB', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600 }}
+                      >
+                        New Bill
+                      </span>
+                    </Box>
+                  )}
                 </Box>
 
               </Box>
@@ -2055,17 +2531,19 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             {/* Add / Enter Action Button */}
             <Button
               onClick={() => {
-                const prod = selectedCatalogProduct || findProductByCode(quickCode, productOptions);
+                const currentOptions = productOptionsRef.current.length > 0 ? productOptionsRef.current : productOptions;
+                const prod = selectedCatalogProduct || findProductByCode(quickCode, currentOptions);
                 if (prod) {
                   handleAddProductFromBar(prod, quickQty);
                 }
               }}
               disabled={
-                (!selectedCatalogProduct && !findProductByCode(quickCode, productOptions)) ||
+                (!selectedCatalogProduct && !findProductByCode(quickCode, productOptionsRef.current.length > 0 ? productOptionsRef.current : productOptions)) ||
                 Boolean(
                   (selectedCatalogProduct && (selectedCatalogProduct.isOutOfStock || (typeof selectedCatalogProduct.qty === 'number' && selectedCatalogProduct.qty <= 0))) ||
                   (() => {
-                    const m = findProductByCode(quickCode, productOptions);
+                    const currentOptions = productOptionsRef.current.length > 0 ? productOptionsRef.current : productOptions;
+                    const m = findProductByCode(quickCode, currentOptions);
                     return m && (m.isOutOfStock || (typeof m.qty === 'number' && m.qty <= 0));
                   })()
                 )
@@ -2470,7 +2948,13 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                       '&:hover': { bgcolor: '#580e34' },
                     }}
                   >
-                    {savingBill ? <CircularProgress size={16} color="inherit" /> : (mode === 'QUOTATION' ? 'Save Quotation' : 'Save Bill')}
+                    {savingBill ? (
+                      <CircularProgress size={16} color="inherit" />
+                    ) : (
+                      (activeEditingBillId || isEditMode)
+                        ? (mode === 'QUOTATION' ? 'Update Quotation' : 'Update Bill')
+                        : (mode === 'QUOTATION' ? 'Save Quotation' : 'Save Bill')
+                    )}
                   </Button>
 
                   <Button
@@ -2769,19 +3253,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         </DialogActions>
       </Dialog>
 
-      {/* ========================================================= */}
-      {/* QUOTATION / BILL PRINT PREVIEW MODAL */}
-      {/* ========================================================= */}
-      {selectedBillForPrint && (
-        <BillPrintModal
-          open={printModalOpen}
-          onClose={() => {
-            setPrintModalOpen(false);
-            setSelectedBillForPrint(null);
-          }}
-          bill={selectedBillForPrint}
-        />
-      )}
+
 
       {/* Duplicate Bill to Multiple Customers Modal */}
       {duplicateModalOpen && (

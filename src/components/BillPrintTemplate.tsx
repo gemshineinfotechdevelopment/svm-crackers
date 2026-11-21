@@ -167,6 +167,12 @@ export const getProductCode = (item: BillPrintProduct): string => {
   if (item.code !== undefined && item.code !== null && String(item.code).trim() !== '') {
     return String(item.code).trim();
   }
+  if ((item as any).itemCode !== undefined && (item as any).itemCode !== null && String((item as any).itemCode).trim() !== '') {
+    return String((item as any).itemCode).trim();
+  }
+  if ((item as any).slNo !== undefined && (item as any).slNo !== null && String((item as any).slNo).trim() !== '') {
+    return String((item as any).slNo).trim();
+  }
   const cleanName = (item.particular || '').toLowerCase().trim();
   if (DEFAULT_CRACKER_CODES[cleanName]) {
     return DEFAULT_CRACKER_CODES[cleanName];
@@ -175,6 +181,38 @@ export const getProductCode = (item: BillPrintProduct): string => {
   if (DEFAULT_CRACKER_CODES[noParens]) {
     return DEFAULT_CRACKER_CODES[noParens];
   }
+
+  // Fallback: search cached price maps in localStorage for matching product name
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith('svm_pricemaps_')) {
+          const raw = window.localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              for (const map of parsed) {
+                if (map && Array.isArray(map.rates)) {
+                  for (const r of map.rates) {
+                    if (r && r.code && r.productName) {
+                      const rName = String(r.productName).toLowerCase().trim();
+                      if (rName === cleanName || rName.replace(/\(.*?\)/g, '').trim() === noParens) {
+                        return String(r.code).trim();
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Ignore storage parse error
+  }
+
   return '';
 };
 

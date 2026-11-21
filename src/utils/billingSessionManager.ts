@@ -7,6 +7,7 @@ export interface ParticularDraftSession {
   customerNo: string;
   billDate: string;
   billNo: string;
+  assignedBillNo?: string;
   rateType: string;
   customerGst: string;
   customerName: string;
@@ -15,6 +16,7 @@ export interface ParticularDraftSession {
   companyName: string;
   productRows: Array<{
     id: string;
+    code?: string;
     particular: string;
     quantity: string;
     pcs?: string;
@@ -31,6 +33,8 @@ export interface ParticularDraftSession {
   priceMap?: string;
   selectedYear?: number;
   lastUpdated: number;
+  isEdit?: boolean;
+  editingBillId?: string;
 }
 
 export interface GstDraftSession {

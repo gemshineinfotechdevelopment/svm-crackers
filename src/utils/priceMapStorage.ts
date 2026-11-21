@@ -27,10 +27,12 @@ export const getLocalPriceMaps = (year?: number | string): PriceMapRecord[] => {
   }));
 };
 
-export const saveLocalPriceMaps = (maps: PriceMapRecord[], year?: number | string) => {
+export const saveLocalPriceMaps = (maps: PriceMapRecord[], year?: number | string, silent: boolean = false) => {
   try {
     localStorage.setItem(getStorageKey(year), JSON.stringify(maps));
-    window.dispatchEvent(new CustomEvent(PRICEMAP_CHANGE_EVENT, { detail: { maps, year } }));
+    if (!silent) {
+      window.dispatchEvent(new CustomEvent(PRICEMAP_CHANGE_EVENT, { detail: { maps, year } }));
+    }
   } catch (e) {
     console.warn('Failed to save price maps to localStorage', e);
   }
@@ -41,7 +43,7 @@ export const fetchPriceMaps = async (year?: number | string): Promise<PriceMapRe
     const res = await PriceMapsApi.getAll(year);
     const data = Array.isArray(res) ? res : (res as any)?.data || [];
     if (data.length > 0) {
-      saveLocalPriceMaps(data, year);
+      saveLocalPriceMaps(data, year, true);
       return data;
     }
   } catch (err) {

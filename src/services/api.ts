@@ -207,13 +207,46 @@ export const PriceMapsApi = {
 
 // Particulars API
 export const ParticularsApi = {
-  getAll: (customerName?: string, billType?: 'REGULAR' | 'GST' | 'QUOTATION' | 'ESTIMATE' | 'ALL' | string, year?: number | string) => {
+  getAll: (
+    customerName?: string,
+    billType?: 'REGULAR' | 'GST' | 'QUOTATION' | 'ESTIMATE' | 'ALL' | string,
+    year?: number | string,
+    billNo?: string
+  ) => {
     const params = new URLSearchParams();
     if (customerName && customerName !== 'ALL') params.append('customerName', customerName);
     if (billType && billType !== 'ALL') params.append('billType', billType);
     if (year !== undefined && year !== null && String(year).toUpperCase() !== 'ALL') params.append('year', String(year));
+    if (billNo && billNo.trim()) params.append('billNo', billNo.trim());
     const qs = params.toString();
     return request<any[]>(`/particulars${qs ? `?${qs}` : ''}`);
+  },
+  getByBillNo: async (billNo: string, billType?: string, year?: number | string) => {
+    const trimmed = billNo ? billNo.trim() : '';
+    if (!trimmed) return null;
+    const params = new URLSearchParams();
+    params.append('billNo', trimmed);
+    if (billType && billType !== 'ALL') params.append('billType', billType);
+    if (year !== undefined && year !== null && String(year).toUpperCase() !== 'ALL') params.append('year', String(year));
+    const qs = params.toString();
+    try {
+      const res = await request<any>(`/particulars?${qs}`);
+      const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+      if (list.length > 0) return list[0];
+
+      // Fallback search across all years
+      if (year && String(year).toUpperCase() !== 'ALL') {
+        const fbParams = new URLSearchParams();
+        fbParams.append('billNo', trimmed);
+        if (billType && billType !== 'ALL') fbParams.append('billType', billType);
+        const fbRes = await request<any>(`/particulars?${fbParams.toString()}`);
+        const fbList = Array.isArray(fbRes) ? fbRes : (Array.isArray(fbRes?.data) ? fbRes.data : []);
+        if (fbList.length > 0) return fbList[0];
+      }
+    } catch (err) {
+      console.warn('[ParticularsApi.getByBillNo] Error fetching bill by billNo:', err);
+    }
+    return null;
   },
   getNextBillNo: (type?: string, year?: number | string) => {
     const params = new URLSearchParams();

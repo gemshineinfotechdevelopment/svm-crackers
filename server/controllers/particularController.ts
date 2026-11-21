@@ -67,7 +67,7 @@ const adjustStock = async (products: any[], multiplier: number): Promise<void> =
 
 export const getParticulars = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { customerName, billType, year } = req.query;
+    const { customerName, billType, year, billNo } = req.query;
     const filter: any = {};
     const andConditions: any[] = [];
 
@@ -83,6 +83,20 @@ export const getParticulars = async (req: Request, res: Response, next: NextFunc
           ],
         });
       }
+    }
+
+    // Filter by Bill No if specified (supports exact string, regex, or numeric format)
+    if (billNo && typeof billNo === 'string' && billNo.trim() !== '') {
+      const trimmedNo = billNo.trim();
+      const numVal = parseInt(trimmedNo, 10);
+      const billNoConditions: any[] = [
+        { billNo: trimmedNo },
+        { billNo: { $regex: new RegExp(`^${escapeRegex(trimmedNo)}$`, 'i') } },
+      ];
+      if (!isNaN(numVal)) {
+        billNoConditions.push({ billNo: numVal });
+      }
+      andConditions.push({ $or: billNoConditions });
     }
 
     // 2. Customer Name Filter

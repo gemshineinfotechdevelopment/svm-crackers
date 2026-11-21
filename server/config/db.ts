@@ -1,4 +1,13 @@
 import mongoose from 'mongoose';
+import dns from 'node:dns';
+
+// Configure reliable public DNS servers to resolve MongoDB Atlas SRV records
+// (Prevents querySrv ECONNREFUSED caused by local ISP/router DNS rejecting SRV queries)
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+} catch {
+  // Ignore fallback if custom DNS servers cannot be set
+}
 
 export const connectDB = async (retryCount = 0): Promise<void> => {
   let uri =
