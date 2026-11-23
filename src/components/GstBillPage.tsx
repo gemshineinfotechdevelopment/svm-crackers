@@ -73,6 +73,7 @@ export interface GstRowItem {
 interface CustomerOptionItem {
   id: string;
   name: string;
+  agent?: string;
   mobile?: string;
   address?: string;
   gst?: string;
@@ -183,6 +184,7 @@ export const GstBillPage: FC = () => {
   // 2. Customer Info State (Top Middle Box)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOptionItem | null>(null);
   const [customerName, setCustomerName] = useState<string>(() => initialDraft?.customerName || '');
+  const [agent, setAgent] = useState<string>(() => initialDraft?.agent || '');
   const [customerAddress, setCustomerAddress] = useState<string>(() => initialDraft?.customerAddress || '');
   const [customerGst, setCustomerGst] = useState<string>(() => initialDraft?.customerGst || '');
   const [customerAadhar, setCustomerAadhar] = useState<string>(() => initialDraft?.customerAadhar || '');
@@ -237,6 +239,7 @@ export const GstBillPage: FC = () => {
     setBillDate(sess.billDate || getTodayDateStr());
     setSelectedCustomer(null);
     setCustomerName(sess.customerName || '');
+    setAgent(sess.agent || '');
     setCustomerAddress(sess.customerAddress || '');
     setCustomerGst(sess.customerGst || '');
     setCustomerAadhar(sess.customerAadhar || '');
@@ -271,6 +274,7 @@ export const GstBillPage: FC = () => {
             billNo,
             billDate,
             customerName,
+            agent,
             customerAddress,
             customerGst,
             customerAadhar,
@@ -299,6 +303,7 @@ export const GstBillPage: FC = () => {
     billNo,
     billDate,
     customerName,
+    agent,
     customerAddress,
     customerGst,
     customerAadhar,
@@ -336,6 +341,7 @@ export const GstBillPage: FC = () => {
       billNo: nextNum,
       billDate: getTodayDateStr(),
       customerName: '',
+      agent: '',
       customerPhone: '',
       customerMobile: '',
       customerAddress: '',
@@ -378,6 +384,7 @@ export const GstBillPage: FC = () => {
           billNo,
           billDate,
           customerName,
+          agent,
           customerAddress,
           customerGst,
           customerAadhar,
@@ -552,6 +559,7 @@ export const GstBillPage: FC = () => {
           custRes.map((c: any) => ({
             id: c._id || c.id,
             name: c.name || '',
+            agent: c.agent || '',
             mobile: c.mobile && c.mobile !== '-' ? c.mobile : '',
             address: c.address && c.address !== '-' ? c.address : '',
             gst: c.gst && c.gst !== 'N/A' ? c.gst : '',
@@ -691,6 +699,7 @@ export const GstBillPage: FC = () => {
     setSelectedCustomer(opt);
     if (opt) {
       setCustomerName(opt.name || '');
+      setAgent(opt.agent || '');
       setCustomerPhone(opt.mobile || '');
       setCustomerAddress(opt.address || '');
       setCustomerGst(opt.gst || '');
@@ -713,6 +722,7 @@ export const GstBillPage: FC = () => {
       }
     } else {
       setCustomerName('');
+      setAgent('');
       setCustomerPhone('');
       setCustomerAddress('');
       setCustomerGst('');
@@ -726,6 +736,7 @@ export const GstBillPage: FC = () => {
     setEditingBillId(null);
     setSelectedCustomer(null);
     setCustomerName('');
+    setAgent('');
     setCustomerPhone('');
     setCustomerAddress('');
     setCustomerGst('');
@@ -765,6 +776,7 @@ export const GstBillPage: FC = () => {
     );
     setSelectedCustomer(matchedCust || null);
     setCustomerName(b.customerName || '');
+    setAgent(b.agent || matchedCust?.agent || '');
     setCustomerPhone(b.customerPhone || b.customerMobile || matchedCust?.mobile || '');
     setCustomerAddress(b.customerAddress || matchedCust?.address || '');
     setCustomerGst(b.customerGst || matchedCust?.gst || '');
@@ -1053,17 +1065,25 @@ export const GstBillPage: FC = () => {
     }
   };
 
-  // Filter products in catalog modal
+  // Filter products in catalog modal (first letter / prefix match)
   const filteredCatalog = useMemo(() => {
     if (!catalogSearchTerm.trim()) return productOptions;
-    const term = catalogSearchTerm.toLowerCase();
-    return productOptions.filter(
-      (p) =>
-        p.name.toLowerCase().includes(term) ||
-        (p.code && p.code.toLowerCase().includes(term)) ||
-        (p.slNo !== undefined && String(p.slNo).includes(term)) ||
-        (p.category && p.category.toLowerCase().includes(term))
-    );
+    const term = catalogSearchTerm.toLowerCase().trim();
+    const cleanTerm = term.replace(/^#+/, '').trim();
+    const digits = cleanTerm.replace(/\D/g, '');
+    return productOptions.filter((p) => {
+      const cleanName = p.name.toLowerCase().trim();
+      const strippedName = cleanName.replace(/^[^a-z0-9]+/i, '');
+      const matchName = cleanName.startsWith(term) || strippedName.startsWith(term) || cleanName.startsWith(cleanTerm);
+      const slStr = p.slNo !== undefined && p.slNo !== null ? String(p.slNo).trim().toLowerCase() : '';
+      const codeStr = p.code ? String(p.code).trim().toLowerCase() : '';
+      const skuStr = p.sku ? String(p.sku).trim().toLowerCase() : '';
+      const matchSlNo = slStr ? (slStr.startsWith(cleanTerm) || (digits ? slStr.startsWith(digits) : false)) : false;
+      const matchCode = codeStr ? (codeStr.startsWith(cleanTerm) || (digits ? codeStr.startsWith(digits) : false)) : false;
+      const matchSku = skuStr ? skuStr.startsWith(cleanTerm) : false;
+      const matchCat = p.category ? p.category.toLowerCase().trim().startsWith(term) : false;
+      return matchName || matchCode || matchSlNo || matchSku || matchCat;
+    });
   }, [productOptions, catalogSearchTerm]);
 
   // Build Print Data Object
@@ -1086,6 +1106,7 @@ export const GstBillPage: FC = () => {
       billNo,
       date: billDate,
       customerName: (customerName || '').trim(),
+      agent: (agent || '').trim(),
       customerPhone: (customerPhone || '').trim(),
       customerAddress: (customerAddress || '').trim(),
       customerGst: (customerGst || '').trim(),
@@ -1154,6 +1175,7 @@ export const GstBillPage: FC = () => {
       date: billData.date,
       year: selectedYear,
       customerName: billData.customerName,
+      agent: billData.agent || '',
       customerPhone: billData.customerPhone || '',
       customerAddress: billData.customerAddress || '',
       customerGst: billData.customerGst || '',
@@ -1200,6 +1222,7 @@ export const GstBillPage: FC = () => {
     billDate,
     selectedYear,
     customerName,
+    agent,
     customerPhone,
     customerAddress,
     customerGst,
@@ -1264,6 +1287,7 @@ export const GstBillPage: FC = () => {
         date: billData.date,
         year: selectedYear,
         customerName: billData.customerName,
+        agent: billData.agent || agent.trim(),
         customerPhone: billData.customerPhone || '',
         customerAddress: billData.customerAddress || '',
         customerGst: billData.customerGst || '',
@@ -1889,6 +1913,21 @@ export const GstBillPage: FC = () => {
                       />
                     </Box>
 
+                    {/* Agent */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                      <Typography sx={{ fontSize: '11px', fontWeight: 600, color: '#0F172A', minWidth: '55px' }}>
+                        Agent
+                      </Typography>
+                      <input
+                        type="text"
+                        value={agent}
+                        onChange={(e) => setAgent(e.target.value)}
+                        placeholder="Agent name..."
+                        className="erp-input"
+                        style={{ flex: 1 }}
+                      />
+                    </Box>
+
                     {/* Address */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
                       <Typography sx={{ fontSize: '11px', fontWeight: 600, color: '#0F172A', minWidth: '55px' }}>
@@ -2128,25 +2167,6 @@ export const GstBillPage: FC = () => {
                 style={{ width: '75px' }}
               />
 
-              <Button
-                onClick={() => setProductCatalogModalOpen(true)}
-                variant="outlined"
-                size="small"
-                sx={{
-                  minWidth: '28px',
-                  px: 1,
-                  py: 0.2,
-                  height: '26px',
-                  bgcolor: '#EDF4FB',
-                  borderColor: '#94A3B8',
-                  color: '#0F172A',
-                  fontWeight: 800,
-                  '&:hover': { bgcolor: '#D9E4F2' },
-                }}
-              >
-                ...
-              </Button>
-
               <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 0.5 }}>
                 Product
               </Typography>
@@ -2154,6 +2174,24 @@ export const GstBillPage: FC = () => {
                 size="small"
                 sx={{ flex: 1, minWidth: '200px' }}
                 options={productOptions}
+                filterOptions={(options, state) => {
+                  const input = state.inputValue.toLowerCase().trim();
+                  if (!input) return options;
+                  const cleanInput = input.replace(/^#+/, '').trim();
+                  const digits = cleanInput.replace(/\D/g, '');
+                  return options.filter((opt) => {
+                    const cleanName = opt.name.toLowerCase().trim();
+                    const strippedName = cleanName.replace(/^[^a-z0-9]+/i, '');
+                    const matchName = cleanName.startsWith(input) || strippedName.startsWith(input) || cleanName.startsWith(cleanInput);
+                    const slStr = opt.slNo !== undefined && opt.slNo !== null ? String(opt.slNo).trim().toLowerCase() : '';
+                    const codeStr = opt.code ? String(opt.code).trim().toLowerCase() : '';
+                    const skuStr = opt.sku ? String(opt.sku).trim().toLowerCase() : '';
+                    const matchSlNo = slStr ? (slStr.startsWith(cleanInput) || (digits ? slStr.startsWith(digits) : false)) : false;
+                    const matchCode = codeStr ? (codeStr.startsWith(cleanInput) || (digits ? codeStr.startsWith(digits) : false)) : false;
+                    const matchSku = skuStr ? skuStr.startsWith(cleanInput) : false;
+                    return matchName || matchCode || matchSlNo || matchSku;
+                  });
+                }}
                 getOptionDisabled={(opt) => Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0))}
                 getOptionLabel={(opt) => {
                   const isOut = Boolean(opt.isOutOfStock || (typeof opt.qty === 'number' && opt.qty <= 0));

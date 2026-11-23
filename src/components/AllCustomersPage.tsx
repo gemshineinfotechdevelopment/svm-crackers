@@ -46,6 +46,7 @@ export interface CustomerItem {
   avatarColor?: string;
   address: string;
   mobile: string;
+  agent?: string;
   gst: string;
 }
 
@@ -78,6 +79,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
   const [editFormData, setEditFormData] = useState({
     name: '',
     mobile: '',
+    agent: '',
     gst: '',
     address: '',
   });
@@ -105,6 +107,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
     billNo: string;
     date: string;
     customerName: string;
+    agent: string;
     customerPhone: string;
     customerAddress: string;
     customerGst: string;
@@ -125,6 +128,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
     billNo: '',
     date: '',
     customerName: '',
+    agent: '',
     customerPhone: '',
     customerAddress: '',
     customerGst: '',
@@ -208,6 +212,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
     setEditFormData({
       name: customer.name || '',
       mobile: customer.mobile || '',
+      agent: customer.agent || '',
       gst: customer.gst || '',
       address: customer.address || '',
     });
@@ -242,6 +247,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
       await CustomersApi.update(id, {
         name: editFormData.name.trim(),
         mobile: editFormData.mobile.trim() || 'N/A',
+        agent: editFormData.agent.trim(),
         gst: editFormData.gst.trim() || 'N/A',
         address: editFormData.address.trim(),
         avatarLetter: editFormData.name.trim().charAt(0).toUpperCase(),
@@ -354,6 +360,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
       billNo: String(bill.billNo || ''),
       date: bill.date || new Date().toLocaleDateString('en-GB').replace(/\//g, '-'),
       customerName: bill.customerName || '',
+      agent: bill.agent || '',
       customerPhone: bill.customerPhone || '',
       customerAddress: bill.customerAddress || '',
       customerGst: bill.customerGst || '',
@@ -456,6 +463,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
         billNo: editBillFormData.billNo.trim(),
         date: editBillFormData.date.trim(),
         customerName: editBillFormData.customerName.trim(),
+        agent: editBillFormData.agent.trim(),
         customerPhone: editBillFormData.customerPhone.trim(),
         customerAddress: editBillFormData.customerAddress.trim(),
         customerGst: editBillFormData.customerGst.trim(),
@@ -761,6 +769,9 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                         <TableCell sx={{ fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                           Address
                         </TableCell>
+                        <TableCell sx={{ width: '120px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
+                          Agent
+                        </TableCell>
                         <TableCell sx={{ width: '140px', fontWeight: 700, bgcolor: '#DCE7F5', color: '#0F172A', fontSize: '12px' }}>
                           GSTIN
                         </TableCell>
@@ -772,13 +783,13 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                     <TableBody>
                       {loading ? (
                         <TableRow>
-                          <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+                          <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                             <CircularProgress size={24} sx={{ color: '#1E40AF' }} />
                           </TableCell>
                         </TableRow>
                       ) : filteredCustomers.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
+                          <TableCell colSpan={7} align="center" sx={{ py: 5, color: '#64748B', fontSize: '12px' }}>
                             {searchTerm ? 'No customers match your search criteria.' : 'No customers found.'}
                           </TableCell>
                         </TableRow>
@@ -821,6 +832,11 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                               {/* Address */}
                               <TableCell sx={{ fontSize: '12px', color: '#334155' }}>
                                 {customer.address || '-'}
+                              </TableCell>
+
+                              {/* Agent */}
+                              <TableCell sx={{ fontSize: '12px', color: '#0F172A', fontWeight: 600 }}>
+                                {customer.agent || '-'}
                               </TableCell>
 
                               {/* GSTIN */}
@@ -1359,6 +1375,19 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
           </Box>
           <Box>
             <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
+              Agent Name
+            </Typography>
+            <input
+              type="text"
+              value={editFormData.agent}
+              onChange={(e) => setEditFormData({ ...editFormData, agent: e.target.value })}
+              placeholder="e.g. Kumar / Agent Name"
+              className="erp-input"
+              style={{ width: '100%' }}
+            />
+          </Box>
+          <Box>
+            <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
               GSTIN
             </Typography>
             <input
@@ -1501,6 +1530,20 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
                   type="text"
                   value={editBillFormData.customerName}
                   onChange={(e) => setEditBillFormData({ ...editBillFormData, customerName: e.target.value })}
+                  className="erp-input"
+                  style={{ width: '100%' }}
+                />
+              </Box>
+
+              <Box>
+                <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', mb: 0.3 }}>
+                  Agent Name
+                </Typography>
+                <input
+                  type="text"
+                  value={editBillFormData.agent}
+                  onChange={(e) => setEditBillFormData({ ...editBillFormData, agent: e.target.value })}
+                  placeholder="Agent name..."
                   className="erp-input"
                   style={{ width: '100%' }}
                 />

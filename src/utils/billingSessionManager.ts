@@ -11,6 +11,7 @@ export interface ParticularDraftSession {
   rateType: string;
   customerGst: string;
   customerName: string;
+  agent?: string;
   customerMobile: string;
   customerAddress: string;
   companyName: string;
@@ -43,6 +44,7 @@ export interface GstDraftSession {
   billNo: string;
   billDate: string;
   customerName: string;
+  agent?: string;
   customerPhone?: string;
   customerMobile?: string;
   customerAddress: string;

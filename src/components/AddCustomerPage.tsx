@@ -23,6 +23,7 @@ export const AddCustomerPage: FC<AddCustomerPageProps> = ({
   const [formData, setFormData] = useState({
     fullName: '',
     mobileNumber: '',
+    agent: '',
     gstin: '',
     billingAddress: '',
   });
@@ -48,6 +49,7 @@ export const AddCustomerPage: FC<AddCustomerPageProps> = ({
       await CustomersApi.create({
         name: formData.fullName.trim(),
         mobile: formData.mobileNumber.trim() || 'N/A',
+        agent: formData.agent.trim(),
         gst: formData.gstin.trim() || 'N/A',
         address: formData.billingAddress.trim(),
         avatarLetter: formData.fullName.trim().charAt(0).toUpperCase(),
@@ -185,6 +187,21 @@ export const AddCustomerPage: FC<AddCustomerPageProps> = ({
                     placeholder="e.g. 9876543210"
                     value={formData.mobileNumber}
                     onChange={handleChange('mobileNumber')}
+                    className="erp-input"
+                    style={{ width: '100%' }}
+                  />
+                </Box>
+
+                {/* Agent Name */}
+                <Box>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#0F172A', mb: 0.4 }}>
+                    Agent Name
+                  </Typography>
+                  <input
+                    type="text"
+                    placeholder="e.g. Kumar / Agent Name"
+                    value={formData.agent}
+                    onChange={handleChange('agent')}
                     className="erp-input"
                     style={{ width: '100%' }}
                   />

@@ -148,7 +148,7 @@ export const getCustomerById = async (req: Request, res: Response, next: NextFun
 
 export const createCustomer = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { name, mobile, address, gst, idCode, year } = req.body;
+    const { name, mobile, address, gst, idCode, year, agent } = req.body;
     const currentYear = new Date().getFullYear();
     const customerYear = year ? Number(year) : currentYear;
 
@@ -175,6 +175,7 @@ export const createCustomer = async (req: Request, res: Response, next: NextFunc
       gst,
       idCode: finalIdCode,
       year: customerYear,
+      agent: agent ? String(agent).trim() : '',
     });
     res.status(201).json({ success: true, data: customer });
   } catch (error) {

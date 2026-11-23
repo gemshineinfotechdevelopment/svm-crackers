@@ -17,6 +17,7 @@ export interface BillPrintData {
   billNo: string;
   date: string;
   customerName: string;
+  agent?: string;
   customerPhone?: string;
   customerAddress?: string;
   customerCity?: string;

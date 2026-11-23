@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface ICustomer extends Document {
   idCode?: string;
   name: string;
+  agent?: string;
   avatarLetter?: string;
   avatarBg?: string;
   avatarColor?: string;
@@ -19,6 +20,7 @@ const CustomerSchema: Schema = new Schema(
   {
     idCode: { type: String, trim: true },
     name: { type: String, required: true, trim: true },
+    agent: { type: String, default: '', trim: true },
     avatarLetter: { type: String, trim: true },
     avatarBg: { type: String, default: '#DBEAFE' },
     avatarColor: { type: String, default: '#0B4DB7' },

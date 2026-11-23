@@ -273,6 +273,7 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
     const currentSystemYear = new Date().getFullYear();
     const {
       customerName,
+      agent,
       customerPhone,
       customerAddress,
       customerGst,
@@ -460,6 +461,7 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
 
     const particular = await Particular.create({
       customerName: trimmedCustName,
+      agent: agent ? String(agent).trim() : (req.body.agent ? String(req.body.agent).trim() : ''),
       customerPhone: customerPhone || '',
       customerAddress: customerAddress || '',
       customerGst: customerGst || '',
@@ -578,6 +580,7 @@ export const updateParticular = async (req: Request, res: Response, next: NextFu
 
     const {
       customerName,
+      agent,
       customerPhone,
       customerAddress,
       customerGst,
@@ -602,6 +605,7 @@ export const updateParticular = async (req: Request, res: Response, next: NextFu
       id,
       {
         ...(customerName !== undefined && { customerName: String(customerName).trim() }),
+        ...(req.body.agent !== undefined && { agent: String(req.body.agent).trim() }),
         ...(customerPhone !== undefined && { customerPhone }),
         ...(customerAddress !== undefined && { customerAddress }),
         ...(customerGst !== undefined && { customerGst }),

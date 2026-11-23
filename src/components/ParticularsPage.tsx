@@ -76,6 +76,7 @@ interface CustomerOptionItem {
   id: string;
   idCode?: string;
   name: string;
+  agent?: string;
   mobile?: string;
   address?: string;
   gst?: string;
@@ -322,6 +323,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   // 2. Customer Middle Selection & Right New Customer Form
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOptionItem | null>(null);
   const [customerName, setCustomerName] = useState<string>(() => initialCustomerName || initialDraft?.customerName || '');
+  const [agent, setAgent] = useState<string>(() => initialDraft?.agent || '');
   const [customerMobile, setCustomerMobile] = useState<string>(() => initialDraft?.customerMobile || '');
   const [customerAddress, setCustomerAddress] = useState<string>(() => initialDraft?.customerAddress || '');
   const [companyName, setCompanyName] = useState<string>(() => initialDraft?.companyName || storeSettings.companyName || 'S.V.M Fireworks Agencies');
@@ -363,6 +365,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setRateType(sess.rateType || 'Befor Rate');
     setCustomerGst(sess.customerGst || '');
     setCustomerName(sess.customerName || '');
+    setAgent(sess.agent || '');
     setCustomerMobile(sess.customerMobile || '');
     setCustomerAddress(sess.customerAddress || '');
     setCompanyName(sess.companyName || storeSettings.companyName || 'Manjula Crackers');
@@ -408,6 +411,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
             rateType,
             customerGst,
             customerName,
+            agent,
             customerMobile,
             customerAddress,
             companyName,
@@ -440,6 +444,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     rateType,
     customerGst,
     customerName,
+    agent,
     customerMobile,
     customerAddress,
     companyName,
@@ -475,6 +480,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       rateType: 'Befor Rate',
       customerGst: '',
       customerName: '',
+      agent: '',
       customerMobile: '',
       customerAddress: '',
       companyName: storeSettings.companyName || 'Manjula Crackers',
@@ -659,6 +665,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           rateType: foundBill.rateType || 'Befor Rate',
           customerGst: foundBill.customerGst || '',
           customerName: foundBill.customerName || '',
+          agent: foundBill.agent || '',
           customerMobile: foundBill.customerPhone || '',
           customerAddress: foundBill.customerAddress || '',
           companyName: foundBill.companyName || storeSettings.companyName || 'S.V.M Fireworks Agencies',
@@ -946,6 +953,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           id: c._id || c.id,
           idCode: c.idCode || `C${450 + idx}`,
           name: c.name,
+          agent: c.agent || '',
           mobile: c.mobile && c.mobile !== 'N/A' && c.mobile !== '-' ? c.mobile : '',
           address: c.address && c.address !== 'N/A' && c.address !== '-' ? c.address : '',
           gst: c.gst && c.gst !== 'N/A' && c.gst !== '-' ? c.gst : '',
@@ -960,6 +968,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
           if (match) {
             setSelectedCustomer(match);
             setCustomerName(match.name);
+            setAgent(match.agent || '');
             setCustomerMobile(match.mobile || '');
             setCustomerAddress(match.address || '');
             setCustomerGst(match.gst || '');
@@ -1047,6 +1056,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   useEffect(() => {
     if (editBillData && (editBillData._id || editBillData.id)) {
       setCustomerName(editBillData.customerName || '');
+      setAgent(editBillData.agent || '');
       setCustomerMobile(editBillData.customerPhone || '');
       setCustomerAddress(editBillData.customerAddress || '');
       setCustomerGst(editBillData.customerGst || '');
@@ -1088,6 +1098,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     setSelectedCustomer(opt);
     if (opt) {
       setCustomerName(opt.name);
+      setAgent(opt.agent || '');
       setCustomerMobile(opt.mobile || '');
       setCustomerAddress(opt.address || '');
       setCustomerGst(opt.gst || '');
@@ -1462,6 +1473,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     try {
       const payload = {
         customerName: customerName.trim(),
+        agent: agent.trim(),
         customerPhone: customerMobile.trim(),
         customerAddress: customerAddress.trim(),
         customerGst: customerGst.trim(),
@@ -1516,6 +1528,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
         date: billDate,
         rateType: rateType,
         customerName: customerName.trim() || 'Valued Customer',
+        agent: agent.trim(),
         customerPhone: customerMobile.trim(),
         customerAddress: customerAddress.trim(),
         customerGst: customerGst.trim(),
@@ -1596,6 +1609,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       } else {
         const payload = {
           customerName: customerName.trim(),
+          agent: agent.trim(),
           customerPhone: customerMobile.trim(),
           customerAddress: customerAddress.trim(),
           customerGst: customerGst.trim(),
@@ -1679,6 +1693,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
       date: billDate,
       rateType: rateType,
       customerName: customerName || 'Valued Customer',
+      agent: agent.trim(),
       customerPhone: customerMobile,
       customerAddress: customerAddress,
       customerGst: customerGst,
@@ -1717,6 +1732,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
   const resetFormForNewBill = async (overrideNextBillNo?: string) => {
     setActiveEditingBillId(null);
     setCustomerName('');
+    setAgent('');
     setCustomerMobile('');
     setCustomerAddress('');
     setCustomerGst('');
@@ -1767,6 +1783,7 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               rateType: 'Befor Rate',
               customerGst: '',
               customerName: '',
+              agent: '',
               customerMobile: '',
               customerAddress: '',
               companyName: storeSettings.companyName || 'Manjula Crackers',
@@ -1799,16 +1816,23 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
     resetFormForNewBill();
   };
 
-  // Filter products in catalog modal
+  // Filter products in catalog modal (first letter / prefix match)
   const filteredCatalog = useMemo(() => {
     if (!catalogSearchTerm.trim()) return productOptions;
-    const term = catalogSearchTerm.toLowerCase();
-    return productOptions.filter(
-      (p) =>
-        p.name.toLowerCase().includes(term) ||
-        (p.category && p.category.toLowerCase().includes(term)) ||
-        (p.sku && p.sku.toLowerCase().includes(term))
-    );
+    const term = catalogSearchTerm.toLowerCase().trim();
+    const cleanTerm = term.replace(/^#+/, '').trim();
+    const digits = cleanTerm.replace(/\D/g, '');
+    return productOptions.filter((p) => {
+      const cleanName = p.name.toLowerCase().trim();
+      const strippedName = cleanName.replace(/^[^a-z0-9]+/i, '');
+      const matchName = cleanName.startsWith(term) || strippedName.startsWith(term) || cleanName.startsWith(cleanTerm);
+      const slStr = p.slNo !== undefined && p.slNo !== null ? String(p.slNo).trim().toLowerCase() : '';
+      const skuStr = p.sku ? String(p.sku).trim().toLowerCase() : '';
+      const matchSlNo = slStr ? (slStr.startsWith(cleanTerm) || (digits ? slStr.startsWith(digits) : false)) : false;
+      const matchSku = skuStr ? skuStr.startsWith(cleanTerm) : false;
+      const matchCat = p.category ? p.category.toLowerCase().trim().startsWith(term) : false;
+      return matchName || matchSku || matchSlNo || matchCat;
+    });
   }, [productOptions, catalogSearchTerm]);
 
   // Generate visual empty filler rows to mirror the classic ERP look in the screenshot
@@ -2268,6 +2292,20 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '65px' }}>
+                    Agent
+                  </Typography>
+                  <input
+                    type="text"
+                    value={agent}
+                    onChange={(e) => setAgent(e.target.value)}
+                    placeholder="Agent name..."
+                    className="erp-input"
+                    style={{ flex: 1 }}
+                  />
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography sx={{ fontSize: '11.5px', fontWeight: 600, color: '#0F172A', minWidth: '65px' }}>
                     Mobile No
                   </Typography>
                   <input
@@ -2392,30 +2430,10 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
                 title="Enter S.No / Code to auto-fill product (Press Enter to jump to Quantity)"
               />
 
-            {/* Browse Button (...) */}
-            <Button
-              onClick={() => setProductCatalogModalOpen(true)}
-              variant="outlined"
-              size="small"
-              sx={{
-                minWidth: '28px',
-                px: 1,
-                py: 0.2,
-                height: '26px',
-                bgcolor: '#EDF4FB',
-                borderColor: '#94A3B8',
-                color: '#0F172A',
-                fontWeight: 800,
-                '&:hover': { bgcolor: '#D9E4F2' },
-              }}
-            >
-              ...
-            </Button>
-
-            {/* Product Dropdown */}
-            <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 1 }}>
-              Product
-            </Typography>
+              {/* Product Dropdown */}
+              <Typography sx={{ fontSize: '12px', fontWeight: 600, color: '#0F172A', ml: 1 }}>
+                Product
+              </Typography>
             <Autocomplete
               size="small"
               sx={{ flex: 1, minWidth: '220px' }}
@@ -2454,11 +2472,16 @@ export const ParticularsPage: FC<ParticularsPageProps> = ({
               filterOptions={(options, state) => {
                 const input = state.inputValue.toLowerCase().trim();
                 if (!input) return options;
-                const digits = input.replace(/\D/g, '');
+                const cleanInput = input.replace(/^#+/, '').trim();
+                const digits = cleanInput.replace(/\D/g, '');
                 return options.filter((opt) => {
-                  const matchName = opt.name.toLowerCase().includes(input);
-                  const matchSku = opt.sku ? String(opt.sku).toLowerCase().includes(input) : false;
-                  const matchSlNo = opt.slNo !== undefined ? String(opt.slNo).includes(digits || input) : false;
+                  const cleanName = opt.name.toLowerCase().trim();
+                  const strippedName = cleanName.replace(/^[^a-z0-9]+/i, '');
+                  const matchName = cleanName.startsWith(input) || strippedName.startsWith(input) || cleanName.startsWith(cleanInput);
+                  const slStr = opt.slNo !== undefined && opt.slNo !== null ? String(opt.slNo).trim().toLowerCase() : '';
+                  const skuStr = opt.sku ? String(opt.sku).trim().toLowerCase() : '';
+                  const matchSlNo = slStr ? (slStr.startsWith(cleanInput) || (digits ? slStr.startsWith(digits) : false)) : false;
+                  const matchSku = skuStr ? skuStr.startsWith(cleanInput) : false;
                   return matchName || matchSku || matchSlNo;
                 });
               }}

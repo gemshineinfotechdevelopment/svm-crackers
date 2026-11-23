@@ -42,6 +42,7 @@ export interface Customer {
   id?: string;
   idCode?: string;
   name: string;
+  agent?: string;
   avatarLetter?: string;
   avatarBg?: string;
   avatarColor?: string;
@@ -70,6 +71,7 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [editFormData, setEditFormData] = useState({
     name: '',
+    agent: '',
     mobile: '',
     gst: '',
     address: '',
@@ -147,6 +149,7 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
     setEditingCustomer(customer);
     setEditFormData({
       name: customer.name || '',
+      agent: customer.agent || '',
       mobile: customer.mobile || '',
       gst: customer.gst || '',
       address: customer.address || '',
@@ -181,6 +184,7 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
       setEditLoading(true);
       await CustomersApi.update(id, {
         name: editFormData.name.trim(),
+        agent: editFormData.agent.trim(),
         mobile: editFormData.mobile.trim() || 'N/A',
         gst: editFormData.gst.trim() || 'N/A',
         address: editFormData.address.trim(),
@@ -273,6 +277,7 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
     return customers.filter(
       (c) =>
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.agent && c.agent.toLowerCase().includes(searchTerm.toLowerCase())) ||
         c.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.gst.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.mobile.includes(searchTerm) ||
@@ -491,6 +496,19 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
                   ADDRESS & CONTACT
                 </TableCell>
                 <TableCell
+                  sx={{
+                    py: 1.6,
+                    px: 2.5,
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#1E293B',
+                    letterSpacing: '0.04em',
+                    borderBottom: '2px solid #E2E8F0',
+                  }}
+                >
+                  AGENT
+                </TableCell>
+                <TableCell
                   align="right"
                   sx={{
                     py: 1.6,
@@ -556,13 +574,13 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
                     <CircularProgress size={32} sx={{ color: '#DC2626' }} />
                   </TableCell>
                 </TableRow>
               ) : filteredCustomers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 6, color: '#786C58' }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 6, color: '#786C58' }}>
                     No customers found.
                   </TableCell>
                 </TableRow>
@@ -677,6 +695,19 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
                         </Typography>
                         <Typography sx={{ fontSize: '11.5px', color: '#64748B', fontWeight: 600 }}>
                           📞 {customer.mobile || 'N/A'}
+                        </Typography>
+                      </TableCell>
+
+                      {/* Agent */}
+                      <TableCell
+                        sx={{
+                          py: 1.6,
+                          px: 2.5,
+                          borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
+                        }}
+                      >
+                        <Typography sx={{ fontSize: '13px', fontWeight: 600, color: customer.agent ? '#0F172A' : '#94A3B8' }}>
+                          {customer.agent || '-'}
                         </Typography>
                       </TableCell>
 
@@ -1024,6 +1055,22 @@ export const CustomersPage: FC<CustomersPageProps> = ({ onAddNew, onSelectCustom
                 size="small"
                 value={editFormData.name}
                 onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                slotProps={{
+                  input: { sx: { fontSize: '13.5px', fontWeight: 500, borderRadius: '6px' } },
+                }}
+              />
+            </Box>
+
+            <Box>
+              <Typography sx={{ fontSize: '13px', fontWeight: 600, color: '#475569', mb: 0.5 }}>
+                Agent Name
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                value={editFormData.agent}
+                onChange={(e) => setEditFormData({ ...editFormData, agent: e.target.value })}
+                placeholder="Agent name..."
                 slotProps={{
                   input: { sx: { fontSize: '13.5px', fontWeight: 500, borderRadius: '6px' } },
                 }}

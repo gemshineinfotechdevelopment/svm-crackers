@@ -451,14 +451,6 @@ export const ProductsPage: FC<ProductsPageProps> = ({
     openAddAction();
   };
 
-  // Switch type inside modal -> update S.No accordingly
-  const handleSelectProductTypeInModal = (newType: ProductType) => {
-    setProductType(newType);
-    if (!editingProduct) {
-      setProductSlNo(getNextSlNoForType(newType));
-    }
-  };
-
   // Open Edit Modal
   const openEditAction = (product: ProductItem) => {
     setEditingProduct(product);
@@ -1545,63 +1537,6 @@ export const ProductsPage: FC<ProductsPageProps> = ({
 
         <DialogContent sx={{ p: 2, bgcolor: '#F8FAFC' }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0.5 }}>
-            {/* Type Selection */}
-            <Box>
-              <Typography sx={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', mb: 0.5 }}>
-                Product Type: *
-              </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0.8 }}>
-                <Button
-                  size="small"
-                  onClick={() => handleSelectProductTypeInModal('Retail')}
-                  variant={productType === 'Retail' ? 'contained' : 'outlined'}
-                  sx={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    py: 0.6,
-                    bgcolor: productType === 'Retail' ? '#0284C7' : '#FFFFFF',
-                    color: productType === 'Retail' ? '#FFFFFF' : '#0369A1',
-                    borderColor: '#0284C7',
-                  }}
-                >
-                  🛒 Retail
-                </Button>
-                <Button
-                  size="small"
-                  onClick={() => handleSelectProductTypeInModal('Wholesale')}
-                  variant={productType === 'Wholesale' ? 'contained' : 'outlined'}
-                  sx={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    py: 0.6,
-                    bgcolor: productType === 'Wholesale' ? '#7C3AED' : '#FFFFFF',
-                    color: productType === 'Wholesale' ? '#FFFFFF' : '#7C3AED',
-                    borderColor: '#7C3AED',
-                  }}
-                >
-                  🏢 Wholesale
-                </Button>
-                <Button
-                  size="small"
-                  onClick={() => handleSelectProductTypeInModal('Both')}
-                  variant={productType === 'Both' ? 'contained' : 'outlined'}
-                  sx={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    py: 0.6,
-                    bgcolor: productType === 'Both' ? '#059669' : '#FFFFFF',
-                    color: productType === 'Both' ? '#FFFFFF' : '#059669',
-                    borderColor: '#059669',
-                  }}
-                >
-                  🔄 Both
-                </Button>
-              </Box>
-            </Box>
-
             {/* S.No & Product Name */}
             <Box sx={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: 1 }}>
               <Box>
