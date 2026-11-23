@@ -44,9 +44,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const url = `${API_BASE_URL}${normalizedEndpoint}`;
 
-  // Retrieve auth token if stored
+  // Retrieve auth token if stored in sessionStorage (or legacy localStorage)
   const token = typeof window !== 'undefined'
-    ? localStorage.getItem('svm_auth_token')
+    ? (sessionStorage.getItem('svm_auth_token') || localStorage.getItem('svm_auth_token'))
     : null;
 
   const headers: Record<string, string> = {

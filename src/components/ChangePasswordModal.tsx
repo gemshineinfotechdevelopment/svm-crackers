@@ -42,7 +42,7 @@ interface AdminUserItem {
 
 const getStoredUser = (): { username: string; role: string } => {
   try {
-    const stored = localStorage.getItem('svm_auth_user');
+    const stored = sessionStorage.getItem('svm_auth_user') || localStorage.getItem('svm_auth_user');
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed.username) {
@@ -160,13 +160,12 @@ export const ChangePasswordModal: FC<ChangePasswordModalProps> = ({ open, onClos
 
       setSuccessMsg(res?.message || `Password updated successfully in database for "${cleanTarget}"!`);
 
-      // If user changed their own password, update local user storage
+      // If user changed their own password, update session user storage
       if (cleanTarget === operator.username) {
         try {
-          localStorage.setItem(
-            'svm_auth_user',
-            JSON.stringify({ username: cleanTarget, role: operator.role })
-          );
+          const userObj = JSON.stringify({ username: cleanTarget, role: operator.role });
+          sessionStorage.setItem('svm_auth_user', userObj);
+          localStorage.removeItem('svm_auth_user');
         } catch {}
       }
 

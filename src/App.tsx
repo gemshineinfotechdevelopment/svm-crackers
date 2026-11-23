@@ -26,7 +26,14 @@ const VALID_TABS = ['All Customers', 'Sales', 'Estimate', 'Product', 'Quotation'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return Boolean(localStorage.getItem('svm_auth_token') || localStorage.getItem('apsara_auth_token'));
+    // Purge persistent localStorage tokens so closing the window ends the session
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('svm_auth_token');
+      localStorage.removeItem('svm_auth_user');
+      localStorage.removeItem('apsara_auth_token');
+      localStorage.removeItem('apsara_auth_user');
+    }
+    return Boolean(sessionStorage.getItem('svm_auth_token'));
   });
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
     const saved = localStorage.getItem(ACTIVE_TAB_KEY) || localStorage.getItem('apsara_active_tab');
@@ -125,7 +132,11 @@ function App() {
      'apsara_auth_token', 'apsara_auth_user', 'apsara_active_customer', 'apsara_draft_bill',
      'varun_auth_token', 'dheeksha_auth_token', 'varun_auth_user', 'dheeksha_auth_user',
      'varun_active_customer', 'dheeksha_active_customer',
-     ACTIVE_TAB_KEY, CUSTOMER_SUBVIEW_KEY].forEach(key => localStorage.removeItem(key));
+     ACTIVE_TAB_KEY, CUSTOMER_SUBVIEW_KEY].forEach(key => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
+    sessionStorage.clear();
     setIsAuthenticated(false);
     setActiveTab('All Customers');
     setCustomerSubView('list');

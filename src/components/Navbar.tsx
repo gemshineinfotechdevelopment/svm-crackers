@@ -87,7 +87,7 @@ export const Navbar: FC<NavbarProps> = ({
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('svm_auth_user');
+      const stored = sessionStorage.getItem('svm_auth_user') || localStorage.getItem('svm_auth_user');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed.username) {

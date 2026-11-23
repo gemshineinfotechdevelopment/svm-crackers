@@ -24,7 +24,7 @@ interface LoginPageProps {
 
 export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [settings, setSettings] = useState<CompanySettings>(() => getStoredSettings());
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -32,6 +32,19 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [isInstalled, setIsInstalled] = useState<boolean>(() => checkIsStandalone());
   const [installPromptReady, setInstallPromptReady] = useState<boolean>(() => canInstallPwa());
   const [installModalOpen, setInstallModalOpen] = useState<boolean>(false);
+
+  // Clear inputs and purge session on mount so no credentials or session persist
+  useEffect(() => {
+    setUsername('');
+    setPassword('');
+    setErrorMsg('');
+    try {
+      sessionStorage.removeItem('svm_auth_token');
+      sessionStorage.removeItem('svm_auth_user');
+      localStorage.removeItem('svm_auth_token');
+      localStorage.removeItem('svm_auth_user');
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const onPromptReady = () => setInstallPromptReady(true);
@@ -117,8 +130,12 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
       });
 
       if (res && res.token) {
-        localStorage.setItem('svm_auth_token', res.token);
-        localStorage.setItem('svm_auth_user', JSON.stringify(res.user || { username: username.trim(), role: 'admin' }));
+        sessionStorage.setItem('svm_auth_token', res.token);
+        sessionStorage.setItem('svm_auth_user', JSON.stringify(res.user || { username: username.trim(), role: 'admin' }));
+        localStorage.removeItem('svm_auth_token');
+        localStorage.removeItem('svm_auth_user');
+        setUsername('');
+        setPassword('');
         onLoginSuccess(res.user || { username: username.trim(), role: 'admin' });
       } else {
         setErrorMsg('Authentication failed. Please check your credentials.');
@@ -148,6 +165,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
         elevation={0}
         component="form"
         onSubmit={handleSubmit}
+        autoComplete="off"
         sx={{
           width: '100%',
           maxWidth: '380px',
@@ -253,7 +271,10 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 placeholder="Username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
               />
             </Box>
 
@@ -268,7 +289,7 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   style={{ paddingRight: '28px' }}
                 />
                 <IconButton
