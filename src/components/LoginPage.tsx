@@ -269,12 +269,15 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 type="text"
                 className="erp-input"
                 placeholder="Username"
+                name="erp_username_entry"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck={false}
+                data-lpignore="true"
+                data-form-type="other"
               />
             </Box>
 
@@ -287,9 +290,12 @@ export const LoginPage: FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   type={showPassword ? 'text' : 'password'}
                   className="erp-input"
                   placeholder="Password"
+                  name="erp_password_entry"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="new-password"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
                   style={{ paddingRight: '28px' }}
                 />
                 <IconButton

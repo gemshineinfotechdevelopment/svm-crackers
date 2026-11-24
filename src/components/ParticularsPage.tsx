@@ -33,7 +33,7 @@ import {
   CustomersApi,
   CompaniesApi,
   ProductsApi,
-  ParticularsApi,
+  ParticularsApi, 
   type PriceMapRecord,
 } from '../services/api';
 import {
