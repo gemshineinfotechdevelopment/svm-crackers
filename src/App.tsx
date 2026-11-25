@@ -13,6 +13,7 @@ import { QuotationPage } from './components/QuotationPage';
 import { GstBillPage } from './components/GstBillPage';
 import { DespatchPage } from './components/DespatchPage';
 import { StockPage } from './components/StockPage';
+import { ChitsPage } from './components/chits/ChitsPage';
 import { SettingsPage, getStoredSettings, DEFAULT_COMPANY_SETTINGS } from './components/SettingsPage';
 import { SettingsApi } from './services/api';
 import { YearRestrictionDialog } from './components/YearRestrictionDialog';
@@ -22,9 +23,20 @@ const ACTIVE_TAB_KEY = 'svm_active_tab';
 const CUSTOMER_SUBVIEW_KEY = 'svm_customer_subview';
 const PRODUCT_SUBPAGE_KEY = 'svm_product_subpage';
 
-const VALID_TABS = ['All Customers', 'Sales', 'Estimate', 'Product', 'Quotation', 'Categories', 'Stock', 'GST Bill', 'Despatch', 'Settings'] as const;
+const VALID_TABS = ['All Customers', 'Sales', 'Estimate', 'Product', 'Quotation', 'Categories', 'Stock', 'GST Bill', 'Despatch', 'Chits', 'Settings'] as const;
 
 function App() {
+  const [currentUserRole, setCurrentUserRole] = useState<string>(() => {
+    try {
+      const stored = sessionStorage.getItem('svm_auth_user') || localStorage.getItem('svm_auth_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed.role || 'admin';
+      }
+    } catch {}
+    return 'admin';
+  });
+
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     // Purge persistent localStorage tokens so closing the window ends the session
     if (typeof window !== 'undefined') {
@@ -38,6 +50,16 @@ function App() {
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
     const saved = localStorage.getItem(ACTIVE_TAB_KEY) || localStorage.getItem('apsara_active_tab');
     if (saved === 'Billing') return 'Estimate';
+    if (saved === 'Chits') {
+      try {
+        const stored = sessionStorage.getItem('svm_auth_user') || localStorage.getItem('svm_auth_user');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.role === 'superadmin') return 'Chits';
+        }
+      } catch {}
+      return 'All Customers';
+    }
     if (saved && VALID_TABS.includes(saved as NavTab)) {
       return saved as NavTab;
     }
@@ -123,8 +145,30 @@ function App() {
     };
   }, []);
 
-  const handleLoginSuccess = () => {
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('svm_auth_user') || localStorage.getItem('svm_auth_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.role) {
+          setCurrentUserRole(parsed.role);
+          if (parsed.role !== 'superadmin' && activeTab === 'Chits') {
+            setActiveTab('All Customers');
+            localStorage.setItem(ACTIVE_TAB_KEY, 'All Customers');
+          }
+        }
+      }
+    } catch {}
+  }, [activeTab]);
+
+  const handleLoginSuccess = (user?: { username?: string; role?: string }) => {
     setIsAuthenticated(true);
+    const role = user?.role || 'admin';
+    setCurrentUserRole(role);
+    if (role !== 'superadmin' && activeTab === 'Chits') {
+      setActiveTab('All Customers');
+      localStorage.setItem(ACTIVE_TAB_KEY, 'All Customers');
+    }
   };
 
   const handleLogout = () => {
@@ -138,11 +182,17 @@ function App() {
     });
     sessionStorage.clear();
     setIsAuthenticated(false);
+    setCurrentUserRole('admin');
     setActiveTab('All Customers');
     setCustomerSubView('list');
   };
 
   const handleSelectTab = (tab: NavTab) => {
+    if (tab === 'Chits' && currentUserRole !== 'superadmin') {
+      setActiveTab('All Customers');
+      localStorage.setItem(ACTIVE_TAB_KEY, 'All Customers');
+      return;
+    }
     setActiveTab(tab);
     localStorage.setItem(ACTIVE_TAB_KEY, tab);
     if (tab === 'All Customers') {
@@ -299,6 +349,9 @@ function App() {
               onSubPageChangeProp={handleSelectProductSubPage}
             />
           )}
+
+          {/* Chits Tab (Super Admin Only) */}
+          {activeTab === 'Chits' && currentUserRole === 'superadmin' && <ChitsPage />}
 
           {/* Settings Tab */}
           {activeTab === 'Settings' && <SettingsPage />}

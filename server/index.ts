@@ -21,6 +21,7 @@ import authRoutes from './routes/authRoutes';
 import settingsRoutes from './routes/settingsRoutes';
 import priceMapRoutes from './routes/priceMapRoutes';
 import despatchRoutes from './routes/despatchRoutes';
+import chitRoutes from './routes/chitRoutes';
 import { seedDefaultAdmin } from './controllers/authController';
 import { backfillMissingYears } from './utils/yearUtils';
 
@@ -122,6 +123,7 @@ app.use('/api/accounts', accountRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/pricemaps', priceMapRoutes);
 app.use('/api/despatches', despatchRoutes);
+app.use('/api/chits', chitRoutes);
 
 // 404 Handler for Unmatched API routes
 app.use('/api', (req: Request, res: Response) => {

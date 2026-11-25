@@ -35,6 +35,7 @@ import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
 import LockResetRoundedIcon from '@mui/icons-material/LockResetRounded';
 import GetAppRoundedIcon from '@mui/icons-material/GetAppRounded';
+import SavingsRoundedIcon from '@mui/icons-material/SavingsRounded';
 import { getStoredSettings, type CompanySettings } from './SettingsPage';
 import { HealthApi, API_BASE_URL } from '../services/api';
 import {
@@ -48,7 +49,7 @@ import { ChangePasswordModal } from './ChangePasswordModal';
 import { InstallAppModal } from './InstallAppModal';
 import { checkIsStandalone, canInstallPwa, promptPwaInstall } from '../utils/pwaInstall';
 
-export type NavTab = 'All Customers' | 'Sales' | 'Estimate' | 'Product' | 'Quotation' | 'Categories' | 'Stock' | 'GST Bill' | 'Despatch' | 'Settings';
+export type NavTab = 'All Customers' | 'Sales' | 'Estimate' | 'Product' | 'Quotation' | 'Categories' | 'Stock' | 'GST Bill' | 'Despatch' | 'Chits' | 'Settings';
 
 interface NavbarProps {
   activeTab?: NavTab;
@@ -78,7 +79,16 @@ export const Navbar: FC<NavbarProps> = ({
   const [installModalOpen, setInstallModalOpen] = useState(false);
   const [isInstalled, setIsInstalled] = useState<boolean>(() => checkIsStandalone());
   const [currentUsername, setCurrentUsername] = useState<string>('Administrator');
-  const [currentUserRole, setCurrentUserRole] = useState<string>('admin');
+  const [currentUserRole, setCurrentUserRole] = useState<string>(() => {
+    try {
+      const stored = sessionStorage.getItem('svm_auth_user') || localStorage.getItem('svm_auth_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed.role || 'admin';
+      }
+    } catch {}
+    return 'admin';
+  });
   const [companySettings, setCompanySettings] = useState<CompanySettings>(getStoredSettings);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [backendUrl, setBackendUrl] = useState<string>(API_BASE_URL);
@@ -180,6 +190,8 @@ export const Navbar: FC<NavbarProps> = ({
   };
 
   // Top ERP Menu Items
+  const isSuperAdmin = currentUserRole === 'superadmin';
+
   const erpMenuItems: ErpMenuItem[] = [
     { label: 'Customers', tabKey: 'All Customers' },
     { label: 'Sales', tabKey: 'Sales' },
@@ -190,6 +202,7 @@ export const Navbar: FC<NavbarProps> = ({
     { label: 'Stock', tabKey: 'Stock' },
     { label: 'Tax Bill', tabKey: 'GST Bill' },
     { label: 'Despatch', tabKey: 'Despatch' },
+    ...(isSuperAdmin ? [{ label: 'Chits', tabKey: 'Chits' as NavTab }] : []),
     { label: 'Settings', tabKey: 'Settings' },
   ];
 
@@ -685,6 +698,7 @@ export const Navbar: FC<NavbarProps> = ({
             { label: 'Stock (Sales)', tab: 'Stock' as NavTab, icon: <TrendingUpRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Tax Bill (GST)', tab: 'GST Bill' as NavTab, icon: <DescriptionRoundedIcon sx={{ fontSize: 18 }} /> },
             { label: 'Despatch', tab: 'Despatch' as NavTab, icon: <LocalShippingRoundedIcon sx={{ fontSize: 18 }} /> },
+            ...(isSuperAdmin ? [{ label: 'Chits', tab: 'Chits' as NavTab, icon: <SavingsRoundedIcon sx={{ fontSize: 18 }} /> }] : []),
             { label: 'Settings', tab: 'Settings' as NavTab, icon: <SettingsRoundedIcon sx={{ fontSize: 18 }} /> },
           ].map((item) => (
             <Box key={item.label}>

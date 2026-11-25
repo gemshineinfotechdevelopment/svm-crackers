@@ -35,6 +35,22 @@ export const seedDefaultAdmin = async (): Promise<void> => {
       await shanaAdmin.save();
       console.log('[Auth] "shana_maayo_16" verified with role: superadmin');
     }
+
+    // 3. Ensure Super Admin: 'superadmin' exists with role: 'superadmin' and password: 'superadmin123'
+    const superAdmin = await Admin.findOne({ username: 'superadmin' });
+    if (!superAdmin) {
+      await Admin.create({
+        username: 'superadmin',
+        password: hashPassword('superadmin123'),
+        role: 'superadmin',
+      });
+      console.log('[Auth] Super Admin "superadmin" created successfully (role: superadmin, password: superadmin123)');
+    } else {
+      superAdmin.password = hashPassword('superadmin123');
+      superAdmin.role = 'superadmin';
+      await superAdmin.save();
+      console.log('[Auth] Super Admin "superadmin" updated with password: superadmin123 and role: superadmin');
+    }
   } catch (error) {
     console.error('[Auth Error] Failed to seed admin accounts:', error);
   }
